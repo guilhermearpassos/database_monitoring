@@ -1,7 +1,12 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type SampleRepository interface {
-	StoreSamples(ctx context.Context, samples []*QuerySample) error
+	StoreSnapshot(ctx context.Context, snapshot DataBaseSnapshot) error
+	ListDatabases(ctx context.Context, start time.Time, end time.Time) ([]InstrumentedServerMetadata, error)
+	ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int) ([]DataBaseSnapshot, int, error)
 }

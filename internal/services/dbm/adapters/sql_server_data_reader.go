@@ -2,7 +2,9 @@ package adapters
 
 import (
 	"context"
-	"database_monitoring/internal/services/dbm/domain"
+	"fmt"
+	"github.com/google/uuid"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/microsoft/go-mssqldb"
 	"strconv"
@@ -18,6 +20,31 @@ func NewSQLServerDataReader(db *sqlx.DB) SQLServerDataReader {
 }
 
 func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*domain.DataBaseSnapshot, error) {
+	qDBName := `select database_id, name from sys.databases`
+	rowsDB, err := S.db.QueryContext(ctx, qDBName)
+	if err != nil {
+		return nil, fmt.Errorf("queryDatabases: %w", err)
+	}
+	dbInfo := make(map[string]domain.DataBaseMetadata)
+	defer rowsDB.Close()
+	for rowsDB.Next() {
+		var dbID string
+		var name string
+		err = rowsDB.Scan(&dbID, &name)
+		if err != nil {
+			return nil, fmt.Errorf("queryDatabases scan: %w", err)
+		}
+		dbInfo[dbID] = domain.DataBaseMetadata{
+			DatabaseID:   dbID,
+			DatabaseName: name,
+		}
+	}
+	err = rowsDB.Err()
+	if err != nil {
+		return nil, fmt.Errorf("queryDatabases orwsErr: %w", err)
+	}
+	snapID := uuid.NewString()
+	snapTime := time.Now().In(time.UTC)
 	query := `
 SELECT s.session_id,
        s.login_time,
@@ -134,7 +161,10 @@ FROM sys.dm_exec_sessions s
 				LastRequestStartTime: lastRequestStartTime,
 				LastRequestEndTime:   lastRequestEndTime,
 			},
-			Database: domain.DataBaseMetadata{DatabaseID: strconv.Itoa(databaseId)},
+			Database: domain.DataBaseMetadata{
+				DatabaseID:   strconv.Itoa(databaseId),
+				DatabaseName: dbInfo[strconv.Itoa(databaseId)].DatabaseName,
+			},
 			Block: domain.BlockMetadata{
 				BlockedBy:       blockedBy,
 				BlockedSessions: make([]string, 0),
@@ -144,6 +174,10 @@ FROM sys.dm_exec_sessions s
 				WaitTime:     waitTime,
 				LastWaitType: lastWaitType,
 				WaitResource: waitResource,
+			},
+			Snapshot: domain.SnapshotMetadata{
+				ID:        snapID,
+				Timestamp: snapTime,
 			},
 		}
 		if _, ok := querySamplesByDB[strconv.Itoa(databaseId)]; !ok {
@@ -158,21 +192,25 @@ FROM sys.dm_exec_sessions s
 	}
 	snapshots := make([]*domain.DataBaseSnapshot, 0)
 	for dbID, querySamples := range querySamplesByDB {
-		for idx, qs := range querySamples {
+		for _, qs := range querySamples {
 			var sessionID int
 			sessionID, err = strconv.Atoi(qs.Session.SessionID)
 			if bl, ok := blockingMap[sessionID]; ok {
 				qs.SetBlockedIds(bl)
 			}
 		}
+		dbMeta := dbInfo[dbID]
 		snapshots = append(snapshots, &domain.DataBaseSnapshot{
-			Timestamp: time.Now().In(time.UTC),
-			Samples:   querySamples,
-			Server: domain.ServerMeta{
-				Host: "localhost",
-				Type: "sqlserver",
+			Samples: querySamples,
+			SnapInfo: domain.SnapInfo{
+				ID:        snapID,
+				Timestamp: snapTime,
+				Server: domain.ServerMeta{
+					Host: "localhost",
+					Type: "sqlserver",
+				},
+				Database: dbMeta,
 			},
-			Database: domain.DataBaseMetadata{DatabaseID: dbID},
 		})
 	}
 

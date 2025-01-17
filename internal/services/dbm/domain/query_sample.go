@@ -13,6 +13,7 @@ type QuerySample struct {
 	Database  DataBaseMetadata
 	Block     BlockMetadata
 	Wait      WaitMetadata
+	Snapshot  SnapshotMetadata
 }
 
 func (q *QuerySample) SetBlockedIds(sessionIds []string) {
@@ -48,5 +49,11 @@ type SessionMetadata struct {
 }
 
 type DataBaseMetadata struct {
-	DatabaseID string
+	DatabaseID   string
+	DatabaseName string
+}
+
+type SnapshotMetadata struct {
+	ID        string
+	Timestamp time.Time
 }
