@@ -1,0 +1,46 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1;dbmv1";
+import "google/protobuf/timestamp.proto";
+
+
+message QuerySample {
+  string status = 1;
+  bytes sql_handle = 2;
+  string text = 3;
+  bool blocked = 4;
+  bool blocker = 5;
+  SessionMetadata session = 6;
+  DBMetadata db = 7;
+  BlockMetadata block_info = 8;
+  WaitMetadata wait_info = 9;
+
+}
+message SessionMetadata {
+  string session_id = 1;
+  google.protobuf.Timestamp login_time = 2;
+  string host = 3;
+  string program_name = 4;
+  string login_name = 5;
+  string status = 6;
+  google.protobuf.Timestamp last_request_start = 7;
+  google.protobuf.Timestamp last_request_end = 8;
+
+}
+
+message DBMetadata {
+  string database_id = 1;
+  string database_name = 2;
+}
+
+message BlockMetadata {
+  string blocked_by = 1;
+  repeated string blocked_sessions = 2;
+}
+
+message WaitMetadata {
+  string wait_type = 1;
+  int64 wait_time = 2;
+  string last_wait_type = 3;
+  string wait_resource = 4;
+}

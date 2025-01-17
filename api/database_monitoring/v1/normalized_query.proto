@@ -1,0 +1,7 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1;dbmv1";
+
+message NormalizedQuery {
+
+}

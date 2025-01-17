@@ -1,0 +1,25 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1;dbmv1";
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/sample.proto";
+import "database_monitoring/v1/snapshot.proto";
+
+service DBMSupportApi {
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse);
+}
+
+message ListDatabasesRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+message ListDatabasesResponse{
+  repeated InstrumentedServer servers = 1;
+}
+
+message InstrumentedServer {
+  ServerMetadata server = 1;
+  repeated DBMetadata db = 2;
+}
+

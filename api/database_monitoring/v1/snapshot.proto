@@ -1,0 +1,18 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1;dbmv1";
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/sample.proto";
+
+message DBSnapshot {
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  ServerMetadata server = 3;
+  DBMetadata database = 4;
+  repeated QuerySample samples = 5;
+}
+
+message ServerMetadata {
+  string host = 1;
+  string type = 2;
+}

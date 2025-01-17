@@ -1,0 +1,25 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1;dbmv1";
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/snapshot.proto";
+
+service DBMApi {
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+}
+
+message ListSnapshotsRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  string database = 4;
+  int32 page_size = 5;
+  int64 page_number = 6;
+}
+
+message ListSnapshotsResponse{
+  repeated DBSnapshot snapshots = 1;
+  int64 page_number = 2;
+  int64 total_count = 3;
+}
+
