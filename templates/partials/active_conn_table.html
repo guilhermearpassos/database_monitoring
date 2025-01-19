@@ -1,0 +1,41 @@
+<table class="table table-bordered table-hover" id="snapshots-table">
+    <thead>
+    <tr>
+        <th hx-get='/snapshots/sort?column=timestamp&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
+            hx-target="#snapshots-table" hx-swap="outerHTML"
+            hx-trigger="click"
+            aria-sort='{{if ne .SortColumn "timestamp"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
+            Timestamp
+        </th>
+        <th hx-get='/snapshots/sort?column=db_name&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
+            hx-target="#snapshots-table" hx-swap="outerHTML"
+            hx-trigger="click"
+            aria-sort='{{if ne .SortColumn "db_name"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
+            Database Name
+        </th>
+        <th hx-get='/snapshots/sort?column=status&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
+            hx-target="#snapshots-table" hx-swap="outerHTML"
+            hx-trigger="click"
+            aria-sort='{{if ne .SortColumn "status"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
+            Status
+        </th>
+        <th>Actions</th>
+    </tr>
+    </thead>
+    <tbody>
+    {{range $snap := .Snapshots}}
+    <tr data-snapshot-id="{{.ID}}">
+        <td>{{$snap.Timestamp.Format "2006-01-02 15:04:05"}}</td>
+        <td>{{$snap.DBName}}</td>
+        <td>{{$snap.Status}}</td>
+        <td>
+            <button class="btn btn-info" hx-get="/samples/{{$snap.ID}}" hx-target="#queries-{{$snap.ID}}"
+                    hx-swap="innerHTML" hx-trigger="click">View Queries
+            </button>
+        </td>
+    </tr>
+    <tr class="expandable-row" id="queries-{{$snap.ID}}">
+    </tr>
+    {{end}}
+    </tbody>
+</table>

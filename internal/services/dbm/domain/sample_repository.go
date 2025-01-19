@@ -7,6 +7,6 @@ import (
 
 type SampleRepository interface {
 	StoreSnapshot(ctx context.Context, snapshot DataBaseSnapshot) error
-	ListDatabases(ctx context.Context, start time.Time, end time.Time) ([]InstrumentedServerMetadata, error)
+	ListServers(ctx context.Context, start time.Time, end time.Time) ([]ServerMeta, error)
 	ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int) ([]DataBaseSnapshot, int, error)
 }

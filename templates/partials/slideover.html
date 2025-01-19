@@ -1,0 +1,21 @@
+<div class="slideover-wrapper {{.State}}" id="slideover-wrapper" onclick="handleOutsideClick(event)">
+    <div class="slideover" id="slideover">
+        <div class="slideover-content">
+            <h2> {{.ServerName}}</h2>
+            <input hidden id="selected-server" name="selected-server"/>
+            <div class="card">
+                <div class="card-section">
+                    <h3>Database Connections by Wait Group</h3>
+                    {{template "connections_timeseries.html" .}}
+                </div>
+                <div class="card-section">
+                    <div id="snapshots-table-container"
+                    hx-get="/snapshots/" hx-swap="innerHTML" hx-include="#selected-timerange,#selected-server"
+                         hx-trigger="load"
+                    ></div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

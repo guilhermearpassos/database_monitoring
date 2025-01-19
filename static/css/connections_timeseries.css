@@ -1,0 +1,11 @@
+.chart-wrapper {
+    height: 400px;
+    position: relative;
+    margin: 20px 0;
+}
+#form-container {
+    margin: 20px 0;
+}
+input {
+    margin: 0 10px;
+}

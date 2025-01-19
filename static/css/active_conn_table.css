@@ -1,0 +1,107 @@
+
+.expandable-row {
+    display: none;
+    background-color: #f8f9fa;
+}
+/* Table Container Styling */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Table Styling */
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 3px; /* Add spacing between rows for a softer look */
+    margin: 20px 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-radius: 8px; /* Rounded corners for the table */
+    overflow: hidden; /* Prevent content from overflowing */
+}
+
+/* Table Header Styling */
+th {
+    font-weight: bold;
+    text-align: left;
+    padding: 12px 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+}
+
+/* Table Cell Styling */
+td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    color: #333;
+    border-radius: 1px; /* Rounded corners for each table cell */
+}
+
+/* Row Hover Effect */
+tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* Alternating Row Colors */
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+tr:nth-child(odd) {
+    background-color: #ffffff;
+}
+
+/* Expanding Row (Query Samples) */
+.expandable-row {
+    background-color: #f8f9fa;
+}
+
+/* Responsive Table */
+@media screen and (max-width: 768px) {
+    th, td {
+        padding: 8px 12px;
+    }
+    table {
+        font-size: 14px;
+    }
+}
+
+/* Button Styling */
+.btn-info {
+    background-color: #17a2b8;
+    border: none;
+    color: white;
+    padding: 8px 15px;
+    font-size: 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Soft shadow for the button */
+}
+
+.btn-info:hover {
+    background-color: #138496;
+}
+
+/* Table Sorting Arrows */
+th a {
+    text-decoration: none;
+    display: inline-block;
+    padding-right: 20px;
+}
+
+th a:after {
+    content: " \25B2";
+    font-size: 10px;
+}
+
+th[aria-sort="ascending"]:after {
+    content: " \25B2";
+}
+
+th[aria-sort="descending"]:after {
+    content: " \25BC";
+}

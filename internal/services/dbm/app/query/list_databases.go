@@ -14,6 +14,6 @@ func NewListDatabasesHandler(repo domain.SampleRepository) ListDatabasesHandler 
 	return ListDatabasesHandler{repo: repo}
 }
 
-func (h ListDatabasesHandler) Handle(ctx context.Context, start time.Time, end time.Time) ([]domain.InstrumentedServerMetadata, error) {
-	return h.repo.ListDatabases(ctx, start, end)
+func (h ListDatabasesHandler) Handle(ctx context.Context, start time.Time, end time.Time) ([]domain.ServerMeta, error) {
+	return h.repo.ListServers(ctx, start, end)
 }

@@ -1,0 +1,96 @@
+
+.slideover-wrapper {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    overflow-y: scroll;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: flex-end;
+}
+
+.slideover-wrapper.open {
+    display: flex;
+}
+
+.slideover {
+    width: 85%;
+    height: 100%;
+    background-color: white;
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+    transition: right 0.3s;
+}
+
+.slideover-header {
+    padding: 20px;
+    background-color: #007BFF;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.slideover-content {
+    padding: 20px;
+    font-size: 16px;
+}
+
+.close-btn {
+    cursor: pointer;
+    float: right;
+    font-weight: bold;
+}
+
+.close-btn:hover {
+    color: #ccc;
+}
+.card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 16px;
+    background-color: #fff;
+}
+
+.card-section {
+    margin-bottom: 20px;
+}
+
+.close-btn {
+    cursor: pointer;
+    float: right;
+    font-weight: bold;
+}
+
+.close-btn:hover {
+    color: #ccc;
+}
+
+.chart {
+    height: 200px;
+    background-color: #f9f9f9;
+    border: 1px dashed #ddd;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 14px;
+    color: #888;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th, .table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}

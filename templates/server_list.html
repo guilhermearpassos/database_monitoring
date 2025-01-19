@@ -1,0 +1,40 @@
+<table class="min-w-full divide-y divide-gray-200 text-sm" id="server-list-table">
+    <thead class="bg-gray-50">
+    <tr>
+        <th class="px-6 py-3 text-left font-medium text-gray-600">Server Name</th>
+        <th class="px-6 py-3 text-left font-medium text-gray-600">Connections</th>
+        <th class="px-6 py-3 text-left font-medium text-gray-600">Request Rate</th>
+        <th class="px-6 py-3 text-left font-medium text-gray-600">% Blocked</th>
+        <th class="px-6 py-3 text-left font-medium text-gray-600">Wait Types</th>
+    </tr>
+    </thead>
+
+    <tbody id="server-table-body" class="bg-white divide-y divide-gray-200">
+    {{range .}}
+    <tr class="hover:bg-gray-50" hx-get="/server-drilldown?server={{.Name}}"
+        hx-include="#selected-timerange"
+        hx-target="#slideover-wrapper" hx-trigger="click"
+        hx-swap="outerHTML">
+        <td class="px-6 py-4 text-gray-700 flex items-center">
+            <img src="/static/icons/{{.DatabaseType}}.svg" alt="{{.DatabaseType}}" class="database-icon">
+            {{.Name}}
+        </td>
+        <td class="px-6 py-4 text-gray-700">{{.Connections}}</td>
+        <td class="px-6 py-4 text-gray-700">{{.RequestRate}}</td>
+        <td class="px-6 py-4 text-gray-700">{{.BlockedPercent}}%</td>
+        <td class="px-6 py-4">
+            <div class="stacked-bar">
+                {{range .WaitTypes}}
+                <div
+                        class="bar-segment {{.Color}}"
+                        data-percent="{{.Percent}}"
+                        style="width: {{.Percent}}%;"
+                        title="{{.Type}}: {{.Percent}}%">
+                </div>
+                {{end}}
+            </div>
+        </td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>

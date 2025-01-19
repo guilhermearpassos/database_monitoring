@@ -26,19 +26,19 @@ func (s GRPCServer) ListDatabases(ctx context.Context, request *dbmv1.ListDataba
 	}
 	protoServers := make([]*dbmv1.InstrumentedServer, len(servers))
 	for i, server := range servers {
-		dbs := make([]*dbmv1.DBMetadata, len(server.DataBaseMetadata))
-		for j, dataBaseMetadata := range server.DataBaseMetadata {
-			dbs[j] = &dbmv1.DBMetadata{
-				DatabaseId:   dataBaseMetadata.DatabaseID,
-				DatabaseName: dataBaseMetadata.DatabaseName,
-			}
-		}
+		//dbs := make([]*dbmv1.DBMetadata, len(server.DataBaseMetadata))
+		//for j, dataBaseMetadata := range server.DataBaseMetadata {
+		//	dbs[j] = &dbmv1.DBMetadata{
+		//		DatabaseId:   dataBaseMetadata.DatabaseID,
+		//		DatabaseName: dataBaseMetadata.DatabaseName,
+		//	}
+		//}
 		protoServers[i] = &dbmv1.InstrumentedServer{
 			Server: &dbmv1.ServerMetadata{
-				Host: server.ServerMeta.Host,
-				Type: server.ServerMeta.Type,
+				Host: server.Host,
+				Type: server.Type,
 			},
-			Db: dbs,
+			Db: nil,
 		}
 	}
 	return &dbmv1.ListDatabasesResponse{Servers: protoServers}, nil

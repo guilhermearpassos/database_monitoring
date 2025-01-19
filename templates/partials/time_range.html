@@ -1,0 +1,55 @@
+<!-- Timerange Picker -->
+<div id="timerange-picker" class="relative">
+    <div
+            id="timerange-display"
+            class="cursor-pointer bg-white border border-gray-300 rounded px-4 py-2 flex items-center justify-between space-x-2 shadow-sm hover:border-blue-400"
+            hx-on-click="toggleDropdown()">
+        <label for="selected-timerange" id="selected-timerange-label">Last 15 minutes</label>
+        <input id="selected-timerange" name="selected-timerange" hidden="hidden" value="Last 15 minutes"
+               hx-get="/servers"
+               hx-trigger="load,change delay:500ms"
+               hx-target="#server-list-table"
+               hx-include="#selected-timerange"
+               hx-swap="outerHTML"
+        />
+        <svg class="w-4 h-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+    </div>
+
+    <div id="timerange-dropdown" class="dropdown">
+        <div class="flex">
+            <!-- Custom Range - Left Side -->
+            <div class="w-1/2 p-4 border-r border-gray-200">
+                <h4 class="text-sm font-medium text-gray-600 mb-3">Custom Range</h4>
+                <div class="space-y-3">
+                    <div>
+                        <label for="start-time" class="block text-xs text-gray-500 mb-1">Start Time</label>
+                        <input type="datetime-local" id="start-time" class="custom-input">
+                    </div>
+                    <div>
+                        <label for="end-time" class="block text-xs text-gray-500 mb-1">End Time</label>
+                        <input type="datetime-local" id="end-time" class="custom-input">
+                    </div>
+                    <button class="apply-button" onclick="applyCustomRange()">
+                        Apply Custom Range
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Select - Right Side -->
+            <div class="w-1/2 p-4">
+                <h4 class="text-sm font-medium text-gray-600 mb-3">Quick Select</h4>
+                <div class="space-y-1">
+                    <div class="dropdown-option" data-value="15min">Last 15 minutes</div>
+                    <div class="dropdown-option" data-value="30min">Last 30 minutes</div>
+                    <div class="dropdown-option" data-value="1h">Last 1 hour</div>
+                    <div class="dropdown-option" data-value="3h">Last 3 hours</div>
+                    <div class="dropdown-option" data-value="12h">Last 12 hours</div>
+                    <div class="dropdown-option" data-value="1d">Last 1 day</div>
+                    <div class="dropdown-option" data-value="2d">Last 2 days</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

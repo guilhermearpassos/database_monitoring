@@ -9,6 +9,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/google/uuid"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
+	io "io"
 	"log"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ func (r ELKRepository) StoreSnapshot(ctx context.Context, snapshot domain.DataBa
 	}
 	return nil
 }
+
 func (r ELKRepository) storeSnapData(ctx context.Context, snapshot domain.DataBaseSnapshot) error {
 	jsonData, err := json.Marshal(snapshot.SnapInfo)
 	if err != nil {
@@ -99,10 +101,56 @@ func (r ELKRepository) storeSamples(ctx context.Context, samples []*domain.Query
 	return nil
 }
 
-func (r ELKRepository) ListDatabases(ctx context.Context, start time.Time, end time.Time) ([]domain.InstrumentedServerMetadata, error) {
-	panic("implement me")
+func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end time.Time) ([]domain.ServerMeta, error) {
+
+	query := map[string]interface{}{
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"must": map[string]interface{}{
+					"range": map[string]interface{}{
+						"timestamp": map[string]interface{}{
+							"gte": start,
+							"lte": end,
+						},
+					},
+				},
+			},
+		},
+	}
+	resp, err := r.client.Search(
+		r.client.Search.WithContext(ctx),
+		r.client.Search.WithIndex("db_snapshots"),
+		r.client.Search.WithTrackTotalHits(true),
+		r.client.Search.WithContext(ctx),
+		r.client.Search.WithBody(esutil.NewJSONReader(query)),
+		r.client.Search.WithStats("count = COUNT(*)  by server.Type, server.Host"),
+		r.client.Search.WithSort("timestamp"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("searching serverMeta: %w", err)
+	}
+	defer func(Body *io.ReadCloser) {
+		if Body == nil {
+			return
+		}
+		_ = (*Body).Close()
+	}(&resp.Body)
+	if resp.IsError() {
+		return nil, fmt.Errorf("getting serverMeta: (code %d), %s:  %s", resp.StatusCode, resp.Status(), resp.String())
+	}
+	var decodedResp SearchServersResponse
+	err = json.NewDecoder(resp.Body).Decode(&decodedResp)
+	if err != nil {
+		return nil, fmt.Errorf("decoding response body: %w", err)
+	}
+	ret := make([]domain.ServerMeta, len(decodedResp.Hits.Hits))
+	for _, hit := range decodedResp.Hits.Hits {
+		ret = append(ret, hit.Source.Server)
+	}
+	return ret, nil
 
 }
+
 func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int) ([]domain.DataBaseSnapshot, int, error) {
 
 	//ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -135,11 +183,6 @@ func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, sta
 
 func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumber int, databaseID string, start time.Time, end time.Time) (map[string]domain.SnapInfo, []string, int, error) {
 	from := (pageNumber - 1) * pageSize
-	//to := from + pageSize
-	queryString := fmt.Sprintf("timestamp >= \"%s\" and timestamp <= \"%s\"", start.Format("2006-01-02T15:04:05"), end.Format("2006-01-02T15:04:05"))
-	if databaseID != "" {
-		queryString += fmt.Sprintf(" and database.DatabaseID == \"%s\"", databaseID)
-	}
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
 			"bool": map[string]interface{}{
@@ -268,4 +311,23 @@ type SearchSamplesHit struct {
 	Source  domain.QuerySample `json:"_source"`
 	Type    string             `json:"_type"`
 	Version int64              `json:"_version,omitempty"`
+}
+
+type SearchServersResponse struct {
+	Took int64
+	Hits struct {
+		Total struct {
+			Value int64
+		}
+		Hits []*SeachServerHit
+	}
+}
+type SeachServerHit struct {
+	Index   string                             `json:"_index"`
+	ID      string                             `json:"_id"`
+	Score   float64                            `json:"_score"`
+	Ignored []string                           `json:"_ignored"`
+	Source  struct{ Server domain.ServerMeta } `json:"_source"`
+	Type    string                             `json:"_type"`
+	Version int64                              `json:"_version,omitempty"`
 }
