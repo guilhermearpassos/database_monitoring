@@ -6,6 +6,7 @@ import "database_monitoring/v1/snapshot.proto";
 
 service DBMApi {
   rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+  rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
 }
 
 message ListSnapshotsRequest{
@@ -23,3 +24,21 @@ message ListSnapshotsResponse{
   int64 total_count = 3;
 }
 
+
+message ListServerSummaryRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+
+}
+
+message ListServerSummaryResponse{
+  repeated ServerSummary servers = 1;
+}
+
+message ServerSummary {
+  string name = 1;
+  string type = 2;
+  int32 connections = 3;
+  double request_rate = 4;
+  map<string, int32> connections_by_wait_group = 5;
+}

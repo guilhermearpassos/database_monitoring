@@ -1,19 +1,20 @@
-package domain
+package common_domain
 
 import "time"
 
 type QuerySample struct {
-	Status    string
-	Cmd       string
-	SqlHandle []byte
-	Text      string
-	IsBlocked bool
-	IsBlocker bool
-	Session   SessionMetadata
-	Database  DataBaseMetadata
-	Block     BlockMetadata
-	Wait      WaitMetadata
-	Snapshot  SnapshotMetadata
+	Status        string
+	Cmd           string
+	SqlHandle     []byte
+	Text          string
+	IsBlocked     bool
+	IsBlocker     bool
+	Session       SessionMetadata
+	Database      DataBaseMetadata
+	Block         BlockMetadata
+	Wait          WaitMetadata
+	Snapshot      SnapshotMetadata
+	TimeElapsedMs int64
 }
 
 func (q *QuerySample) SetBlockedIds(sessionIds []string) {

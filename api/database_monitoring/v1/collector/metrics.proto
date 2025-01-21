@@ -1,0 +1,26 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1/collector;collectorv1";
+import "google/protobuf/timestamp.proto";
+
+message DatabaseMetrics {
+  string database_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+//  repeated QueryMetric query_metrics = 3;
+  SystemMetrics system_metrics = 4;
+}
+
+message SystemMetrics {
+  double cpu_usage = 1;
+  double memory_usage = 2;
+  int64 active_connections = 3;
+  double disk_io_rate = 4;
+  double network_io_rate = 5;
+  repeated PerformanceCounters counters = 6;
+}
+
+message PerformanceCounters{
+  string counter_name = 1;
+  int64 counter_value = 2;
+  double counter_rate = 3;
+}

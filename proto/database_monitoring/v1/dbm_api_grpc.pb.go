@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DBMApi_ListSnapshots_FullMethodName = "/database_monitoring.v1.DBMApi/ListSnapshots"
+	DBMApi_ListSnapshots_FullMethodName     = "/database_monitoring.v1.DBMApi/ListSnapshots"
+	DBMApi_ListServerSummary_FullMethodName = "/database_monitoring.v1.DBMApi/ListServerSummary"
 )
 
 // DBMApiClient is the client API for DBMApi service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DBMApiClient interface {
 	ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	ListServerSummary(ctx context.Context, in *ListServerSummaryRequest, opts ...grpc.CallOption) (*ListServerSummaryResponse, error)
 }
 
 type dBMApiClient struct {
@@ -47,11 +49,22 @@ func (c *dBMApiClient) ListSnapshots(ctx context.Context, in *ListSnapshotsReque
 	return out, nil
 }
 
+func (c *dBMApiClient) ListServerSummary(ctx context.Context, in *ListServerSummaryRequest, opts ...grpc.CallOption) (*ListServerSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListServerSummaryResponse)
+	err := c.cc.Invoke(ctx, DBMApi_ListServerSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DBMApiServer is the server API for DBMApi service.
 // All implementations must embed UnimplementedDBMApiServer
 // for forward compatibility.
 type DBMApiServer interface {
 	ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error)
+	ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error)
 	mustEmbedUnimplementedDBMApiServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedDBMApiServer struct{}
 
 func (UnimplementedDBMApiServer) ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListSnapshots not implemented")
+}
+func (UnimplementedDBMApiServer) ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListServerSummary not implemented")
 }
 func (UnimplementedDBMApiServer) mustEmbedUnimplementedDBMApiServer() {}
 func (UnimplementedDBMApiServer) testEmbeddedByValue()                {}
@@ -104,6 +120,24 @@ func _DBMApi_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DBMApi_ListServerSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListServerSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DBMApiServer).ListServerSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DBMApi_ListServerSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DBMApiServer).ListServerSummary(ctx, req.(*ListServerSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DBMApi_ServiceDesc is the grpc.ServiceDesc for DBMApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var DBMApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSnapshots",
 			Handler:    _DBMApi_ListSnapshots_Handler,
+		},
+		{
+			MethodName: "ListServerSummary",
+			Handler:    _DBMApi_ListServerSummary_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

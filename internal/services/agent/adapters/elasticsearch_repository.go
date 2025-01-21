@@ -8,6 +8,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/google/uuid"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
 	io "io"
 	"log"
@@ -23,7 +24,7 @@ func NewELKRepository(client *elasticsearch.Client) *ELKRepository {
 	return &ELKRepository{client: client}
 }
 
-func (r ELKRepository) StoreSnapshot(ctx context.Context, snapshot domain.DataBaseSnapshot) error {
+func (r ELKRepository) StoreSnapshot(ctx context.Context, snapshot common_domain.DataBaseSnapshot) error {
 	err := r.storeSnapData(ctx, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to store snapshot data: %w", err)
@@ -35,7 +36,7 @@ func (r ELKRepository) StoreSnapshot(ctx context.Context, snapshot domain.DataBa
 	return nil
 }
 
-func (r ELKRepository) storeSnapData(ctx context.Context, snapshot domain.DataBaseSnapshot) error {
+func (r ELKRepository) storeSnapData(ctx context.Context, snapshot common_domain.DataBaseSnapshot) error {
 	jsonData, err := json.Marshal(snapshot.SnapInfo)
 	if err != nil {
 		return fmt.Errorf("marshal snapshot info: %w", err)
@@ -50,7 +51,7 @@ func (r ELKRepository) storeSnapData(ctx context.Context, snapshot domain.DataBa
 	return nil
 }
 
-func (r ELKRepository) storeSamples(ctx context.Context, samples []*domain.QuerySample) error {
+func (r ELKRepository) storeSamples(ctx context.Context, samples []*common_domain.QuerySample) error {
 	var err error
 	var indexer esutil.BulkIndexer
 	indexer, err = esutil.NewBulkIndexer(esutil.BulkIndexerConfig{Index: "db_samples", Client: r.client,
@@ -101,7 +102,7 @@ func (r ELKRepository) storeSamples(ctx context.Context, samples []*domain.Query
 	return nil
 }
 
-func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end time.Time) ([]domain.ServerMeta, error) {
+func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end time.Time) ([]domain.ServerSummary, error) {
 
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -123,7 +124,7 @@ func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end tim
 		r.client.Search.WithTrackTotalHits(true),
 		r.client.Search.WithContext(ctx),
 		r.client.Search.WithBody(esutil.NewJSONReader(query)),
-		r.client.Search.WithStats("count = COUNT(*)  by server.Type, server.Host"),
+		r.client.Search.WithStats("| STATS last_snap = MAX(timestamp)  by server.Type, server.Host \n"),
 		r.client.Search.WithSort("timestamp"),
 	)
 	if err != nil {
@@ -143,15 +144,12 @@ func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end tim
 	if err != nil {
 		return nil, fmt.Errorf("decoding response body: %w", err)
 	}
-	ret := make([]domain.ServerMeta, len(decodedResp.Hits.Hits))
-	for _, hit := range decodedResp.Hits.Hits {
-		ret = append(ret, hit.Source.Server)
-	}
-	return ret, nil
-
+	//timestamps := make([]time.Time, len(decodedResp.Hits.Hits))
+	//return ret, nil
+	panic("unimplemented")
 }
 
-func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int) ([]domain.DataBaseSnapshot, int, error) {
+func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int) ([]common_domain.DataBaseSnapshot, int, error) {
 
 	//ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	//defer cancel()
@@ -161,18 +159,18 @@ func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, sta
 		return nil, 0, err3
 	}
 	if total == 0 {
-		return []domain.DataBaseSnapshot{}, 0, nil
+		return []common_domain.DataBaseSnapshot{}, 0, nil
 	}
 	if len(ids) == 0 {
-		return []domain.DataBaseSnapshot{}, 0, nil
+		return []common_domain.DataBaseSnapshot{}, 0, nil
 	}
 	samplesBySnap, err2 := r.getSnapSamples(ctx, ids)
 	if err2 != nil {
 		return nil, 0, err2
 	}
-	snapshots := make([]domain.DataBaseSnapshot, 0)
+	snapshots := make([]common_domain.DataBaseSnapshot, 0)
 	for id, snapInfo := range snapshotInfos {
-		snap := domain.DataBaseSnapshot{
+		snap := common_domain.DataBaseSnapshot{
 			Samples:  samplesBySnap[id],
 			SnapInfo: snapInfo,
 		}
@@ -181,7 +179,7 @@ func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, sta
 	return snapshots, total, nil
 }
 
-func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumber int, databaseID string, start time.Time, end time.Time) (map[string]domain.SnapInfo, []string, int, error) {
+func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumber int, databaseID string, start time.Time, end time.Time) (map[string]common_domain.SnapInfo, []string, int, error) {
 	from := (pageNumber - 1) * pageSize
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -219,7 +217,7 @@ func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumbe
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("decoding response body: %w", err)
 	}
-	snapshotInfos := make(map[string]domain.SnapInfo, len(decodedResp.Hits.Hits))
+	snapshotInfos := make(map[string]common_domain.SnapInfo, len(decodedResp.Hits.Hits))
 	total := int(decodedResp.Hits.Total.Value)
 	ids := make([]string, 0)
 	for _, si := range decodedResp.Hits.Hits {
@@ -229,7 +227,7 @@ func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumbe
 	return snapshotInfos, ids, total, nil
 }
 
-func (r ELKRepository) getSnapSamples(ctx context.Context, ids []string) (map[string][]*domain.QuerySample, error) {
+func (r ELKRepository) getSnapSamples(ctx context.Context, ids []string) (map[string][]*common_domain.QuerySample, error) {
 
 	queryString := "Snapshot.ID in (" + strings.Join(ids, ",") + ")"
 
@@ -260,13 +258,13 @@ func (r ELKRepository) getSnapSamples(ctx context.Context, ids []string) (map[st
 		print(resp2.String())
 		return nil, fmt.Errorf("decoding response body: %w", err)
 	}
-	samplesBySnap := make(map[string][]*domain.QuerySample, len(decodedResp2.Hits.Hits))
+	samplesBySnap := make(map[string][]*common_domain.QuerySample, len(decodedResp2.Hits.Hits))
 	for _, h := range decodedResp2.Hits.Hits {
 		sample := h.Source
 		if _, ok := samplesBySnap[sample.Snapshot.ID]; ok {
 			samplesBySnap[sample.Snapshot.ID] = append(samplesBySnap[sample.Snapshot.ID], &sample)
 		} else {
-			samplesBySnap[sample.Snapshot.ID] = []*domain.QuerySample{&sample}
+			samplesBySnap[sample.Snapshot.ID] = []*common_domain.QuerySample{&sample}
 		}
 	}
 
@@ -284,13 +282,13 @@ type SearchSnapResponse struct {
 }
 
 type SearchDBSnapHit struct {
-	Index   string          `json:"_index"`
-	ID      string          `json:"_id"`
-	Score   float64         `json:"_score"`
-	Ignored []string        `json:"_ignored"`
-	Source  domain.SnapInfo `json:"_source"`
-	Type    string          `json:"_type"`
-	Version int64           `json:"_version,omitempty"`
+	Index   string                 `json:"_index"`
+	ID      string                 `json:"_id"`
+	Score   float64                `json:"_score"`
+	Ignored []string               `json:"_ignored"`
+	Source  common_domain.SnapInfo `json:"_source"`
+	Type    string                 `json:"_type"`
+	Version int64                  `json:"_version,omitempty"`
 }
 
 type SearchSamplesResponse struct {
@@ -304,13 +302,13 @@ type SearchSamplesResponse struct {
 }
 
 type SearchSamplesHit struct {
-	Index   string             `json:"_index"`
-	ID      string             `json:"_id"`
-	Score   float64            `json:"_score"`
-	Ignored []string           `json:"_ignored"`
-	Source  domain.QuerySample `json:"_source"`
-	Type    string             `json:"_type"`
-	Version int64              `json:"_version,omitempty"`
+	Index   string                    `json:"_index"`
+	ID      string                    `json:"_id"`
+	Score   float64                   `json:"_score"`
+	Ignored []string                  `json:"_ignored"`
+	Source  common_domain.QuerySample `json:"_source"`
+	Type    string                    `json:"_type"`
+	Version int64                     `json:"_version,omitempty"`
 }
 
 type SearchServersResponse struct {
@@ -319,15 +317,22 @@ type SearchServersResponse struct {
 		Total struct {
 			Value int64
 		}
-		Hits []*SeachServerHit
+		Hits []*SearchServerHit
 	}
 }
-type SeachServerHit struct {
-	Index   string                             `json:"_index"`
-	ID      string                             `json:"_id"`
-	Score   float64                            `json:"_score"`
-	Ignored []string                           `json:"_ignored"`
-	Source  struct{ Server domain.ServerMeta } `json:"_source"`
-	Type    string                             `json:"_type"`
-	Version int64                              `json:"_version,omitempty"`
+type SearchServerHit struct {
+	Index   string                          `json:"_index"`
+	ID      string                          `json:"_id"`
+	Score   float64                         `json:"_score"`
+	Ignored []string                        `json:"_ignored"`
+	Source  struct{ Server ServerLastSnap } `json:"_source"`
+	Type    string                          `json:"_type"`
+	Version int64                           `json:"_version,omitempty"`
+}
+type ServerLastSnap struct {
+	Server struct {
+		Host string `json:"host"`
+		Type string `json:"type"`
+	}
+	LastSnap time.Time `json:"last_snap"`
 }

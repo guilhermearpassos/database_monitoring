@@ -62,16 +62,6 @@ func (m *DBSnapshot) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0x2a
 		}
 	}
-	if m.Database != nil {
-		size, err := m.Database.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x22
-	}
 	if m.Server != nil {
 		size, err := m.Server.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -165,10 +155,6 @@ func (m *DBSnapshot) SizeVT() (n int) {
 	}
 	if m.Server != nil {
 		l = m.Server.SizeVT()
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.Database != nil {
-		l = m.Database.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if len(m.Samples) > 0 {
@@ -329,42 +315,6 @@ func (m *DBSnapshot) UnmarshalVT(dAtA []byte) error {
 				m.Server = &ServerMetadata{}
 			}
 			if err := m.Server.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Database", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Database == nil {
-				m.Database = &DBMetadata{}
-			}
-			if err := m.Database.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

@@ -10,6 +10,7 @@ message QuerySample {
   string text = 3;
   bool blocked = 4;
   bool blocker = 5;
+  int64 time_elapsed_millis = 10;
   SessionMetadata session = 6;
   DBMetadata db = 7;
   BlockMetadata block_info = 8;

@@ -141,8 +141,9 @@ func (s *HtmxServer) HandleServerRefresh(w http.ResponseWriter, r *http.Request)
 			End:   timestamppb.New(endTime),
 		})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
+		//return
+		fmt.Println(err)
 	}
 	_ = resp
 

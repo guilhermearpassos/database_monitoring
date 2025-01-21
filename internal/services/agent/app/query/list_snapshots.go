@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
 	"time"
 )
@@ -22,6 +23,6 @@ func NewListSnapshotsHandler(repo domain.SampleRepository) ListSnapshotsHandler 
 	return ListSnapshotsHandler{repo: repo}
 }
 
-func (h ListSnapshotsHandler) Handle(ctx context.Context, query SnapshotsQuery) ([]domain.DataBaseSnapshot, int, error) {
+func (h ListSnapshotsHandler) Handle(ctx context.Context, query SnapshotsQuery) ([]common_domain.DataBaseSnapshot, int, error) {
 	return h.repo.ListSnapshots(ctx, query.DatabaseID, query.Start, query.End, query.PageNumber, query.PageSize)
 }

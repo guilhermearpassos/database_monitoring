@@ -1,0 +1,39 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1/collector;collectorv1";
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/collector/metrics.proto";
+import "database_monitoring/v1/snapshot.proto";
+
+service IngestionService{
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+  rpc IngestMetrics(DatabaseMetrics) returns (IngestMetricsResponse);
+  rpc IngestSnapshot(IngestSnapshotRequest) returns (IngestSnapshotResponse);
+}
+
+message RegisterAgentRequest{
+  string target_host = 1;
+  string target_type = 2;
+  string agent_version = 3;
+  repeated string tags = 4;
+}
+
+message RegisterAgentResponse{
+
+}
+
+message IngestMetricsResponse{
+  bool success = 1;
+  string message = 2;
+
+}
+
+message IngestSnapshotRequest{
+    DBSnapshot snapshot = 1;
+}
+
+message IngestSnapshotResponse{
+  bool success = 1;
+  string message = 2;
+
+}

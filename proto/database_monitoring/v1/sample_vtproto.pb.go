@@ -50,6 +50,11 @@ func (m *QuerySample) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TimeElapsedMillis != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TimeElapsedMillis))
+		i--
+		dAtA[i] = 0x50
+	}
 	if m.WaitInfo != nil {
 		size, err := m.WaitInfo.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -426,6 +431,9 @@ func (m *QuerySample) SizeVT() (n int) {
 	if m.WaitInfo != nil {
 		l = m.WaitInfo.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.TimeElapsedMillis != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.TimeElapsedMillis))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -847,6 +855,25 @@ func (m *QuerySample) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TimeElapsedMillis", wireType)
+			}
+			m.TimeElapsedMillis = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TimeElapsedMillis |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

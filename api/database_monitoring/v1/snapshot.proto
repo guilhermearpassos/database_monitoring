@@ -8,7 +8,6 @@ message DBSnapshot {
   string id = 1;
   google.protobuf.Timestamp timestamp = 2;
   ServerMetadata server = 3;
-  DBMetadata database = 4;
   repeated QuerySample samples = 5;
 }
 

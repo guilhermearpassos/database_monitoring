@@ -10,15 +10,15 @@ type Application struct {
 }
 
 type Queries struct {
-	ListDatabases query.ListDatabasesHandler
-	ListSnapshots query.ListSnapshotsHandler
+	ListServerSummary query.ListServerSummaryHandler
+	ListSnapshots     query.ListSnapshotsHandler
 }
 
 func NewApplication(repo domain.SampleRepository) Application {
 	return Application{
 		Queries: Queries{
-			ListDatabases: query.NewListDatabasesHandler(repo),
-			ListSnapshots: query.NewListSnapshotsHandler(repo),
+			ListServerSummary: query.NewListServerSummaryHandler(repo),
+			ListSnapshots:     query.NewListSnapshotsHandler(repo),
 		},
 	}
 }

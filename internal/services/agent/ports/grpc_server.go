@@ -20,28 +20,29 @@ func NewGRPCServer(app app.Application) GRPCServer {
 }
 
 func (s GRPCServer) ListDatabases(ctx context.Context, request *dbmv1.ListDatabasesRequest) (*dbmv1.ListDatabasesResponse, error) {
-	servers, err := s.app.Queries.ListDatabases.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())
-	if err != nil {
-		return nil, err
-	}
-	protoServers := make([]*dbmv1.InstrumentedServer, len(servers))
-	for i, server := range servers {
-		//dbs := make([]*dbmv1.DBMetadata, len(server.DataBaseMetadata))
-		//for j, dataBaseMetadata := range server.DataBaseMetadata {
-		//	dbs[j] = &dbmv1.DBMetadata{
-		//		DatabaseId:   dataBaseMetadata.DatabaseID,
-		//		DatabaseName: dataBaseMetadata.DatabaseName,
-		//	}
-		//}
-		protoServers[i] = &dbmv1.InstrumentedServer{
-			Server: &dbmv1.ServerMetadata{
-				Host: server.Host,
-				Type: server.Type,
-			},
-			Db: nil,
-		}
-	}
-	return &dbmv1.ListDatabasesResponse{Servers: protoServers}, nil
+	panic("implement me")
+	//servers, err := s.app.Queries.ListServerSummary.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())
+	//if err != nil {
+	//	return nil, err
+	//}
+	//protoServers := make([]*dbmv1.InstrumentedServer, len(servers))
+	//for i, server := range servers {
+	//	//dbs := make([]*dbmv1.DBMetadata, len(server.DataBaseMetadata))
+	//	//for j, dataBaseMetadata := range server.DataBaseMetadata {
+	//	//	dbs[j] = &dbmv1.DBMetadata{
+	//	//		DatabaseId:   dataBaseMetadata.DatabaseID,
+	//	//		DatabaseName: dataBaseMetadata.DatabaseName,
+	//	//	}
+	//	//}
+	//	protoServers[i] = &dbmv1.InstrumentedServer{
+	//		Server: &dbmv1.ServerMetadata{
+	//			Host: server.Host,
+	//			Type: server.Type,
+	//		},
+	//		Db: nil,
+	//	}
+	//}
+	//return &dbmv1.ListDatabasesResponse{Servers: protoServers}, nil
 }
 
 func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapshotsRequest) (*dbmv1.ListSnapshotsResponse, error) {
@@ -118,4 +119,22 @@ func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapsh
 		PageNumber: pageNumber,
 		TotalCount: int64(total),
 	}, nil
+}
+
+func (s GRPCServer) ListServerSummary(ctx context.Context, request *dbmv1.ListServerSummaryRequest) (*dbmv1.ListServerSummaryResponse, error) {
+	servers, err := s.app.Queries.ListServerSummary.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())
+	if err != nil {
+		return nil, err
+	}
+	protoServers := make([]*dbmv1.ServerSummary, len(servers))
+	for i, server := range servers {
+		protoServers[i] = &dbmv1.ServerSummary{
+			Name:                   server.Name,
+			Type:                   server.Type,
+			Connections:            int32(server.Connections),
+			RequestRate:            server.RequestRate,
+			ConnectionsByWaitGroup: server.ConnsByWaitGroup,
+		}
+	}
+	return &dbmv1.ListServerSummaryResponse{Servers: protoServers}, nil
 }

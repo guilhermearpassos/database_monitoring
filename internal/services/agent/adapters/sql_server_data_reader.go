@@ -2,8 +2,10 @@ package adapters
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/microsoft/go-mssqldb"
@@ -19,14 +21,16 @@ func NewSQLServerDataReader(db *sqlx.DB) SQLServerDataReader {
 	return SQLServerDataReader{db: db}
 }
 
-func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*domain.DataBaseSnapshot, error) {
+func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error) {
 	qDBName := `select database_id, name from sys.databases`
 	rowsDB, err := S.db.QueryContext(ctx, qDBName)
 	if err != nil {
 		return nil, fmt.Errorf("queryDatabases: %w", err)
 	}
-	dbInfo := make(map[string]domain.DataBaseMetadata)
-	defer rowsDB.Close()
+	dbInfo := make(map[string]common_domain.DataBaseMetadata)
+	defer func(rowsDB *sql.Rows) {
+		_ = rowsDB.Close()
+	}(rowsDB)
 	for rowsDB.Next() {
 		var dbID string
 		var name string
@@ -34,7 +38,7 @@ func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*domain.DataBa
 		if err != nil {
 			return nil, fmt.Errorf("queryDatabases scan: %w", err)
 		}
-		dbInfo[dbID] = domain.DataBaseMetadata{
+		dbInfo[dbID] = common_domain.DataBaseMetadata{
 			DatabaseID:   dbID,
 			DatabaseName: name,
 		}
@@ -78,8 +82,10 @@ FROM sys.dm_exec_sessions s
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	querySamplesByDB := make(map[string][]*domain.QuerySample, 0)
+	defer func(rows *sqlx.Rows) {
+		_ = rows.Close()
+	}(rows)
+	querySamplesByDB := make(map[string][]*common_domain.QuerySample)
 	blockingMap := make(map[int][]string)
 	for rows.Next() {
 		var sessionID int
@@ -144,14 +150,14 @@ FROM sys.dm_exec_sessions s
 			bl = append(bl, strconv.Itoa(sessionID))
 			blockingMap[blockingSessionId] = bl
 		}
-		qs := domain.QuerySample{
+		qs := common_domain.QuerySample{
 			Status:    pStatus,
 			Cmd:       "",
 			SqlHandle: sqlHandle,
 			Text:      text,
 			IsBlocked: blockingSessionId != 0,
 			IsBlocker: false,
-			Session: domain.SessionMetadata{
+			Session: common_domain.SessionMetadata{
 				SessionID:            strconv.Itoa(sessionID),
 				LoginTime:            loginTime,
 				HostName:             hostName,
@@ -161,27 +167,27 @@ FROM sys.dm_exec_sessions s
 				LastRequestStartTime: lastRequestStartTime,
 				LastRequestEndTime:   lastRequestEndTime,
 			},
-			Database: domain.DataBaseMetadata{
+			Database: common_domain.DataBaseMetadata{
 				DatabaseID:   strconv.Itoa(databaseId),
 				DatabaseName: dbInfo[strconv.Itoa(databaseId)].DatabaseName,
 			},
-			Block: domain.BlockMetadata{
+			Block: common_domain.BlockMetadata{
 				BlockedBy:       blockedBy,
 				BlockedSessions: make([]string, 0),
 			},
-			Wait: domain.WaitMetadata{
+			Wait: common_domain.WaitMetadata{
 				WaitType:     waitType,
 				WaitTime:     waitTime,
 				LastWaitType: lastWaitType,
 				WaitResource: waitResource,
 			},
-			Snapshot: domain.SnapshotMetadata{
+			Snapshot: common_domain.SnapshotMetadata{
 				ID:        snapID,
 				Timestamp: snapTime,
 			},
 		}
 		if _, ok := querySamplesByDB[strconv.Itoa(databaseId)]; !ok {
-			querySamplesByDB[strconv.Itoa(databaseId)] = make([]*domain.QuerySample, 0)
+			querySamplesByDB[strconv.Itoa(databaseId)] = make([]*common_domain.QuerySample, 0)
 		}
 		querySamplesByDB[strconv.Itoa(databaseId)] = append(querySamplesByDB[strconv.Itoa(databaseId)], &qs)
 
@@ -190,8 +196,8 @@ FROM sys.dm_exec_sessions s
 	if err != nil {
 		return nil, err
 	}
-	snapshots := make([]*domain.DataBaseSnapshot, 0)
-	for dbID, querySamples := range querySamplesByDB {
+	snapshots := make([]*common_domain.DataBaseSnapshot, 0)
+	for _, querySamples := range querySamplesByDB {
 		for _, qs := range querySamples {
 			var sessionID int
 			sessionID, err = strconv.Atoi(qs.Session.SessionID)
@@ -199,17 +205,16 @@ FROM sys.dm_exec_sessions s
 				qs.SetBlockedIds(bl)
 			}
 		}
-		dbMeta := dbInfo[dbID]
-		snapshots = append(snapshots, &domain.DataBaseSnapshot{
+		//dbMeta := dbInfo[dbID]
+		snapshots = append(snapshots, &common_domain.DataBaseSnapshot{
 			Samples: querySamples,
-			SnapInfo: domain.SnapInfo{
+			SnapInfo: common_domain.SnapInfo{
 				ID:        snapID,
 				Timestamp: snapTime,
-				Server: domain.ServerMeta{
+				Server: common_domain.ServerMeta{
 					Host: "localhost",
 					Type: "sqlserver",
 				},
-				Database: dbMeta,
 			},
 		})
 	}

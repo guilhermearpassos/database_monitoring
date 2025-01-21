@@ -1,0 +1,28 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database_monitoring_v1/collector;collectorv1";
+import "database_monitoring/v1/collector/metrics.proto";
+import "google/protobuf/timestamp.proto";
+
+service CollectorSyncService {
+  rpc SyncState(stream StateUpdate) returns (stream StateUpdate) {
+
+  }
+  rpc GetPeerState(PeerStateRequest) returns (PeerStateResponse) {}
+}
+message StateUpdate {
+  string collector_id = 1;
+  repeated DatabaseMetrics metrics = 2;
+  int64 sequence_number = 3;
+  string checksum = 4;  // For consistency verification
+}
+
+message PeerStateRequest {
+  string collector_id = 1;
+  google.protobuf.Timestamp since_timestamp = 2;
+}
+
+message PeerStateResponse {
+  map<string, DatabaseMetrics> current_state = 1;
+  int64 last_sequence_number = 2;
+}
