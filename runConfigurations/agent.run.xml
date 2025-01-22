@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="agent" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="database_monitoring" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="agent" />
+    <kind value="PACKAGE" />
+    <package value="github.com/guilhermearpassos/database-monitoring/cmd" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/root.go" />
+    <method v="2" />
+  </configuration>
+</component>
