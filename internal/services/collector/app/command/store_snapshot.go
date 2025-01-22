@@ -10,8 +10,8 @@ type StoreSnapShotHandler struct {
 	repo domain.SampleRepository
 }
 
-func NewStoreSnapShotHandler(repo domain.SampleRepository) *StoreSnapShotHandler {
-	return &StoreSnapShotHandler{repo: repo}
+func NewStoreSnapShotHandler(repo domain.SampleRepository) StoreSnapShotHandler {
+	return StoreSnapShotHandler{repo: repo}
 }
 
 func (h *StoreSnapShotHandler) Handle(ctx context.Context, snapshot common_domain.DataBaseSnapshot) error {

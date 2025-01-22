@@ -9,10 +9,10 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/ports"
-	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/adapters"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/ports"
+	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,18 +24,18 @@ import (
 )
 
 var (
-	GrpcCmd = &cobra.Command{
-		Use:     "grpc",
-		Short:   "run grpc server",
-		Long:    "run grpc server",
-		Aliases: []string{"server"},
-		Example: "dbm grpc",
-		RunE:    StartGrpc,
+	CollectorCmd = &cobra.Command{
+		Use:     "collector",
+		Short:   "run dbm collector",
+		Long:    "run dbm collector",
+		Aliases: []string{},
+		Example: "dbm collector",
+		RunE:    StartCollector,
 	}
 )
 
-func StartGrpc(cmd *cobra.Command, args []string) error {
-	address := "localhost:8082"
+func StartCollector(cmd *cobra.Command, args []string) error {
+	address := "localhost:7080"
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatal("failed to listen on 8082: %w", err)
@@ -65,9 +65,8 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 	}
 	elk := adapters.NewELKRepository(client)
 	application := app.NewApplication(elk)
-	server := ports.NewGRPCServer(application)
-	dbmv1.RegisterDBMApiServer(grpcServer, server)
-	dbmv1.RegisterDBMSupportApiServer(grpcServer, server)
+	svc := ports.NewIngestionSvc(*application)
+	collectorv1.RegisterIngestionServiceServer(grpcServer, svc)
 	reflection.Register(grpcServer)
 	go func() {
 		err = grpcServer.Serve(lis)
@@ -80,13 +79,14 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(err)
 	}
-	h, err := grpcui.HandlerViaReflection(ctx, cc, "database monitoring")
+	h, err := grpcui.HandlerViaReflection(ctx, cc, "database monitoring collector")
 	if err != nil {
 		panic(err)
 	}
-	err2 := http.ListenAndServe(":8083", h)
+	err2 := http.ListenAndServe(":7081", h)
 	if err2 != nil {
 		panic(err2)
 	}
 	return nil
+
 }

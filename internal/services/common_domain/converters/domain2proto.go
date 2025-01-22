@@ -6,7 +6,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func DatabaseSnapshotToProto(d common_domain.DataBaseSnapshot) *dbmv1.DBSnapshot {
+func DatabaseSnapshotToProto(d *common_domain.DataBaseSnapshot) *dbmv1.DBSnapshot {
 	samples := make([]*dbmv1.QuerySample, len(d.Samples))
 	for i, sample := range d.Samples {
 		samples[i] = SampleToProto(sample)
@@ -22,6 +22,10 @@ func DatabaseSnapshotToProto(d common_domain.DataBaseSnapshot) *dbmv1.DBSnapshot
 }
 
 func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
+	var waitType string
+	if sample.Wait.WaitType != nil {
+		waitType = *sample.Wait.WaitType
+	}
 	return &dbmv1.QuerySample{
 		Status:            sample.Status,
 		SqlHandle:         sample.SqlHandle,
@@ -48,10 +52,14 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 			BlockedSessions: sample.Block.BlockedSessions,
 		},
 		WaitInfo: &dbmv1.WaitMetadata{
-			WaitType:     *sample.Wait.WaitType,
+			WaitType:     waitType,
 			WaitTime:     int64(sample.Wait.WaitTime),
 			LastWaitType: sample.Wait.LastWaitType,
 			WaitResource: sample.Wait.WaitResource,
+		},
+		SnapInfo: &dbmv1.SnapMetadata{
+			Id:        sample.Snapshot.ID,
+			Timestamp: timestamppb.New(sample.Snapshot.Timestamp),
 		},
 	}
 }

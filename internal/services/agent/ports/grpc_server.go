@@ -2,11 +2,11 @@ package ports
 
 import (
 	"context"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/app"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/app/query"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app/query"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"time"
 )
 
 type GRPCServer struct {
@@ -100,19 +100,7 @@ func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapsh
 				},
 			}
 		}
-		protoSnaps[i] = &dbmv1.DBSnapshot{
-			Id:        "",
-			Timestamp: timestamppb.New(snap.SnapInfo.Timestamp.In(time.UTC)),
-			Server: &dbmv1.ServerMetadata{
-				Host: snap.SnapInfo.Server.Host,
-				Type: snap.SnapInfo.Server.Type,
-			},
-			Database: &dbmv1.DBMetadata{
-				DatabaseId:   snap.SnapInfo.Database.DatabaseID,
-				DatabaseName: snap.SnapInfo.Database.DatabaseName,
-			},
-			Samples: protoSamples,
-		}
+		protoSnaps[i] = converters.DatabaseSnapshotToProto(&snap)
 	}
 	return &dbmv1.ListSnapshotsResponse{
 		Snapshots:  protoSnaps,
@@ -122,19 +110,20 @@ func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapsh
 }
 
 func (s GRPCServer) ListServerSummary(ctx context.Context, request *dbmv1.ListServerSummaryRequest) (*dbmv1.ListServerSummaryResponse, error) {
-	servers, err := s.app.Queries.ListServerSummary.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())
-	if err != nil {
-		return nil, err
-	}
-	protoServers := make([]*dbmv1.ServerSummary, len(servers))
-	for i, server := range servers {
-		protoServers[i] = &dbmv1.ServerSummary{
-			Name:                   server.Name,
-			Type:                   server.Type,
-			Connections:            int32(server.Connections),
-			RequestRate:            server.RequestRate,
-			ConnectionsByWaitGroup: server.ConnsByWaitGroup,
-		}
-	}
-	return &dbmv1.ListServerSummaryResponse{Servers: protoServers}, nil
+	panic("implement me")
+	//servers, err := s.app.Queries.ListServerSummary.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())
+	//if err != nil {
+	//	return nil, err
+	//}
+	//protoServers := make([]*dbmv1.ServerSummary, len(servers))
+	//for i, server := range servers {
+	//	protoServers[i] = &dbmv1.ServerSummary{
+	//		Name:                   server.Name,
+	//		Type:                   server.Type,
+	//		Connections:            int32(server.Connections),
+	//		RequestRate:            server.RequestRate,
+	//		ConnectionsByWaitGroup: server.ConnsByWaitGroup,
+	//	}
+	//}
+	//return &dbmv1.ListServerSummaryResponse{Servers: protoServers}, nil
 }

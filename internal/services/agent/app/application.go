@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/app/query"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app/query"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 )
 
 type Application struct {

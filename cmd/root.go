@@ -12,6 +12,7 @@ func main() {
 			return cmd.Usage()
 		},
 	}
+	c.AddCommand(CollectorCmd)
 	c.AddCommand(AgentCmd)
 	c.AddCommand(GrpcCmd)
 	c.AddCommand(UiCmd)

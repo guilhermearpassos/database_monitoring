@@ -25,6 +25,7 @@ func NewELKRepository(client *elasticsearch.Client) *ELKRepository {
 var _ domain.SampleRepository = (*ELKRepository)(nil)
 
 func (r ELKRepository) StoreSnapshot(ctx context.Context, snapshot common_domain.DataBaseSnapshot) error {
+
 	err := r.storeSnapData(ctx, snapshot)
 	if err != nil {
 		return fmt.Errorf("failed to store snapshot data: %w", err)

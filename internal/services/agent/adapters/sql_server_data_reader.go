@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/microsoft/go-mssqldb"
 	"strconv"
@@ -197,27 +197,28 @@ FROM sys.dm_exec_sessions s
 		return nil, err
 	}
 	snapshots := make([]*common_domain.DataBaseSnapshot, 0)
-	for _, querySamples := range querySamplesByDB {
-		for _, qs := range querySamples {
+	querySamples := make([]*common_domain.QuerySample, 0)
+	for _, qs2 := range querySamplesByDB {
+		for _, qs := range qs2 {
 			var sessionID int
 			sessionID, err = strconv.Atoi(qs.Session.SessionID)
 			if bl, ok := blockingMap[sessionID]; ok {
 				qs.SetBlockedIds(bl)
 			}
 		}
-		//dbMeta := dbInfo[dbID]
-		snapshots = append(snapshots, &common_domain.DataBaseSnapshot{
-			Samples: querySamples,
-			SnapInfo: common_domain.SnapInfo{
-				ID:        snapID,
-				Timestamp: snapTime,
-				Server: common_domain.ServerMeta{
-					Host: "localhost",
-					Type: "sqlserver",
-				},
-			},
-		})
+		querySamples = append(querySamples, qs2...)
 	}
+	snapshots = append(snapshots, &common_domain.DataBaseSnapshot{
+		Samples: querySamples,
+		SnapInfo: common_domain.SnapInfo{
+			ID:        snapID,
+			Timestamp: snapTime,
+			Server: common_domain.ServerMeta{
+				Host: "localhost",
+				Type: "sqlserver",
+			},
+		},
+	})
 
 	return snapshots, nil
 }

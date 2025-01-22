@@ -55,5 +55,10 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 			LastWaitType: sample.WaitInfo.LastWaitType,
 			WaitResource: sample.WaitInfo.WaitResource,
 		},
+		Snapshot: common_domain.SnapshotMetadata{
+			ID:        sample.SnapInfo.Id,
+			Timestamp: sample.SnapInfo.Timestamp.AsTime(),
+		},
+		Cmd: "",
 	}
 }

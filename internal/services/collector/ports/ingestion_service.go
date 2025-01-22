@@ -1,4 +1,4 @@
-package collector
+package ports
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 type IngestionSvc struct {
 	*collectorv1.UnimplementedIngestionServiceServer
+	*collectorv1.UnimplementedCollectorSyncServiceServer
 	agents map[string]*domain.AgentConfig
 	app    app.Application
 }

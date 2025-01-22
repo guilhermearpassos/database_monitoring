@@ -15,8 +15,14 @@ message QuerySample {
   DBMetadata db = 7;
   BlockMetadata block_info = 8;
   WaitMetadata wait_info = 9;
-
+  SnapMetadata snap_info = 11;
 }
+
+message SnapMetadata {
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
+
 message SessionMetadata {
   string session_id = 1;
   google.protobuf.Timestamp login_time = 2;

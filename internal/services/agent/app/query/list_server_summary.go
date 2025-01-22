@@ -2,7 +2,7 @@ package query
 
 import (
 	"context"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/dbm/domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"time"
 )
 
