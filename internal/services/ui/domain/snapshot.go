@@ -20,10 +20,10 @@ type Server struct {
 // Sample data - in a real app, this would come from a database
 var SampleServers = []Server{
 	{
-		Name:           "Server 1",
+		Name:           "localhost",
 		Connections:    120,
 		RequestRate:    "350 req/s",
-		DatabaseType:   "mysql",
+		DatabaseType:   "mssql",
 		BlockedPercent: 15,
 		WaitTypes: []WaitType{
 			{"CPU", 40, "bg-blue-500"},
@@ -41,6 +41,20 @@ var SampleServers = []Server{
 			{"CPU", 50, "bg-blue-500"},
 			{"IO", 30, "bg-green-500"},
 			{"Network", 20, "bg-yellow-500"},
+		},
+	},
+	{
+		Name:           "Server 2",
+		Connections:    22,
+		RequestRate:    "10 req/s",
+		DatabaseType:   "mysql",
+		BlockedPercent: 10,
+		WaitTypes: []WaitType{
+			{"CPU", 20, "bg-blue-500"},
+			{"IO", 15, "bg-green-500"},
+			{"Network", 30, "bg-yellow-500"},
+			{"Locks", 25, "bg-yellow-500"},
+			{"Memory", 10, "bg-yellow-500"},
 		},
 	},
 }

@@ -13,6 +13,7 @@ type SnapshotsQuery struct {
 	PageNumber int
 	PageSize   int
 	DatabaseID string
+	ServerID   string
 }
 
 type ListSnapshotsHandler struct {
@@ -24,5 +25,5 @@ func NewListSnapshotsHandler(repo domain.SampleRepository) ListSnapshotsHandler 
 }
 
 func (h ListSnapshotsHandler) Handle(ctx context.Context, query SnapshotsQuery) ([]common_domain.DataBaseSnapshot, int, error) {
-	return h.repo.ListSnapshots(ctx, query.DatabaseID, query.Start, query.End, query.PageNumber, query.PageSize)
+	return h.repo.ListSnapshots(ctx, query.DatabaseID, query.Start, query.End, query.PageNumber, query.PageSize, query.ServerID)
 }

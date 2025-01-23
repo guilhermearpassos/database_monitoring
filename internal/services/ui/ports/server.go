@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -160,30 +161,6 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	server := r.URL.Query().Get("server")
-	//startStr := r.URL.Query().Get("start")
-	//endStr := r.URL.Query().Get("end")
-	//
-	//if len(startStr) == 16 {
-	//	startStr += ":00"
-	//}
-	//if len(endStr) == 16 {
-	//	endStr += ":00"
-	//}
-	//
-	//startTime, err := time.Parse("2006-01-02T15:04:05", startStr)
-	//if err != nil {
-	//	log.Printf("Error parsing start time: %v", err)
-	//	http.Error(w, "Invalid start time: "+err.Error(), http.StatusBadRequest)
-	//	return
-	//}
-	//
-	//endTime, err := time.Parse("2006-01-02T15:04:05", endStr)
-	//if err != nil {
-	//	log.Printf("Error parsing end time: %v", err)
-	//	http.Error(w, "Invalid end time: "+err.Error(), http.StatusBadRequest)
-	//	return
-	//}
-
 	data := domain.GenerateSampleData()
 	var filteredData []domain.TimeSeriesData
 	for _, entry := range data {
@@ -267,6 +244,34 @@ func getTimeRange(r *http.Request) (time.Time, time.Time, error) {
 }
 
 func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
+	startTime, endTime, err := getTimeRange(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	server := r.URL.Query().Get("selected-server")
+	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
+		Start:      timestamppb.New(startTime),
+		End:        timestamppb.New(endTime),
+		Host:       server,
+		Database:   "",
+		PageSize:   5,
+		PageNumber: 0,
+	})
+	var qsdata []domain.Snapshot
+	if err == nil {
+		qsdata = make([]domain.Snapshot, 0)
+		for _, snapshot := range resp.Snapshots {
+			qsdata = append(qsdata, domain.Snapshot{
+				ID:        snapshot.Id,
+				Timestamp: snapshot.Timestamp.AsTime(),
+				DBName:    "",
+				Status:    "",
+			})
+		}
+	} else {
+		qsdata = domain.Snapshots
+	}
 	sortDirection := r.URL.Query().Get("direction")
 	if sortDirection == "" {
 		sortDirection = "asc" // default sort direction
@@ -274,11 +279,12 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters for sorting
 	column := r.URL.Query().Get("column")
 	if column == "" {
-		column = "timestamp" // Default sort column
+		column = "timestamp"   // Default sort column
+		sortDirection = "desc" // default sort direction
 	}
 
 	// Sort snapshots
-	sortedSnapshots := SortSnapshots(domain.Snapshots, column, sortDirection)
+	sortedSnapshots := SortSnapshots(qsdata, column, sortDirection)
 
 	// Create the template data
 	data := struct {
@@ -291,7 +297,7 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		SortColumn:    column,
 	}
 
-	err := s.templates.ExecuteTemplate(w, "active_conn_table.html", data)
+	err = s.templates.ExecuteTemplate(w, "active_conn_table.html", data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -306,9 +312,28 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	//startTime, endTime, err := getTimeRange(r)
+	//if err != nil {
+	//	http.Error(w, err.Error(), http.StatusBadRequest)
+	//	return
+	//}
+	resp, err := s.client.GetSnapshot(r.Context(), &dbmv1.GetSnapshotRequest{Id: snapshotID})
+	var querySamplesForSnapshot []domain.QuerySample
+	if err != nil {
+		querySamplesForSnapshot = make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
+		for i, sample := range resp.Snapshot.Samples {
+			querySamplesForSnapshot[i] = domain.QuerySample{
+				Query:         sample.Text,
+				ExecutionTime: strconv.FormatInt(sample.TimeElapsedMillis, 10),
+				User:          sample.Session.LoginName,
+			}
+		}
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else {
+		querySamplesForSnapshot = domain.QuerySamples[snapshotID]
 
+	}
 	// Get the query samples for the snapshot
-	querySamplesForSnapshot := domain.QuerySamples[snapshotID]
 
 	// Parse query parameters for sorting query samples
 	column := r.URL.Query().Get("column")

@@ -68,12 +68,12 @@ func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end tim
 	panic("unimplemented")
 }
 
-func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int) ([]common_domain.DataBaseSnapshot, int, error) {
+func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int, serverID string) ([]common_domain.DataBaseSnapshot, int, error) {
 
 	//ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	//defer cancel()
 
-	snapshotInfos, ids, total, err3 := r.getSnapInfos(ctx, pageSize, pageNumber, "5", start, end)
+	snapshotInfos, ids, total, err3 := r.getSnapInfos(ctx, pageSize, pageNumber, start, end, serverID)
 	if err3 != nil {
 		return nil, 0, err3
 	}
@@ -98,16 +98,23 @@ func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, sta
 	return snapshots, total, nil
 }
 
-func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumber int, databaseID string, start time.Time, end time.Time) (map[string]common_domain.SnapInfo, []string, int, error) {
+func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumber int, start time.Time, end time.Time, serverID string) (map[string]common_domain.SnapInfo, []string, int, error) {
 	from := (pageNumber - 1) * pageSize
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
 			"bool": map[string]interface{}{
-				"must": map[string]interface{}{
-					"range": map[string]interface{}{
-						"timestamp": map[string]interface{}{
-							"gte": start,
-							"lte": end,
+				"must": []map[string]interface{}{
+					{
+						"term": map[string]interface{}{
+							"server.Host.keyword": serverID,
+						},
+					},
+					{
+						"range": map[string]interface{}{
+							"timestamp": map[string]interface{}{
+								"gte": start,
+								"lte": end,
+							},
 						},
 					},
 				},
@@ -254,4 +261,53 @@ type ServerLastSnap struct {
 		Type string `json:"type"`
 	}
 	LastSnap time.Time `json:"last_snap"`
+}
+
+func (r ELKRepository) GetSnapshot(ctx context.Context, id string) (common_domain.DataBaseSnapshot, error) {
+	query := map[string]interface{}{
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"must": []map[string]interface{}{
+					{
+						"term": map[string]interface{}{
+							"id.keyword": id,
+						},
+					},
+				},
+			},
+		},
+	}
+	resp, err := r.client.Search(
+		r.client.Search.WithContext(ctx),
+		r.client.Search.WithIndex("db_snapshots"),
+		r.client.Search.WithTrackTotalHits(true),
+		r.client.Search.WithContext(ctx),
+		r.client.Search.WithBody(esutil.NewJSONReader(query)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("getting snapshot: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.IsError() {
+		return nil, fmt.Errorf("getting snapshot: (code %d), %s:  %s", resp.StatusCode, resp.Status(), resp.String())
+	}
+	var decodedResp SearchSnapResponse
+	err = json.NewDecoder(resp.Body).Decode(&decodedResp)
+	if err != nil {
+		return nil, fmt.Errorf("decoding response body: %w", err)
+	}
+	if len(decodedResp.Hits.Hits) == 0 {
+		return nil, fmt.Errorf("snapshot %s not found", id)
+	}
+	snapInfo := decodedResp.Hits.Hits[0].Source
+	snapSamples, err := r.getSnapSamples(ctx, []string{id})
+	if err != nil {
+		return nil, err
+	}
+	snap := common_domain.DataBaseSnapshot{
+		Samples:  snapSamples[id],
+		SnapInfo: snapInfo,
+	}
+
+	return snap, nil
 }

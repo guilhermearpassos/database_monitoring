@@ -6,7 +6,15 @@ import "database_monitoring/v1/snapshot.proto";
 
 service DBMApi {
   rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
   rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
+  rpc ListServers(ListServersRequest) returns (ListServersResponse);
+}
+message GetSnapshotRequest{
+  string id = 1;
+}
+message GetSnapshotResponse{
+  DBSnapshot snapshot = 1;
 }
 
 message ListSnapshotsRequest{
@@ -33,6 +41,15 @@ message ListServerSummaryRequest{
 
 message ListServerSummaryResponse{
   repeated ServerSummary servers = 1;
+}
+
+message ListServersRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+
+}
+message ListServersResponse{
+  repeated ServerMetadata servers = 1;
 }
 
 message ServerSummary {

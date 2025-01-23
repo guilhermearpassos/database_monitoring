@@ -12,6 +12,7 @@ type Application struct {
 type Queries struct {
 	ListServerSummary query.ListServerSummaryHandler
 	ListSnapshots     query.ListSnapshotsHandler
+	GetSnapshot       query.GetSnapshotHandler
 }
 
 func NewApplication(repo domain.SampleRepository) Application {
@@ -19,6 +20,7 @@ func NewApplication(repo domain.SampleRepository) Application {
 		Queries: Queries{
 			ListServerSummary: query.NewListServerSummaryHandler(repo),
 			ListSnapshots:     query.NewListSnapshotsHandler(repo),
+			GetSnapshot:       query.NewGetSnapshotHandler(repo),
 		},
 	}
 }

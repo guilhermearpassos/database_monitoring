@@ -56,6 +56,7 @@ func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapsh
 		End:        request.End.AsTime(),
 		PageSize:   int(request.PageSize),
 		PageNumber: int(pageNumber),
+		ServerID:   request.Host,
 	})
 	if err != nil {
 		return nil, err
@@ -126,4 +127,12 @@ func (s GRPCServer) ListServerSummary(ctx context.Context, request *dbmv1.ListSe
 	//	}
 	//}
 	//return &dbmv1.ListServerSummaryResponse{Servers: protoServers}, nil
+}
+
+func (s GRPCServer) GetSnapshot(ctx context.Context, request *dbmv1.GetSnapshotRequest) (*dbmv1.GetSnapshotResponse, error) {
+	snap, err := s.app.Queries.GetSnapshot.Handle(ctx, request.Id)
+	if err != nil {
+		return nil, err
+	}
+	return &dbmv1.GetSnapshotResponse{Snapshot: converters.DatabaseSnapshotToProto(&snap)}, nil
 }
