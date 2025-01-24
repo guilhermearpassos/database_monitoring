@@ -319,7 +319,7 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 	//}
 	resp, err := s.client.GetSnapshot(r.Context(), &dbmv1.GetSnapshotRequest{Id: snapshotID})
 	var querySamplesForSnapshot []domain.QuerySample
-	if err != nil {
+	if err == nil {
 		querySamplesForSnapshot = make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
 		for i, sample := range resp.Snapshot.Samples {
 			querySamplesForSnapshot[i] = domain.QuerySample{

@@ -29,12 +29,12 @@
         <td>{{$snap.DBName}}</td>
         <td>{{$snap.Status}}</td>
         <td>
-            <button class="btn btn-info" hx-get="/samples/{{$snap.ID}}" hx-target="#queries-{{$snap.ID}}"
+            <button class="btn btn-info" hx-get="/samples/{{$snap.ID}}" hx-target="#queries---{{$snap.ID}}"
                     hx-swap="innerHTML" hx-trigger="click">View Queries
             </button>
         </td>
     </tr>
-    <tr class="expandable-row" id="queries-{{$snap.ID}}">
+    <tr class="expandable-row" id="queries---{{$snap.ID}}">
     </tr>
     {{end}}
     </tbody>

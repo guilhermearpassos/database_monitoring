@@ -129,7 +129,7 @@ func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumbe
 		r.client.Search.WithTrackTotalHits(true),
 		r.client.Search.WithContext(ctx),
 		r.client.Search.WithBody(esutil.NewJSONReader(query)),
-		r.client.Search.WithSort("timestamp"),
+		r.client.Search.WithSort("timestamp:desc"),
 	)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("getting snapshots: %w", err)
@@ -285,24 +285,24 @@ func (r ELKRepository) GetSnapshot(ctx context.Context, id string) (common_domai
 		r.client.Search.WithBody(esutil.NewJSONReader(query)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("getting snapshot: %w", err)
+		return common_domain.DataBaseSnapshot{}, fmt.Errorf("getting snapshot: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.IsError() {
-		return nil, fmt.Errorf("getting snapshot: (code %d), %s:  %s", resp.StatusCode, resp.Status(), resp.String())
+		return common_domain.DataBaseSnapshot{}, fmt.Errorf("getting snapshot: (code %d), %s:  %s", resp.StatusCode, resp.Status(), resp.String())
 	}
 	var decodedResp SearchSnapResponse
 	err = json.NewDecoder(resp.Body).Decode(&decodedResp)
 	if err != nil {
-		return nil, fmt.Errorf("decoding response body: %w", err)
+		return common_domain.DataBaseSnapshot{}, fmt.Errorf("decoding response body: %w", err)
 	}
 	if len(decodedResp.Hits.Hits) == 0 {
-		return nil, fmt.Errorf("snapshot %s not found", id)
+		return common_domain.DataBaseSnapshot{}, fmt.Errorf("snapshot %s not found", id)
 	}
 	snapInfo := decodedResp.Hits.Hits[0].Source
 	snapSamples, err := r.getSnapSamples(ctx, []string{id})
 	if err != nil {
-		return nil, err
+		return common_domain.DataBaseSnapshot{}, err
 	}
 	snap := common_domain.DataBaseSnapshot{
 		Samples:  snapSamples[id],
