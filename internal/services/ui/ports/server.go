@@ -161,12 +161,56 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	server := r.URL.Query().Get("server")
-	data := domain.GenerateSampleData()
-	var filteredData []domain.TimeSeriesData
-	for _, entry := range data {
-		filteredData = append(filteredData, entry)
-		//if !entry.Timestamp.Before(startTime) && !entry.Timestamp.After(endTime) {
-		//}
+
+	pageNumber := int64(1)
+	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
+		Start:      timestamppb.New(startTime),
+		End:        timestamppb.New(endTime),
+		Host:       server,
+		Database:   "",
+		PageSize:   30,
+		PageNumber: pageNumber,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	snaps := resp.GetSnapshots()
+	for int64(len(snaps)) < resp.TotalCount {
+		pageNumber++
+
+		resp2, err2 := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
+			Start:      timestamppb.New(startTime),
+			End:        timestamppb.New(endTime),
+			Host:       server,
+			Database:   "",
+			PageSize:   30,
+			PageNumber: pageNumber,
+		})
+		if err2 != nil {
+			http.Error(w, err2.Error(), http.StatusInternalServerError)
+			return
+		}
+		snaps = append(snaps, resp2.GetSnapshots()...)
+	}
+	filteredData := make([]domain.TimeSeriesData, 0)
+	for _, snap := range snaps {
+		waitGroups := make(map[string]int)
+		for _, sample := range snap.Samples {
+			waitType := sample.WaitInfo.WaitType
+			if waitType == "" {
+				waitType = "none"
+			}
+			if _, ok := waitGroups[waitType]; ok {
+				waitGroups[waitType]++
+			} else {
+				waitGroups[waitType] = 1
+			}
+		}
+		filteredData = append(filteredData, domain.TimeSeriesData{
+			Timestamp:  snap.Timestamp.AsTime(),
+			WaitGroups: waitGroups,
+		})
 	}
 
 	chartData, err := json.Marshal(filteredData)

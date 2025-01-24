@@ -6,7 +6,12 @@
             <div class="card">
                 <div class="card-section">
                     <h3>Database Connections by Wait Group</h3>
-                    {{template "connections_timeseries.html" .}}
+                    <div id="chart-container"
+                         data-chart='{{.ChartData}}'
+                         data-time-range='{{.TimeRange}}'
+                         style="height: 400px">
+                        <canvas id="chart"></canvas>
+                    </div>
                 </div>
                 <div class="card-section">
                     <div id="snapshots-table-container"
