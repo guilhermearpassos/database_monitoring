@@ -16,7 +16,7 @@ function createChart(data, timeRange) {
     console.log(new Date(timeRange.start))
     const waitGroups = Object.keys(data[0]?.wait_groups || {});
     const datasets = waitGroups.map(waitGroup => {
-        const color = getRandomColor();
+        const color = getRandomColor(waitGroup);
         return {
             label: waitGroup,
             data: data.map(item => ({
@@ -77,6 +77,14 @@ function createChart(data, timeRange) {
     });
 }
 
-function getRandomColor() {
+const colorMapping = {
+    "PAGELATCH_EX": "#b91c1c",
+    "PAGELATCH_SH": "#ef4444",
+    "none":         "#6ee7b7",}
+
+function getRandomColor(waitGroup) {
+    if (waitGroup in colorMapping){
+        return colorMapping[waitGroup];
+    }
     return '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 }

@@ -9,12 +9,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"html/template"
 	"log"
+	"math/rand"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 )
+
+var colors = map[string]string{
+	"PAGELATCH_EX": "bg-red-700",
+	"PAGELATCH_SH": "bg-red-500",
+	"none":         "bg-green-300",
+}
 
 type HtmxServer struct {
 	client        dbmv1.DBMApiClient
@@ -82,24 +89,24 @@ func SortSnapshots(snapshots []domain.Snapshot, column string, sortDirection str
 
 			}
 		})
-	case "db_name":
-		sort.Slice(snapshots, func(i, j int) bool {
-			if sortDirection == "asc" {
-				return strings.ToLower(snapshots[i].DBName) < strings.ToLower(snapshots[j].DBName)
-			} else {
-				return strings.ToLower(snapshots[i].DBName) > strings.ToLower(snapshots[j].DBName)
-
-			}
-		})
-	case "status":
-		sort.Slice(snapshots, func(i, j int) bool {
-			if sortDirection == "asc" {
-				return strings.ToLower(snapshots[i].Status) < strings.ToLower(snapshots[j].Status)
-			} else {
-				return strings.ToLower(snapshots[i].Status) > strings.ToLower(snapshots[j].Status)
-
-			}
-		})
+		//case "db_name":
+		//	sort.Slice(snapshots, func(i, j int) bool {
+		//		if sortDirection == "asc" {
+		//			return strings.ToLower(snapshots[i].DBName) < strings.ToLower(snapshots[j].DBName)
+		//		} else {
+		//			return strings.ToLower(snapshots[i].DBName) > strings.ToLower(snapshots[j].DBName)
+		//
+		//		}
+		//	})
+		//case "status":
+		//	sort.Slice(snapshots, func(i, j int) bool {
+		//		if sortDirection == "asc" {
+		//			return strings.ToLower(snapshots[i].Status) < strings.ToLower(snapshots[j].Status)
+		//		} else {
+		//			return strings.ToLower(snapshots[i].Status) > strings.ToLower(snapshots[j].Status)
+		//
+		//		}
+		//	})
 	}
 	return snapshots
 }
@@ -162,6 +169,8 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 	}
 	server := r.URL.Query().Get("server")
 
+	startTime = startTime.Add(-1 * time.Minute)
+	endTime = endTime.Add(1 * time.Minute)
 	pageNumber := int64(1)
 	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
 		Start:      timestamppb.New(startTime),
@@ -220,8 +229,8 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 	}
 
 	timeRange := map[string]string{
-		"start": startTime.Format("2006-01-02T15:04:05"),
-		"end":   endTime.Format("2006-01-02T15:04:05"),
+		"start": startTime.Add(-1 * time.Minute).Format("2006-01-02T15:04:05"),
+		"end":   endTime.Add(1 * time.Minute).Format("2006-01-02T15:04:05"),
 	}
 	timeRangeJSON, err := json.Marshal(timeRange)
 	if err != nil {
@@ -235,15 +244,17 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 	//_ = timeRange // TODO: Implement filtering
 	//server-drilldown
 	err = s.templates.ExecuteTemplate(w, "slideover.html", struct {
-		State      string
-		ServerName string
-		ChartData  string
-		TimeRange  string
+		State        string
+		ServerName   string
+		DatabaseType string
+		ChartData    string
+		TimeRange    string
 	}{
-		State:      "open",
-		ServerName: server,
-		ChartData:  string(chartData),
-		TimeRange:  string(timeRangeJSON),
+		State:        "open",
+		ServerName:   server,
+		ChartData:    string(chartData),
+		TimeRange:    string(timeRangeJSON),
+		DatabaseType: "mssql",
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -306,11 +317,69 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		qsdata = make([]domain.Snapshot, 0)
 		for _, snapshot := range resp.Snapshots {
+			users := make(map[string]struct{})
+			WaitersNo := 0
+			BlockersNo := 0
+			WaitDuration := 0
+			SumDuration := 0
+			MaxDuration := 0
+			waitersPerGroup := make(map[string]int)
+			for _, sample := range snapshot.Samples {
+				users[sample.Session.LoginName] = struct{}{}
+				if int(sample.TimeElapsedMillis) > MaxDuration {
+					MaxDuration = int(sample.TimeElapsedMillis)
+				}
+				SumDuration += int(sample.TimeElapsedMillis)
+				if sample.Blocked {
+					WaitersNo++
+					WaitDuration += int(sample.WaitInfo.WaitTime)
+
+				}
+				if _, ok := waitersPerGroup[sample.WaitInfo.WaitType]; !ok {
+					waitersPerGroup[sample.WaitInfo.WaitType] = 1
+				} else {
+					waitersPerGroup[sample.WaitInfo.WaitType]++
+				}
+				if sample.Blocker {
+					BlockersNo++
+				}
+
+			}
+			waitGroups := make([]domain.WaitType, len(waitersPerGroup))
+			for k, v := range waitersPerGroup {
+				wait := "none"
+				if k != "" {
+					wait = k
+				}
+				color, ok := colors[wait]
+				if !ok {
+					color = generateRandomColor()
+				}
+				waitGroups = append(waitGroups, domain.WaitType{
+					Type:    wait,
+					Percent: v * 100 / len(snapshot.Samples),
+					Color:   color,
+				})
+			}
+			usersSlice := make([]string, len(users))
+			for user := range users {
+				usersSlice = append(usersSlice, user)
+			}
+			AvgDuration := float64(SumDuration) / float64(len(snapshot.Samples))
+			slices.SortFunc(waitGroups, func(a, b domain.WaitType) int {
+				return b.Percent - a.Percent
+			})
 			qsdata = append(qsdata, domain.Snapshot{
-				ID:        snapshot.Id,
-				Timestamp: snapshot.Timestamp.AsTime(),
-				DBName:    "",
-				Status:    "",
+				ID:           snapshot.Id,
+				Timestamp:    snapshot.Timestamp.AsTime(),
+				Connections:  len(snapshot.Samples),
+				WaitEvGroups: waitGroups,
+				Users:        usersSlice,
+				WaitersNo:    WaitersNo,
+				BlockersNo:   BlockersNo,
+				WaitDuration: float64(WaitDuration),
+				AvgDuration:  AvgDuration,
+				MaxDuration:  float64(MaxDuration),
 			})
 		}
 	} else {
@@ -348,6 +417,13 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func generateRandomColor() string {
+	baseColors := []string{"red", "green", "blue", "orange", "pink", "purple", "cyan", "yellow"}
+	baseC := baseColors[rand.Intn(len(baseColors))]
+	level := rand.Intn(20) * 50
+	return fmt.Sprintf("bg-%s-%d", baseC, level)
+}
+
 func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 	// Get snapshot ID from the URL
 	var snapshotID string
@@ -366,10 +442,29 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		querySamplesForSnapshot = make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
 		for i, sample := range resp.Snapshot.Samples {
+			var blockTime, blockDetails string
+			if sample.Blocker {
+				blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
+			}
+			if sample.Blocked {
+				blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
+				blockDetails += fmt.Sprintf("\nblocked by %s", sample.BlockInfo.BlockedBy)
+			}
+			sid, err2 := strconv.Atoi(sample.Session.SessionId)
+			if err2 != nil {
+				http.Error(w, err2.Error(), http.StatusInternalServerError)
+			}
 			querySamplesForSnapshot[i] = domain.QuerySample{
+				SID:           sid,
 				Query:         sample.Text,
-				ExecutionTime: strconv.FormatInt(sample.TimeElapsedMillis, 10),
+				ExecutionTime: strconv.Itoa(int(sample.TimeElapsedMillis)),
 				User:          sample.Session.LoginName,
+				IsBlocker:     sample.Blocker,
+				IsWaiter:      sample.Blocked,
+				BlockingTime:  blockTime,
+				BlockDetails:  blockDetails,
+				WaitEvent:     sample.WaitInfo.WaitType,
+				Database:      sample.Db.DatabaseName,
 			}
 		}
 		//http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -377,6 +472,29 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 		querySamplesForSnapshot = domain.QuerySamples[snapshotID]
 
 	}
+	sort.Slice(querySamplesForSnapshot, func(i, j int) bool {
+		a := querySamplesForSnapshot[i]
+		b := querySamplesForSnapshot[j]
+		if a.IsBlocker && b.IsBlocker {
+			return a.SID < b.SID
+		}
+		if a.IsWaiter && b.IsWaiter {
+			return a.SID < b.SID
+		}
+		if a.IsBlocker {
+			return true
+		}
+		if b.IsBlocker {
+			return false
+		}
+		if a.IsWaiter {
+			return true
+		}
+		if b.IsWaiter {
+			return false
+		}
+		return a.SID < b.SID
+	})
 	// Get the query samples for the snapshot
 
 	// Parse query parameters for sorting query samples
@@ -386,7 +504,7 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sort query samples
-	sortedQuerySamples := SortQuerySamples(querySamplesForSnapshot, column)
+	//sortedQuerySamples := SortQuerySamples(querySamplesForSnapshot, column)
 
 	// Create the template data
 	data := struct {
@@ -394,7 +512,7 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 		SortColumn   string
 		SnapID       string
 	}{
-		QuerySamples: sortedQuerySamples,
+		QuerySamples: querySamplesForSnapshot,
 		SortColumn:   column,
 		SnapID:       snapshotID,
 	}

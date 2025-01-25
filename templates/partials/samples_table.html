@@ -1,18 +1,26 @@
 
-<td colspan="4">
+<td colspan="9">
     <table class="table table-sm table-bordered">
         <thead>
         <tr>
+            <th><a href="/samples/{{.SnapID}}/sort?column=sid" hx-get="/samples/{{.SnapID}}/sort?column=sid" hx-target="#queries---{{.SnapID}}" hx-swap="outerHTML">SID</a></th>
             <th><a href="/samples/{{.SnapID}}/sort?column=query" hx-get="/samples/{{.SnapID}}/sort?column=query" hx-target="#queries---{{.SnapID}}" hx-swap="outerHTML">Query</a></th>
             <th><a href="/samples/{{.SnapID}}/sort?column=execution_time" hx-get="/samples/{{.SnapID}}/sort?column=execution_time" hx-target="#queries---{{.SnapID}}" hx-swap="outerHTML">Execution Time</a></th>
+            <th><a href="/samples/{{.SnapID}}/sort?column=blocking_impact" hx-get="/samples/{{.SnapID}}/sort?column=blocking_impact" hx-target="#queries---{{.SnapID}}" hx-swap="outerHTML">BlockingImpact</a></th>
+            <th><a href="/samples/{{.SnapID}}/sort?column=wait_event" hx-get="/samples/{{.SnapID}}/sort?column=wait_event" hx-target="#queries---{{.SnapID}}" hx-swap="outerHTML">Wait Event</a></th>
+            <th><a href="/samples/{{.SnapID}}/sort?column=database" hx-get="/samples/{{.SnapID}}/sort?column=database" hx-target="#queries---{{.SnapID}}" hx-swap="outerHTML">Database</a></th>
             <th><a href="/samples/{{.SnapID}}/sort?column=user" hx-get="/samples/{{.SnapID}}/sort?column=user" hx-target="#queries---{{.SnapID}}" hx-swap="outerHTML">User</a></th>
         </tr>
         </thead>
         <tbody>
         {{range $sample := .QuerySamples}}
         <tr>
+            <td>{{$sample.SID}}</td>
             <td>{{$sample.Query}}</td>
             <td>{{$sample.ExecutionTime}}</td>
+            <td>{{$sample.BlockDetails}}</td>
+            <td>{{$sample.WaitEvent}}</td>
+            <td>{{$sample.Database}}</td>
             <td>{{$sample.User}}</td>
         </tr>
         {{end}}

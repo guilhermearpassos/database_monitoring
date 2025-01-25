@@ -7,17 +7,32 @@
             aria-sort='{{if ne .SortColumn "timestamp"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
             Timestamp
         </th>
-        <th hx-get='/snapshots/sort?column=db_name&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
+        <th hx-get='/snapshots/sort?column=connections&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
             hx-target="#snapshots-table" hx-swap="outerHTML"
             hx-trigger="click"
-            aria-sort='{{if ne .SortColumn "db_name"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
-            Database Name
+            aria-sort='{{if ne .SortColumn "connections"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
+            Connections
         </th>
-        <th hx-get='/snapshots/sort?column=status&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
-            hx-target="#snapshots-table" hx-swap="outerHTML"
-            hx-trigger="click"
-            aria-sort='{{if ne .SortColumn "status"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
-            Status
+        <th >
+            Wait Event Groups
+        </th>
+        <th >
+            Users
+        </th>
+        <th >
+            # Waiters
+        </th>
+        <th >
+            # Blockers
+        </th>
+        <th >
+            Wait Duration
+        </th>
+        <th >
+            Average Duration
+        </th>
+        <th >
+            Max Duration
         </th>
         <th>Actions</th>
     </tr>
@@ -26,8 +41,23 @@
     {{range $snap := .Snapshots}}
     <tr data-snapshot-id="{{.ID}}">
         <td>{{$snap.Timestamp.Format "2006-01-02 15:04:05"}}</td>
-        <td>{{$snap.DBName}}</td>
-        <td>{{$snap.Status}}</td>
+        <td>{{$snap.Connections}}</td>
+        <td><div class="stacked-bar">
+            {{range $snap.WaitEvGroups}}
+            <div
+                    class="bar-segment {{.Color}}"
+                    data-percent="{{.Percent}}"
+                    style="width: {{.Percent}}%;"
+                    title="{{.Type}}: {{.Percent}}%">
+            </div>
+            {{end}}
+        </div></td>
+        <td>{{$snap.Users}}</td>
+        <td>{{$snap.WaitersNo}}</td>
+        <td>{{$snap.BlockersNo}}</td>
+        <td>{{$snap.WaitDuration}}</td>
+        <td>{{$snap.AvgDuration}}</td>
+        <td>{{$snap.MaxDuration}}</td>
         <td>
             <button class="btn btn-info" hx-get="/samples/{{$snap.ID}}" hx-target="#queries---{{$snap.ID}}"
                     hx-swap="innerHTML" hx-trigger="click">View Queries

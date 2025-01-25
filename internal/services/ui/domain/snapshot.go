@@ -1,6 +1,8 @@
 package domain
 
-import "time"
+import (
+	"time"
+)
 
 type WaitType struct {
 	Type    string
@@ -76,36 +78,49 @@ func GenerateSampleData() []TimeSeriesData {
 
 // Snapshot represents a database snapshot
 type Snapshot struct {
-	ID        string
-	Timestamp time.Time
-	DBName    string
-	Status    string
+	ID           string
+	Timestamp    time.Time
+	Connections  int
+	WaitEvGroups []WaitType
+	Users        []string
+	WaitersNo    int
+	BlockersNo   int
+	WaitDuration float64
+	AvgDuration  float64
+	MaxDuration  float64
 }
 
 // QuerySample represents a query sample from a snapshot
 type QuerySample struct {
+	SID           int
 	Query         string
 	ExecutionTime string
 	User          string
+	IsBlocker     bool
+	IsWaiter      bool
+	BlockingTime  string
+	BlockDetails  string
+	WaitEvent     string
+	Database      string
 }
 
 // Global data storage (in-memory, can replace with database)
 var Snapshots = []Snapshot{
-	{"1", time.Date(2025, 1, 16, 10, 0, 0, 0, time.UTC), "ProductionDB", "Success"},
-	{"a", time.Date(2025, 1, 15, 9, 30, 0, 0, time.UTC), "TestDB", "Failed"},
-	{"3", time.Date(2025, 1, 14, 8, 45, 0, 0, time.UTC), "AnalyticsDB", "Success"},
+	{"1", time.Date(2025, 1, 16, 10, 0, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, 0, 0, 0},
+	{"a", time.Date(2025, 1, 15, 9, 30, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, 0, 0, 0},
+	{"3", time.Date(2025, 1, 14, 8, 45, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, 0, 0, 0},
 }
 
 var QuerySamples = map[string][]QuerySample{
 	"1": {
-		{"SELECT * FROM users WHERE id = 1", "5ms", "admin"},
-		{"INSERT INTO orders (user_id, total) VALUES (1, 100)", "8ms", "admin"},
+		{1, "SELECT * FROM users WHERE id = 1", "5ms", "admin", false, false, "", "", "CPU", "ProductionDB"},
+		{1, "INSERT INTO orders (user_id, total) VALUES (1, 100)", "8ms", "admin", false, false, "", "", "CPU", "ProductionDB"},
 	},
 	"a": {
-		{"SELECT * FROM orders WHERE id = 1", "3ms", "user1"},
-		{"UPDATE users SET status = 'active' WHERE id = 1", "4ms", "user2"},
+		{1, "SELECT * FROM orders WHERE id = 1", "3ms", "user1", false, false, "", "", "CPU", "ProductionDB"},
+		{1, "UPDATE users SET status = 'active' WHERE id = 1", "4ms", "user2", false, false, "", "", "CPU", "ProductionDB"},
 	},
 	"3": {
-		{"SELECT * FROM products WHERE category = 'electronics'", "6ms", "admin"},
+		{1, "SELECT * FROM products WHERE category = 'electronics'", "6ms", "admin", false, false, "", "", "CPU", "ProductionDB"},
 	},
 }
