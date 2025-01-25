@@ -85,9 +85,9 @@ type Snapshot struct {
 	Users        []string
 	WaitersNo    int
 	BlockersNo   int
-	WaitDuration float64
-	AvgDuration  float64
-	MaxDuration  float64
+	WaitDuration string
+	AvgDuration  string
+	MaxDuration  string
 }
 
 // QuerySample represents a query sample from a snapshot
@@ -106,9 +106,9 @@ type QuerySample struct {
 
 // Global data storage (in-memory, can replace with database)
 var Snapshots = []Snapshot{
-	{"1", time.Date(2025, 1, 16, 10, 0, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, 0, 0, 0},
-	{"a", time.Date(2025, 1, 15, 9, 30, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, 0, 0, 0},
-	{"3", time.Date(2025, 1, 14, 8, 45, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, 0, 0, 0},
+	{"1", time.Date(2025, 1, 16, 10, 0, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, "0 ms", "0 ms", "0 ms"},
+	{"a", time.Date(2025, 1, 15, 9, 30, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, "0 ms", "0 ms", "0 ms"},
+	{"3", time.Date(2025, 1, 14, 8, 45, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, "0 ms", "0 ms", "0 ms"},
 }
 
 var QuerySamples = map[string][]QuerySample{

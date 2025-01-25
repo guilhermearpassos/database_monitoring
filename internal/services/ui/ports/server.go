@@ -377,9 +377,9 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 				Users:        usersSlice,
 				WaitersNo:    WaitersNo,
 				BlockersNo:   BlockersNo,
-				WaitDuration: float64(WaitDuration),
-				AvgDuration:  AvgDuration,
-				MaxDuration:  float64(MaxDuration),
+				WaitDuration: fmt.Sprintf("%.2d ms", WaitDuration),
+				AvgDuration:  fmt.Sprintf("%.2f ms", AvgDuration),
+				MaxDuration:  fmt.Sprintf("%.2d ms", MaxDuration),
 			})
 		}
 	} else {
@@ -457,7 +457,7 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 			querySamplesForSnapshot[i] = domain.QuerySample{
 				SID:           sid,
 				Query:         sample.Text,
-				ExecutionTime: strconv.Itoa(int(sample.TimeElapsedMillis)),
+				ExecutionTime: fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
 				User:          sample.Session.LoginName,
 				IsBlocker:     sample.Blocker,
 				IsWaiter:      sample.Blocked,

@@ -58,7 +58,7 @@ SELECT s.session_id,
        s.status,
        s.cpu_time,
        s.memory_usage,
-       s.total_elapsed_time,
+       p.total_elapsed_time,
        s.last_request_start_time,
        s.last_request_end_time,
        s.reads,
@@ -185,6 +185,7 @@ FROM sys.dm_exec_sessions s
 				ID:        snapID,
 				Timestamp: snapTime,
 			},
+			TimeElapsedMs: int64(totalElapsedTime),
 		}
 		if _, ok := querySamplesByDB[strconv.Itoa(databaseId)]; !ok {
 			querySamplesByDB[strconv.Itoa(databaseId)] = make([]*common_domain.QuerySample, 0)
