@@ -445,10 +445,13 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 			var blockTime, blockDetails string
 			if sample.Blocker {
 				blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
+				if sample.Blocked {
+					blockDetails += " | "
+				}
 			}
 			if sample.Blocked {
 				blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
-				blockDetails += fmt.Sprintf("\nblocked by %s", sample.BlockInfo.BlockedBy)
+				blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
 			}
 			sid, err2 := strconv.Atoi(sample.Session.SessionId)
 			if err2 != nil {
@@ -478,7 +481,7 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 		if a.IsBlocker && b.IsBlocker {
 			return a.SID < b.SID
 		}
-		if a.IsWaiter && b.IsWaiter {
+		if a.IsWaiter && b.IsWaiter && !a.IsBlocker && !b.IsBlocker {
 			return a.SID < b.SID
 		}
 		if a.IsBlocker {
