@@ -49,6 +49,19 @@ func NewServer(cc grpc.ClientConnInterface) (*HtmxServer, error) {
 			return nil, err
 		}
 	}
+	// Parse pages
+	pages, err := template.ParseGlob("templates/pages/*.html")
+	if err != nil {
+		return nil, err
+	}
+
+	// Add pages to main template
+	for _, t := range pages.Templates() {
+		_, err = tmpl.AddParseTree(t.Name(), t.Tree)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &HtmxServer{
 		client:        dbmv1.NewDBMApiClient(cc),
 		supportClient: dbmv1.NewDBMSupportApiClient(cc),
@@ -131,7 +144,13 @@ func SortQuerySamples(querySamples []domain.QuerySample, column string) []domain
 }
 
 func (s *HtmxServer) HandleBaseLayout(w http.ResponseWriter, r *http.Request) {
-	err := s.templates.ExecuteTemplate(w, "layout.html", domain.SampleServers)
+	err := s.templates.ExecuteTemplate(w, "base.html", map[string]interface{}{
+		"ServerList": domain.SampleServers,
+		"Slideover": map[string]interface{}{
+			"State":      "",
+			"ServerName": "",
+		},
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -193,7 +212,7 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 			End:        timestamppb.New(endTime),
 			Host:       server,
 			Database:   "",
-			PageSize:   30,
+			PageSize:   5,
 			PageNumber: pageNumber,
 		})
 		if err2 != nil {
@@ -243,22 +262,46 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 	//timeRange := r.URL.Query().Get("time-range")
 	//_ = timeRange // TODO: Implement filtering
 	//server-drilldown
-	err = s.templates.ExecuteTemplate(w, "slideover.html", struct {
-		State        string
-		ServerName   string
-		DatabaseType string
-		ChartData    string
-		TimeRange    string
-	}{
-		State:        "open",
-		ServerName:   server,
-		ChartData:    string(chartData),
-		TimeRange:    string(timeRangeJSON),
-		DatabaseType: "mssql",
+	if r.Header.Get("Hx-request") == "true" {
+		//partial render
+		err = s.templates.ExecuteTemplate(w, "slideover.html", struct {
+			State        string
+			ServerName   string
+			DatabaseType string
+			ChartData    string
+			TimeRange    string
+		}{
+			State:        "open",
+			ServerName:   server,
+			ChartData:    string(chartData),
+			TimeRange:    string(timeRangeJSON),
+			DatabaseType: "mssql",
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	err = s.templates.ExecuteTemplate(w, "base.html", map[string]interface{}{
+		"ServerList": domain.SampleServers,
+		"Slideover": struct {
+			State        string
+			ServerName   string
+			DatabaseType string
+			ChartData    string
+			TimeRange    string
+		}{
+			State:        "open",
+			ServerName:   server,
+			ChartData:    string(chartData),
+			TimeRange:    string(timeRangeJSON),
+			DatabaseType: "mssql",
+		},
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+
 }
 
 func getTimeRange(r *http.Request) (time.Time, time.Time, error) {
@@ -310,7 +353,7 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		End:        timestamppb.New(endTime),
 		Host:       server,
 		Database:   "",
-		PageSize:   5,
+		PageSize:   10,
 		PageNumber: 0,
 	})
 	var qsdata []domain.Snapshot

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{block "title" . }} DBM {{end}}</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/slideover.css">
+    <link rel="stylesheet" href="/static/css/connections_timeseries.css">
+    <link rel="stylesheet" href="/static/css/active_conn_table.css">
+</head>
+<body class="bg-gray-100">
+    {{ block "content" . }} {{end}}
+<script src="/static/js/refresh.js"></script>
+<script src="/static/js/timerange.js"></script>
+<script src="/static/js/slideover.js"></script>
+<script src="/static/js/connections_timeseries.js"></script>
+<script src="/static/js/active_conn_table.js"></script>
+</body>
+</html>

@@ -86,8 +86,9 @@
 
 .table th, .table td {
     border: 1px solid #ddd;
-    padding: 8px;
+    padding: 4px;
     text-align: left;
+    max-height: 60px;
 }
 
 .table th {

@@ -14,7 +14,7 @@
     <tr class="hover:bg-gray-50" hx-get="/server-drilldown?server={{.Name}}"
         hx-include="#selected-timerange"
         hx-target="#slideover-wrapper" hx-trigger="click"
-        hx-swap="outerHTML">
+        hx-swap="outerHTML" hx-push-url="true">
         <td class="px-6 py-4 text-gray-700 flex items-center">
             <img src="/static/icons/{{.DatabaseType}}.svg" alt="{{.DatabaseType}}" class="database-icon">
             {{.Name}}
