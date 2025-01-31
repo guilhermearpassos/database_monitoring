@@ -71,14 +71,14 @@
 
 </table>
 <div class="pagination">
-    <button
+    <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-get="/snapshots?page=1" hx-push-url="true"
             {{if eq .CurrentPage 1}}disabled{{end}}>
         First
     </button>
 
-    <button
+    <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-get="/snapshots?page={{.PreviousPage}}" hx-push-url="true"
             {{if eq .CurrentPage 1}}disabled{{end}}>
@@ -94,20 +94,20 @@
     <a
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-get="/snapshots?page={{$page}}" hx-push-url="true"
-            class="{{if eq $page $currentPage}}current{{end}}">
+            class="btn btn-sm btn-info{{if eq $page $currentPage}}-current{{end}}">
         {{$page}}
     </a>
     {{end}}
     {{end}}
 
-    <button
+    <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-get="/snapshots?page={{.NextPage}}" hx-push-url="true"
             {{if eq .CurrentPage .TotalPages}}disabled{{end}}>
         Next
     </button>
 
-    <button
+    <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-get="/snapshots?page={{.TotalPages}}" hx-push-url="true"
             {{if eq .CurrentPage .TotalPages}}disabled{{end}}>

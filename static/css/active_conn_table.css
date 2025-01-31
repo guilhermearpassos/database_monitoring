@@ -75,12 +75,25 @@ tr:nth-child(odd) {
     border: none;
     color: white;
     padding: 8px 15px;
+    margin: 0 2px;
     font-size: 14px;
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.3s ease;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Soft shadow for the button */
 }
+.btn-info-current {
+     background-color: #1765b8;
+    border: none;
+    color: white;
+    padding: 8px 15px;
+    margin: 0 2px;
+    font-size: 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Soft shadow for the button */
+ }
 
 .btn-info:hover {
     background-color: #138496;
