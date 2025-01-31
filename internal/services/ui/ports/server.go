@@ -348,109 +348,129 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server := r.URL.Query().Get("selected-server")
+	currPageStr := r.URL.Query().Get("page")
+	currPage := 1
+	if currPageStr != "" {
+		currPage, err = strconv.Atoi(currPageStr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	pageSize := 5
 	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
 		Start:      timestamppb.New(startTime),
 		End:        timestamppb.New(endTime),
 		Host:       server,
 		Database:   "",
-		PageSize:   10,
-		PageNumber: 0,
+		PageSize:   int32(pageSize),
+		PageNumber: int64(currPage - 1),
 	})
-	var qsdata []domain.Snapshot
-	if err == nil {
-		qsdata = make([]domain.Snapshot, 0)
-		for _, snapshot := range resp.Snapshots {
-			users := make(map[string]struct{})
-			WaitersNo := 0
-			BlockersNo := 0
-			WaitDuration := 0
-			SumDuration := 0
-			MaxDuration := 0
-			waitersPerGroup := make(map[string]int)
-			for _, sample := range snapshot.Samples {
-				users[sample.Session.LoginName] = struct{}{}
-				if int(sample.TimeElapsedMillis) > MaxDuration {
-					MaxDuration = int(sample.TimeElapsedMillis)
-				}
-				SumDuration += int(sample.TimeElapsedMillis)
-				if sample.Blocked {
-					WaitersNo++
-					WaitDuration += int(sample.WaitInfo.WaitTime)
-
-				}
-				if _, ok := waitersPerGroup[sample.WaitInfo.WaitType]; !ok {
-					waitersPerGroup[sample.WaitInfo.WaitType] = 1
-				} else {
-					waitersPerGroup[sample.WaitInfo.WaitType]++
-				}
-				if sample.Blocker {
-					BlockersNo++
-				}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	qsdata := make([]domain.Snapshot, 0)
+	for _, snapshot := range resp.Snapshots {
+		users := make(map[string]struct{})
+		WaitersNo := 0
+		BlockersNo := 0
+		WaitDuration := 0
+		SumDuration := 0
+		MaxDuration := 0
+		waitersPerGroup := make(map[string]int)
+		for _, sample := range snapshot.Samples {
+			users[sample.Session.LoginName] = struct{}{}
+			if int(sample.TimeElapsedMillis) > MaxDuration {
+				MaxDuration = int(sample.TimeElapsedMillis)
+			}
+			SumDuration += int(sample.TimeElapsedMillis)
+			if sample.Blocked {
+				WaitersNo++
+				WaitDuration += int(sample.WaitInfo.WaitTime)
 
 			}
-			waitGroups := make([]domain.WaitType, len(waitersPerGroup))
-			for k, v := range waitersPerGroup {
-				wait := "none"
-				if k != "" {
-					wait = k
-				}
-				color, ok := colors[wait]
-				if !ok {
-					color = generateRandomColor()
-				}
-				waitGroups = append(waitGroups, domain.WaitType{
-					Type:    wait,
-					Percent: v * 100 / len(snapshot.Samples),
-					Color:   color,
-				})
+			if _, ok := waitersPerGroup[sample.WaitInfo.WaitType]; !ok {
+				waitersPerGroup[sample.WaitInfo.WaitType] = 1
+			} else {
+				waitersPerGroup[sample.WaitInfo.WaitType]++
 			}
-			usersSlice := make([]string, len(users))
-			for user := range users {
-				usersSlice = append(usersSlice, user)
+			if sample.Blocker {
+				BlockersNo++
 			}
-			AvgDuration := float64(SumDuration) / float64(len(snapshot.Samples))
-			slices.SortFunc(waitGroups, func(a, b domain.WaitType) int {
-				return b.Percent - a.Percent
-			})
-			qsdata = append(qsdata, domain.Snapshot{
-				ID:           snapshot.Id,
-				Timestamp:    snapshot.Timestamp.AsTime(),
-				Connections:  len(snapshot.Samples),
-				WaitEvGroups: waitGroups,
-				Users:        usersSlice,
-				WaitersNo:    WaitersNo,
-				BlockersNo:   BlockersNo,
-				WaitDuration: fmt.Sprintf("%.2d ms", WaitDuration),
-				AvgDuration:  fmt.Sprintf("%.2f ms", AvgDuration),
-				MaxDuration:  fmt.Sprintf("%.2d ms", MaxDuration),
+
+		}
+		waitGroups := make([]domain.WaitType, len(waitersPerGroup))
+		for k, v := range waitersPerGroup {
+			wait := "none"
+			if k != "" {
+				wait = k
+			}
+			color, ok := colors[wait]
+			if !ok {
+				color = generateRandomColor()
+			}
+			waitGroups = append(waitGroups, domain.WaitType{
+				Type:    wait,
+				Percent: v * 100 / len(snapshot.Samples),
+				Color:   color,
 			})
 		}
-	} else {
-		qsdata = domain.Snapshots
+		usersSlice := make([]string, len(users))
+		for user := range users {
+			usersSlice = append(usersSlice, user)
+		}
+		AvgDuration := float64(SumDuration) / float64(len(snapshot.Samples))
+		slices.SortFunc(waitGroups, func(a, b domain.WaitType) int {
+			return b.Percent - a.Percent
+		})
+		qsdata = append(qsdata, domain.Snapshot{
+			ID:           snapshot.Id,
+			Timestamp:    snapshot.Timestamp.AsTime(),
+			Connections:  len(snapshot.Samples),
+			WaitEvGroups: waitGroups,
+			Users:        usersSlice,
+			WaitersNo:    WaitersNo,
+			BlockersNo:   BlockersNo,
+			WaitDuration: fmt.Sprintf("%.2d ms", WaitDuration),
+			AvgDuration:  fmt.Sprintf("%.2f ms", AvgDuration),
+			MaxDuration:  fmt.Sprintf("%.2d ms", MaxDuration),
+		})
 	}
-	sortDirection := r.URL.Query().Get("direction")
-	if sortDirection == "" {
-		sortDirection = "asc" // default sort direction
-	}
+	//sortDirection := r.URL.Query().Get("direction")
+	//if sortDirection == "" {
+	//	sortDirection = "asc" // default sort direction
+	//}
 	// Parse query parameters for sorting
-	column := r.URL.Query().Get("column")
-	if column == "" {
-		column = "timestamp"   // Default sort column
-		sortDirection = "desc" // default sort direction
-	}
+	//column := r.URL.Query().Get("column")
+	//if column == "" {
+	//	column = "timestamp"   // Default sort column
+	//	sortDirection = "desc" // default sort direction
+	//}
 
 	// Sort snapshots
-	sortedSnapshots := SortSnapshots(qsdata, column, sortDirection)
+	//sortedSnapshots := SortSnapshots(qsdata, column, sortDirection)
 
 	// Create the template data
+	totalPages := int(resp.TotalCount) / pageSize
 	data := struct {
 		Snapshots     []domain.Snapshot
 		SortDirection string
 		SortColumn    string
+		CurrentPage   int
+		TotalPages    int
+		PageRange     []string
+		NextPage      int
+		PreviousPage  int
 	}{
-		Snapshots:     sortedSnapshots,
-		SortDirection: sortDirection,
-		SortColumn:    column,
+		Snapshots:     qsdata,
+		SortDirection: "desc",
+		SortColumn:    "",
+		CurrentPage:   currPage,
+		TotalPages:    totalPages,
+		PageRange:     calculatePageRange(currPage, totalPages),
+		NextPage:      currPage + 1,
+		PreviousPage:  currPage - 1,
 	}
 
 	err = s.templates.ExecuteTemplate(w, "active_conn_table.html", data)
@@ -460,6 +480,31 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func calculatePageRange(currentPage, totalPages int) []string {
+	pageRange := []string{}
+
+	for i := 1; i < 4; i++ {
+		if i <= totalPages {
+			pageRange = append(pageRange, strconv.Itoa(i))
+		}
+	}
+	if currentPage > 4 {
+		pageRange = append(pageRange, "...")
+	}
+	for i := currentPage - 2; i < currentPage+3; i++ {
+		if i > 3 && i <= totalPages {
+			pageRange = append(pageRange, strconv.Itoa(i))
+		}
+	}
+	if currentPage < totalPages-3 {
+		pageRange = append(pageRange, "...")
+		for i := totalPages - 2; i <= totalPages; i++ {
+			pageRange = append(pageRange, strconv.Itoa(i))
+		}
+	}
+	fmt.Println(pageRange)
+	return pageRange
+}
 func generateRandomColor() string {
 	baseColors := []string{"red", "green", "blue", "orange", "pink", "purple", "cyan", "yellow"}
 	baseC := baseColors[rand.Intn(len(baseColors))]
