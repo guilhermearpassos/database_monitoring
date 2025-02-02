@@ -9,7 +9,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"html/template"
 	"log"
-	"math/rand"
 	"net/http"
 	"slices"
 	"sort"
@@ -28,6 +27,7 @@ var groupToBaseColor = map[string]string{
 	"Idle":          "107, 114, 128, 1", // Gray
 	"Miscellaneous": "132, 204, 22, 1",  // Lime
 }
+
 var waitEventToIntensity = map[string]float64{
 	// Locks and Blocking
 	"LCK_M_BU":  0.2,
@@ -91,6 +91,7 @@ var waitEventToIntensity = map[string]float64{
 	"CLR_JOIN":                        0.4,
 	"CLR_MANUAL_EVENT":                0.45,
 }
+
 var waitEventToGroup = map[string]string{
 	// Locks and Blocking
 	"LCK_M_S":   "Locks",
@@ -256,59 +257,6 @@ func (s *HtmxServer) StartServer(addr string) error {
 	return nil
 }
 
-// SortSnapshots sorts snapshots by the given column
-func SortSnapshots(snapshots []domain.Snapshot, column string, sortDirection string) []domain.Snapshot {
-	switch column {
-	case "timestamp":
-		sort.Slice(snapshots, func(i, j int) bool {
-			if sortDirection == "asc" {
-				return snapshots[i].Timestamp.Before(snapshots[j].Timestamp)
-			} else {
-				return snapshots[i].Timestamp.After(snapshots[j].Timestamp)
-
-			}
-		})
-		//case "db_name":
-		//	sort.Slice(snapshots, func(i, j int) bool {
-		//		if sortDirection == "asc" {
-		//			return strings.ToLower(snapshots[i].DBName) < strings.ToLower(snapshots[j].DBName)
-		//		} else {
-		//			return strings.ToLower(snapshots[i].DBName) > strings.ToLower(snapshots[j].DBName)
-		//
-		//		}
-		//	})
-		//case "status":
-		//	sort.Slice(snapshots, func(i, j int) bool {
-		//		if sortDirection == "asc" {
-		//			return strings.ToLower(snapshots[i].Status) < strings.ToLower(snapshots[j].Status)
-		//		} else {
-		//			return strings.ToLower(snapshots[i].Status) > strings.ToLower(snapshots[j].Status)
-		//
-		//		}
-		//	})
-	}
-	return snapshots
-}
-
-// SortQuerySamples sorts query samples by the given column
-func SortQuerySamples(querySamples []domain.QuerySample, column string) []domain.QuerySample {
-	switch column {
-	case "query":
-		sort.Slice(querySamples, func(i, j int) bool {
-			return querySamples[i].Query < querySamples[j].Query
-		})
-	case "execution_time":
-		sort.Slice(querySamples, func(i, j int) bool {
-			return querySamples[i].ExecutionTime < querySamples[j].ExecutionTime
-		})
-	case "user":
-		sort.Slice(querySamples, func(i, j int) bool {
-			return querySamples[i].User < querySamples[j].User
-		})
-	}
-	return querySamples
-}
-
 func (s *HtmxServer) HandleBaseLayout(w http.ResponseWriter, r *http.Request) {
 	err := s.templates.ExecuteTemplate(w, "base.html", map[string]interface{}{
 		"ServerList": domain.SampleServers,
@@ -385,6 +333,7 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		}
 		snaps = append(snaps, resp2.GetSnapshots()...)
 	}
+	colorMap := make(map[string]string)
 	filteredData := make([]domain.TimeSeriesData, 0)
 	for _, snap := range snaps {
 		waitGroups := make(map[string]int)
@@ -398,6 +347,9 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 			} else {
 				waitGroups[waitType] = 1
 			}
+			if _, ok := colorMap[waitType]; !ok {
+				colorMap[waitType] = fmt.Sprintf("rgba(%s)", getWaitEventColor(waitType))
+			}
 		}
 		filteredData = append(filteredData, domain.TimeSeriesData{
 			Timestamp:  snap.Timestamp.AsTime(),
@@ -410,7 +362,11 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Unable to marshal data", http.StatusInternalServerError)
 		return
 	}
-
+	colorMapJson, err := json.Marshal(colorMap)
+	if err != nil {
+		http.Error(w, "Unable to marshal color data", http.StatusInternalServerError)
+		return
+	}
 	timeRange := map[string]string{
 		"start": startTime.Add(-1 * time.Minute).Format("2006-01-02T15:04:05"),
 		"end":   endTime.Add(1 * time.Minute).Format("2006-01-02T15:04:05"),
@@ -434,12 +390,14 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 			DatabaseType string
 			ChartData    string
 			TimeRange    string
+			ColorMap     string
 		}{
 			State:        "open",
 			ServerName:   server,
 			ChartData:    string(chartData),
 			TimeRange:    string(timeRangeJSON),
 			DatabaseType: "mssql",
+			ColorMap:     string(colorMapJson),
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -454,12 +412,14 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 			DatabaseType string
 			ChartData    string
 			TimeRange    string
+			ColorMap     string
 		}{
 			State:        "open",
 			ServerName:   server,
 			ChartData:    string(chartData),
 			TimeRange:    string(timeRangeJSON),
 			DatabaseType: "mssql",
+			ColorMap:     string(colorMapJson),
 		},
 	})
 	if err != nil {
@@ -653,64 +613,54 @@ func calculatePageRange(currentPage, totalPages int) []string {
 	fmt.Println(pageRange)
 	return pageRange
 }
-func generateRandomColor() string {
-	baseColors := []string{"red", "green", "blue", "orange", "pink", "purple", "cyan", "yellow"}
-	baseC := baseColors[rand.Intn(len(baseColors))]
-	level := rand.Intn(20) * 50
-	return fmt.Sprintf("bg-%s-%d", baseC, level)
-}
 
 func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 	// Get snapshot ID from the URL
 	var snapshotID string
 	_, err := fmt.Sscanf(r.URL.Path, "/samples/%s", &snapshotID)
 	if err != nil || snapshotID == "" {
-		http.NotFound(w, r)
+		http.Error(w, "Invalid/missing snapshot ID", http.StatusBadRequest)
 		return
 	}
-	//startTime, endTime, err := getTimeRange(r)
-	//if err != nil {
-	//	http.Error(w, err.Error(), http.StatusBadRequest)
-	//	return
-	//}
+
 	resp, err := s.client.GetSnapshot(r.Context(), &dbmv1.GetSnapshotRequest{Id: snapshotID})
 	var querySamplesForSnapshot []domain.QuerySample
-	if err == nil {
-		querySamplesForSnapshot = make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
-		for i, sample := range resp.Snapshot.Samples {
-			var blockTime, blockDetails string
-			if sample.Blocker {
-				blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
-				if sample.Blocked {
-					blockDetails += " | "
-				}
-			}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	querySamplesForSnapshot = make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
+	for i, sample := range resp.Snapshot.Samples {
+		var blockTime, blockDetails string
+		if sample.Blocker {
+			blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
 			if sample.Blocked {
-				blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
-				blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
-			}
-			sid, err2 := strconv.Atoi(sample.Session.SessionId)
-			if err2 != nil {
-				http.Error(w, err2.Error(), http.StatusInternalServerError)
-			}
-			querySamplesForSnapshot[i] = domain.QuerySample{
-				SID:           sid,
-				Query:         sample.Text,
-				ExecutionTime: fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
-				User:          sample.Session.LoginName,
-				IsBlocker:     sample.Blocker,
-				IsWaiter:      sample.Blocked,
-				BlockingTime:  blockTime,
-				BlockDetails:  blockDetails,
-				WaitEvent:     sample.WaitInfo.WaitType,
-				Database:      sample.Db.DatabaseName,
+				blockDetails += " | "
 			}
 		}
-		//http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		querySamplesForSnapshot = domain.QuerySamples[snapshotID]
-
+		if sample.Blocked {
+			blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
+			blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
+		}
+		sid, err2 := strconv.Atoi(sample.Session.SessionId)
+		if err2 != nil {
+			http.Error(w, err2.Error(), http.StatusInternalServerError)
+		}
+		querySamplesForSnapshot[i] = domain.QuerySample{
+			SID:           sid,
+			Query:         sample.Text,
+			ExecutionTime: fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
+			User:          sample.Session.LoginName,
+			IsBlocker:     sample.Blocker,
+			IsWaiter:      sample.Blocked,
+			BlockingTime:  blockTime,
+			BlockDetails:  blockDetails,
+			WaitEvent:     sample.WaitInfo.WaitType,
+			Database:      sample.Db.DatabaseName,
+		}
 	}
+
 	sort.Slice(querySamplesForSnapshot, func(i, j int) bool {
 		a := querySamplesForSnapshot[i]
 		b := querySamplesForSnapshot[j]

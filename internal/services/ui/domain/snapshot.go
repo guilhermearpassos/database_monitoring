@@ -66,16 +66,6 @@ type TimeSeriesData struct {
 	WaitGroups map[string]int `json:"wait_groups"`
 }
 
-func GenerateSampleData() []TimeSeriesData {
-	return []TimeSeriesData{
-		{Timestamp: time.Date(2025, time.January, 18, 1, 0, 0, 0, time.UTC), WaitGroups: map[string]int{"wg1": 10, "wg2": 5}},
-		{Timestamp: time.Date(2025, time.January, 18, 2, 0, 0, 0, time.UTC), WaitGroups: map[string]int{"wg1": 15, "wg2": 10}},
-		{Timestamp: time.Date(2025, time.January, 18, 3, 0, 0, 0, time.UTC), WaitGroups: map[string]int{"wg1": 20, "wg2": 12}},
-		{Timestamp: time.Date(2025, time.January, 18, 4, 0, 0, 0, time.UTC), WaitGroups: map[string]int{"wg1": 25, "wg2": 18}},
-		{Timestamp: time.Date(2025, time.January, 18, 5, 0, 0, 0, time.UTC), WaitGroups: map[string]int{"wg1": 30, "wg2": 20}},
-	}
-}
-
 // Snapshot represents a database snapshot
 type Snapshot struct {
 	ID           string
@@ -102,25 +92,4 @@ type QuerySample struct {
 	BlockDetails  string
 	WaitEvent     string
 	Database      string
-}
-
-// Global data storage (in-memory, can replace with database)
-var Snapshots = []Snapshot{
-	{"1", time.Date(2025, 1, 16, 10, 0, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, "0 ms", "0 ms", "0 ms"},
-	{"a", time.Date(2025, 1, 15, 9, 30, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, "0 ms", "0 ms", "0 ms"},
-	{"3", time.Date(2025, 1, 14, 8, 45, 0, 0, time.UTC), 12, []WaitType{}, []string{}, 0, 0, "0 ms", "0 ms", "0 ms"},
-}
-
-var QuerySamples = map[string][]QuerySample{
-	"1": {
-		{1, "SELECT * FROM users WHERE id = 1", "5ms", "admin", false, false, "", "", "CPU", "ProductionDB"},
-		{1, "INSERT INTO orders (user_id, total) VALUES (1, 100)", "8ms", "admin", false, false, "", "", "CPU", "ProductionDB"},
-	},
-	"a": {
-		{1, "SELECT * FROM orders WHERE id = 1", "3ms", "user1", false, false, "", "", "CPU", "ProductionDB"},
-		{1, "UPDATE users SET status = 'active' WHERE id = 1", "4ms", "user2", false, false, "", "", "CPU", "ProductionDB"},
-	},
-	"3": {
-		{1, "SELECT * FROM products WHERE category = 'electronics'", "6ms", "admin", false, false, "", "", "CPU", "ProductionDB"},
-	},
 }

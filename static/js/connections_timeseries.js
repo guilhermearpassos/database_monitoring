@@ -6,17 +6,18 @@ document.addEventListener('htmx:afterSettle', function(evt) {
     if (chartContainer) {
         const data = JSON.parse(chartContainer.getAttribute('data-chart'));
         const timeRange = JSON.parse(chartContainer.getAttribute('data-time-range'));
-        createChart(data, timeRange);
+        const colormap = JSON.parse(chartContainer.getAttribute("data-color-mapping"))
+        createChart(data, timeRange, colormap);
     }
 });
 
-function createChart(data, timeRange) {
+function createChart(data, timeRange, colormap) {
     // Sort data by timestamp to ensure correct order
     data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     console.log(new Date(timeRange.start))
     const waitGroups = Object.keys(data[0]?.wait_groups || {});
     const datasets = waitGroups.map(waitGroup => {
-        const color = getRandomColor(waitGroup);
+        const color = getRandomColor(waitGroup, colormap);
         return {
             label: waitGroup,
             data: data.map(item => ({
@@ -77,14 +78,10 @@ function createChart(data, timeRange) {
     });
 }
 
-const colorMapping = {
-    "PAGELATCH_EX": "#b91c1c",
-    "PAGELATCH_SH": "#ef4444",
-    "none":         "#6ee7b7",}
 
-function getRandomColor(waitGroup) {
-    if (waitGroup in colorMapping){
-        return colorMapping[waitGroup];
+function getRandomColor(waitGroup, colormap) {
+    if (waitGroup in colormap){
+        return colormap[waitGroup];
     }
     return '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 }
