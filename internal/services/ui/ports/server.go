@@ -14,13 +14,179 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
-var colors = map[string]string{
-	"PAGELATCH_EX": "bg-red-700",
-	"PAGELATCH_SH": "bg-red-500",
-	"none":         "bg-green-300",
+var groupToBaseColor = map[string]string{
+	"Locks":         "239, 68, 68, 1",   // Red
+	"I/O":           "249, 115, 22, 1",  // Orange
+	"CPU":           "34, 197, 94, 1",   // Green
+	"Memory":        "234, 179, 8, 1",   // Yellow
+	"Network":       "168, 85, 247, 1",  // Purple
+	"Background":    "59, 130, 246, 1",  // Blue
+	"Idle":          "107, 114, 128, 1", // Gray
+	"Miscellaneous": "132, 204, 22, 1",  // Lime
+}
+var waitEventToIntensity = map[string]float64{
+	// Locks and Blocking
+	"LCK_M_BU":  0.2,
+	"LCK_M_IS":  0.25,
+	"LCK_M_IU":  0.3,
+	"LCK_M_S":   0.35,
+	"LCK_M_IX":  0.4,
+	"LCK_M_X":   0.45,
+	"LCK_M_U":   0.5,
+	"LCK_M_SIU": 0.55,
+	"LCK_M_SIX": 0.6,
+	"LCK_M_UIX": 0.65,
+
+	// I/O-Related
+	"ASYNC_IO_COMPLETION": 0.2,
+	"IO_COMPLETION":       0.25,
+	"PAGEIOLATCH_SH":      0.3,
+	"PAGEIOLATCH_EX":      0.35,
+	"BACKUPIO":            0.4,
+	"WRITELOG":            0.45,
+	"LOGBUFFER":           0.5,
+
+	// CPU and Parallelism
+	"CXPACKET":                         0.2,
+	"SOS_SCHEDULER_YIELD":              0.25,
+	"THREADPOOL":                       0.3,
+	"RESOURCE_SEMAPHORE":               0.35,
+	"RESOURCE_SEMAPHORE_QUERY_COMPILE": 0.4,
+	"none":                             0.45,
+
+	// Memory-Related
+	"CMEMTHREAD":            0.2,
+	"MEMORY_ALLOCATION_EXT": 0.25,
+	"PAGELATCH_EX":          0.3,
+	"PAGELATCH_SH":          0.35,
+
+	// Network and Latency
+	"ASYNC_NETWORK_IO": 0.2,
+	"NETWORK_IO":       0.25,
+	"OLEDB":            0.3,
+
+	// Background and Maintenance
+	"CHECKPOINT_QUEUE":            0.2,
+	"LAZYWRITER_SLEEP":            0.25,
+	"XE_TIMER_EVENT":              0.3,
+	"TRACEWRITE":                  0.35,
+	"FT_IFTS_SCHEDULER_IDLE_WAIT": 0.4,
+
+	// Idle and Sleep
+	"SLEEP_TASK":             0.2,
+	"WAITFOR":                0.25,
+	"BROKER_RECEIVE_WAITFOR": 0.3,
+	"BROKER_TO_FLUSH":        0.35,
+	"BROKER_TRANSMITTER":     0.4,
+
+	// Miscellaneous
+	"PREEMPTIVE_OS_AUTHENTICATIONOPS": 0.2,
+	"PREEMPTIVE_OS_GETPROCADDRESS":    0.25,
+	"CLR_AUTO_EVENT":                  0.3,
+	"CLR_CRST":                        0.35,
+	"CLR_JOIN":                        0.4,
+	"CLR_MANUAL_EVENT":                0.45,
+}
+var waitEventToGroup = map[string]string{
+	// Locks and Blocking
+	"LCK_M_S":   "Locks",
+	"LCK_M_X":   "Locks",
+	"LCK_M_U":   "Locks",
+	"LCK_M_IS":  "Locks",
+	"LCK_M_IU":  "Locks",
+	"LCK_M_IX":  "Locks",
+	"LCK_M_SIU": "Locks",
+	"LCK_M_SIX": "Locks",
+	"LCK_M_UIX": "Locks",
+	"LCK_M_BU":  "Locks",
+
+	// I/O-Related
+	"PAGEIOLATCH_SH":      "I/O",
+	"PAGEIOLATCH_EX":      "I/O",
+	"WRITELOG":            "I/O",
+	"ASYNC_IO_COMPLETION": "I/O",
+	"IO_COMPLETION":       "I/O",
+	"BACKUPIO":            "I/O",
+	"LOGBUFFER":           "I/O",
+
+	// CPU and Parallelism
+	"none":                             "CPU",
+	"CXPACKET":                         "CPU",
+	"SOS_SCHEDULER_YIELD":              "CPU",
+	"THREADPOOL":                       "CPU",
+	"RESOURCE_SEMAPHORE":               "CPU",
+	"RESOURCE_SEMAPHORE_QUERY_COMPILE": "CPU",
+
+	// Memory-Related
+	"CMEMTHREAD":            "Memory",
+	"MEMORY_ALLOCATION_EXT": "Memory",
+	"PAGELATCH_EX":          "Memory",
+	"PAGELATCH_SH":          "Memory",
+
+	// Network and Latency
+	"ASYNC_NETWORK_IO": "Network",
+	"NETWORK_IO":       "Network",
+	"OLEDB":            "Network",
+
+	// Background and Maintenance
+	"CHECKPOINT_QUEUE":            "Background",
+	"LAZYWRITER_SLEEP":            "Background",
+	"XE_TIMER_EVENT":              "Background",
+	"TRACEWRITE":                  "Background",
+	"FT_IFTS_SCHEDULER_IDLE_WAIT": "Background",
+
+	// Idle and Sleep
+	"SLEEP_TASK":             "Idle",
+	"WAITFOR":                "Idle",
+	"BROKER_RECEIVE_WAITFOR": "Idle",
+	"BROKER_TO_FLUSH":        "Idle",
+	"BROKER_TRANSMITTER":     "Idle",
+
+	// Miscellaneous
+	"PREEMPTIVE_OS_AUTHENTICATIONOPS": "Miscellaneous",
+	"PREEMPTIVE_OS_GETPROCADDRESS":    "Miscellaneous",
+	"CLR_AUTO_EVENT":                  "Miscellaneous",
+	"CLR_CRST":                        "Miscellaneous",
+	"CLR_JOIN":                        "Miscellaneous",
+	"CLR_MANUAL_EVENT":                "Miscellaneous",
+}
+
+func getWaitEventColor(waitEvent string) string {
+	// Get the group for the wait event
+	group, ok := waitEventToGroup[waitEvent]
+	if !ok {
+		return "107, 114, 128, 1" // Default gray color
+	}
+
+	// Get the base color for the group
+	rgba, ok := groupToBaseColor[group]
+	if !ok {
+		return "107, 114, 128, 1" // Default gray color
+	}
+
+	// Get the intensity level for the wait event
+	alpha, ok := waitEventToIntensity[waitEvent]
+	if !ok {
+		alpha = 0.5 // Default intensity
+	}
+
+	// Parse the base color
+	parts := strings.Split(rgba, ",")
+	if len(parts) != 4 {
+		return "107, 114, 128, 1" // Default gray color
+	}
+
+	// Extract RGB values
+	r := strings.TrimSpace(parts[0])
+	g := strings.TrimSpace(parts[1])
+	b := strings.TrimSpace(parts[2])
+
+	// Generate the RGBA color
+	return fmt.Sprintf("%s, %s, %s, %.2f", r, g, b, alpha)
 }
 
 type HtmxServer struct {
@@ -400,16 +566,13 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 			}
 
 		}
-		waitGroups := make([]domain.WaitType, len(waitersPerGroup))
+		waitGroups := make([]domain.WaitType, 0)
 		for k, v := range waitersPerGroup {
 			wait := "none"
 			if k != "" {
 				wait = k
 			}
-			color, ok := colors[wait]
-			if !ok {
-				color = generateRandomColor()
-			}
+			color := getWaitEventColor(wait)
 			waitGroups = append(waitGroups, domain.WaitType{
 				Type:    wait,
 				Percent: v * 100 / len(snapshot.Samples),

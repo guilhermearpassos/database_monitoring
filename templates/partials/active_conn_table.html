@@ -45,10 +45,10 @@
         <td><div class="stacked-bar">
             {{range $snap.WaitEvGroups}}
             <div
-                    class="bar-segment {{.Color}}"
+                    class="bar-segment"
                     data-percent="{{.Percent}}"
-                    style="width: {{.Percent}}%;"
-                    title="{{.Type}}: {{.Percent}}%">
+                    style="background-color:rgba({{.Color}});width:{{.Percent}}%"
+                    title="{{.Type}}: {{.Percent}}% {{.Color}}">
             </div>
             {{end}}
         </div></td>

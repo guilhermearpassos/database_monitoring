@@ -1,13 +1,4 @@
 
-document.addEventListener('htmx:afterSwap', function() {
-    document.querySelectorAll('.bar-segment').forEach(function(segment) {
-        const percent = segment.getAttribute('data-percent');
-        if (percent) {
-            segment.style.transition = 'width 0.5s ease-in-out';
-        }
-    });
-});
-
 function toggleDropdown() {
     const dropdown = document.getElementById('timerange-dropdown');
     dropdown.classList.toggle('active');

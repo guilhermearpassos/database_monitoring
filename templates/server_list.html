@@ -26,9 +26,9 @@
             <div class="stacked-bar">
                 {{range .WaitTypes}}
                 <div
-                        class="bar-segment {{.Color}}"
+                        class="bar-segment"
                         data-percent="{{.Percent}}"
-                        style="width: {{.Percent}}%;"
+                        style="background-color: {{.Color}};width: {{.Percent}}%;"
                         title="{{.Type}}: {{.Percent}}%">
                 </div>
                 {{end}}
