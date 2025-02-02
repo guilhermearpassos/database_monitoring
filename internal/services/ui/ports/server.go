@@ -354,8 +354,6 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 	}
 	server := r.URL.Query().Get("server")
 
-	startTime = startTime.Add(-1 * time.Minute)
-	endTime = endTime.Add(1 * time.Minute)
 	pageNumber := int64(1)
 	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
 		Start:      timestamppb.New(startTime),
@@ -378,7 +376,7 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 			End:        timestamppb.New(endTime),
 			Host:       server,
 			Database:   "",
-			PageSize:   5,
+			PageSize:   30,
 			PageNumber: pageNumber,
 		})
 		if err2 != nil {
@@ -600,19 +598,6 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 			MaxDuration:  fmt.Sprintf("%.2d ms", MaxDuration),
 		})
 	}
-	//sortDirection := r.URL.Query().Get("direction")
-	//if sortDirection == "" {
-	//	sortDirection = "asc" // default sort direction
-	//}
-	// Parse query parameters for sorting
-	//column := r.URL.Query().Get("column")
-	//if column == "" {
-	//	column = "timestamp"   // Default sort column
-	//	sortDirection = "desc" // default sort direction
-	//}
-
-	// Sort snapshots
-	//sortedSnapshots := SortSnapshots(qsdata, column, sortDirection)
 
 	// Create the template data
 	totalPages := int(resp.TotalCount) / pageSize
