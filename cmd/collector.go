@@ -64,7 +64,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 		panic(err)
 	}
 	elk := adapters.NewELKRepository(client)
-	application := app.NewApplication(elk)
+	application := app.NewApplication(elk, elk)
 	svc := ports.NewIngestionSvc(*application)
 	collectorv1.RegisterIngestionServiceServer(grpcServer, svc)
 	reflection.Register(grpcServer)

@@ -23,6 +23,7 @@ func NewELKRepository(client *elasticsearch.Client) *ELKRepository {
 }
 
 var _ domain.SampleRepository = (*ELKRepository)(nil)
+var _ domain.QueryMetricsRepository = (*ELKRepository)(nil)
 
 func (r ELKRepository) StoreSnapshot(ctx context.Context, snapshot common_domain.DataBaseSnapshot) error {
 
@@ -71,6 +72,60 @@ func (r ELKRepository) storeSamples(ctx context.Context, samples []*common_domai
 		jsonData, err = json.Marshal(sample)
 		if err != nil {
 			err = fmt.Errorf("Error marshalling sample to JSON: %w", err)
+			return err
+		}
+		err = indexer.Add(ctx, esutil.BulkIndexerItem{
+			Action:     "index",
+			DocumentID: uuid.NewString(),
+			Body:       bytes.NewReader(jsonData),
+			// OnSuccess is called for each successful operation
+
+			// OnFailure is called for each failed operation
+			OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem, err error) {
+				if err != nil {
+					log.Printf("ERROR: %s", err)
+				} else {
+					log.Printf("ERROR: %s: %s", res.Error.Type, res.Error.Reason)
+				}
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	err = indexer.Close(ctx)
+	if err != nil {
+		return err
+	}
+	stats := indexer.Stats()
+	if stats.NumFailed > 0 {
+		return fmt.Errorf("index encountered %d errors", stats.NumFailed)
+	}
+	return nil
+}
+
+func (r ELKRepository) StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, timestamp time.Time) error {
+	var err error
+	var indexer esutil.BulkIndexer
+	indexer, err = esutil.NewBulkIndexer(esutil.BulkIndexerConfig{Index: "query_metrics", Client: r.client,
+		NumWorkers:    5,
+		FlushBytes:    1000,
+		FlushInterval: 10 * time.Second,
+		OnError: func(ctx context.Context, err error) {
+			log.Printf("Error bulk indexing data: %w", err)
+		},
+	})
+	if err != nil {
+		return err
+	}
+	for _, metric := range metrics {
+		if metric.CollectionTime.IsZero() {
+			metric.CollectionTime = timestamp
+		}
+		var jsonData []byte
+		jsonData, err = json.Marshal(metric)
+		if err != nil {
+			err = fmt.Errorf("Error marshalling metric to JSON: %w", err)
 			return err
 		}
 		err = indexer.Add(ctx, esutil.BulkIndexerItem{

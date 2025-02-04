@@ -5,6 +5,9 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 )
 
-type DataBaseReader interface {
+type SamplesReader interface {
 	TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error)
+}
+type QueryMetricsReader interface {
+	CollectMetrics(ctx context.Context) ([]*common_domain.QueryMetric, error)
 }

@@ -14,11 +14,15 @@ import (
 )
 
 type SQLServerDataReader struct {
-	db *sqlx.DB
+	db                *sqlx.DB
+	lastQueryCounters map[string]map[string]int64
 }
 
+var _ domain.SamplesReader = (*SQLServerDataReader)(nil)
+var _ domain.QueryMetricsReader = (*SQLServerDataReader)(nil)
+
 func NewSQLServerDataReader(db *sqlx.DB) SQLServerDataReader {
-	return SQLServerDataReader{db: db}
+	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64)}
 }
 
 func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error) {
@@ -224,4 +228,227 @@ FROM sys.dm_exec_sessions s
 	return snapshots, nil
 }
 
-var _ domain.DataBaseReader = (*SQLServerDataReader)(nil)
+func (S SQLServerDataReader) CollectMetrics(ctx context.Context) ([]*common_domain.QueryMetric, error) {
+	ret := make([]*common_domain.QueryMetric, 0)
+	query := `
+with qstats as (select query_hash,
+                       query_plan_hash,
+                       plan_handle,
+                       last_execution_time,
+                       last_elapsed_time,
+
+                       CONCAT(
+                               CONVERT(binary(64), plan_handle),
+                               CONVERT(binary(4), statement_start_offset),
+                               CONVERT(binary(4), statement_end_offset))                                     as plan_handle_and_offsets,
+                       (select value from sys.dm_exec_plan_attributes(plan_handle) where attribute = 'dbid') as dbid,
+                       execution_count,
+                       total_worker_time,
+                       total_physical_reads,
+                       total_logical_writes,
+                       total_logical_reads,
+                       total_clr_time,
+                       total_elapsed_time,
+                       total_rows,
+                       total_dop,
+                       total_grant_kb,
+                       total_used_grant_kb,
+                       total_ideal_grant_kb,
+                       total_reserved_threads,
+                       total_used_threads,
+                       total_columnstore_segment_reads,
+                       total_columnstore_segment_skips,
+                       total_spills
+
+
+                from sys.dm_exec_query_stats),
+     qstats_aggr as (select query_hash,
+                            query_plan_hash,
+                            cast(dbid as int)                    as dbid,
+                            d.name                               as db_name,
+                            max(plan_handle_and_offsets)         as plan_handle_and_offsets,
+                            max(last_execution_time)             as last_execution_time,
+                            max(last_elapsed_time)               as last_elapsed_time,
+                            sum(execution_count)                 as execution_count,
+                            sum(total_worker_time)               as total_worker_time,
+                            sum(total_physical_reads)            as total_physical_reads,
+                            sum(total_logical_writes)            as total_logical_writes,
+                            sum(total_logical_reads)             as total_logical_reads,
+                            sum(total_clr_time)                  as total_clr_time,
+                            sum(total_elapsed_time)              as total_elapsed_time,
+                            sum(total_rows)                      as total_rows,
+                            sum(total_dop)                       as total_dop,
+                            sum(total_grant_kb)                  as total_grant_kb,
+                            sum(total_used_grant_kb)             as total_used_grant_kb,
+                            sum(total_ideal_grant_kb)            as total_ideal_grant_kb,
+                            sum(total_reserved_threads)          as total_reserved_threads,
+                            sum(total_used_threads)              as total_used_threads,
+                            sum(total_columnstore_segment_reads) as total_columnstore_segment_reads,
+                            sum(total_columnstore_segment_skips) as total_columnstore_segment_skips,
+                            sum(total_spills)                    as total_spills
+
+                     from qstats s
+                              left join sys.databases d on s.dbid = d.database_id
+                     group by query_hash, query_plan_hash, s.dbid, d.name),
+     qstats_aggr_split
+         as (select convert(varbinary(64), substring(plan_handle_and_offsets, 1, 64))                  as plan_handle,
+                    convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 64 + 1, 4))) as statement_start_offset,
+                    convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 64 + 6, 4))) as statement_end_offset,
+                    *
+             from qstats_aggr
+             where last_execution_time > dateadd(second, -60, getdate()))
+
+select plan_handle,
+       statement_start_offset,
+       statement_end_offset,
+       query_hash,
+       query_plan_hash,
+       qas.dbid,
+       db_name,
+       last_execution_time,
+       last_elapsed_time,
+       execution_count,
+       total_worker_time,
+       total_physical_reads,
+       total_logical_writes,
+       total_logical_reads,
+       total_clr_time,
+       total_elapsed_time,
+       total_rows,
+       total_dop,
+       total_grant_kb,
+       total_used_grant_kb,
+       total_ideal_grant_kb,
+       total_reserved_threads,
+       total_used_threads,
+       total_columnstore_segment_reads,
+       total_columnstore_segment_skips,
+       total_spills, 
+       text
+from qstats_aggr_split qas
+         cross apply sys.dm_exec_sql_text(plan_handle)
+`
+	rows, err := S.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("collecting metrics: %w", err)
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+	for rows.Next() {
+		var planHandle []byte
+		var statementStartOffset int
+		var statementEndOffset int
+		var queryHash []byte
+		var queryPlanHash []byte
+		var dbId int
+		var dbName string
+		var lastExecutionTime time.Time
+		var lastElapsedTime int64
+		var executionCount int64
+		var totalWorkerTime int64
+		var totalPhysicalReads int64
+		var totalLogicalWrites int64
+		var totalLogicalReads int64
+		var totalClrTime int64
+		var totalElapsedTime int64
+		var totalRows int64
+		var totalDop int64
+		var totalGrantKb int64
+		var totalUsedGrantKb int64
+		var totalIdealGrantKb int64
+		var totalReservedThreads int64
+		var totalUsedThreads int64
+		var totalColumnstoreSegmentReads int64
+		var totalColumnstoreSegmentSkips int64
+		var totalSpills int64
+		var text string
+		err = rows.Scan(&planHandle, &statementStartOffset, &statementEndOffset,
+			&queryHash,
+			&queryPlanHash,
+			&dbId,
+			&dbName,
+			&lastExecutionTime,
+			&lastElapsedTime,
+			&executionCount,
+			&totalWorkerTime,
+			&totalPhysicalReads,
+			&totalLogicalWrites,
+			&totalLogicalReads,
+			&totalClrTime,
+			&totalElapsedTime,
+			&totalRows,
+			&totalDop,
+			&totalGrantKb,
+			&totalUsedGrantKb,
+			&totalIdealGrantKb,
+			&totalReservedThreads,
+			&totalUsedThreads,
+			&totalColumnstoreSegmentReads,
+			&totalColumnstoreSegmentSkips,
+			&totalSpills,
+			&text)
+		if err != nil {
+			return nil, fmt.Errorf("collecting metrics - scan: %w", err)
+		}
+		var counters map[string]int64
+		lastCounters, ok := S.lastQueryCounters[string(queryHash)]
+		if ok {
+			counters = map[string]int64{
+				"executionCount":               executionCount - lastCounters["executionCount"],
+				"totalWorkerTime":              totalWorkerTime - lastCounters["totalWorkerTime"],
+				"totalPhysicalReads":           totalPhysicalReads - lastCounters["totalPhysicalReads"],
+				"totalLogicalWrites":           totalLogicalWrites - lastCounters["totalLogicalWrites"],
+				"totalLogicalReads":            totalLogicalReads - lastCounters["totalLogicalReads"],
+				"totalClrTime":                 totalClrTime - lastCounters["totalClrTime"],
+				"totalElapsedTime":             totalElapsedTime - lastCounters["totalElapsedTime"],
+				"totalRows":                    totalRows - lastCounters["totalRows"],
+				"totalDop":                     totalDop - lastCounters["totalDop"],
+				"totalGrantKb":                 totalGrantKb - lastCounters["totalGrantKb"],
+				"totalUsedGrantKb":             totalUsedGrantKb - lastCounters["totalUsedGrantKb"],
+				"totalIdealGrantKb":            totalIdealGrantKb - lastCounters["totalIdealGrantKb"],
+				"totalReservedThreads":         totalReservedThreads - lastCounters["totalReservedThreads"],
+				"totalUsedThreads":             totalUsedThreads - lastCounters["totalUsedThreads"],
+				"totalColumnstoreSegmentReads": totalColumnstoreSegmentReads - lastCounters["totalColumnstoreSegmentReads"],
+				"totalColumnstoreSegmentSkips": totalColumnstoreSegmentSkips - lastCounters["totalColumnstoreSegmentSkips"],
+				"totalSpills":                  totalSpills - lastCounters["totalSpills"],
+			}
+		} else {
+
+			counters = map[string]int64{
+				"executionCount":               executionCount,
+				"totalWorkerTime":              totalWorkerTime,
+				"totalPhysicalReads":           totalPhysicalReads,
+				"totalLogicalWrites":           totalLogicalWrites,
+				"totalLogicalReads":            totalLogicalReads,
+				"totalClrTime":                 totalClrTime,
+				"totalElapsedTime":             totalElapsedTime,
+				"totalRows":                    totalRows,
+				"totalDop":                     totalDop,
+				"totalGrantKb":                 totalGrantKb,
+				"totalUsedGrantKb":             totalUsedGrantKb,
+				"totalIdealGrantKb":            totalIdealGrantKb,
+				"totalReservedThreads":         totalReservedThreads,
+				"totalUsedThreads":             totalUsedThreads,
+				"totalColumnstoreSegmentReads": totalColumnstoreSegmentReads,
+				"totalColumnstoreSegmentSkips": totalColumnstoreSegmentSkips,
+				"totalSpills":                  totalSpills,
+			}
+		}
+		ret = append(ret, &common_domain.QueryMetric{
+			QueryHash:         queryHash,
+			Text:              text,
+			Database:          common_domain.DataBaseMetadata{},
+			LastExecutionTime: lastExecutionTime,
+			LastElapsedTime:   time.Duration(lastElapsedTime) * time.Microsecond,
+			Counters:          counters,
+			Rates:             nil,
+		})
+		S.lastQueryCounters[string(queryHash)] = counters
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("collecting metrics - rows.Err: %w", err)
+	}
+	return ret, nil
+}

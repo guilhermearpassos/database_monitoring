@@ -2,13 +2,21 @@ syntax = "proto3";
 package database_monitoring.v1;
 option go_package = "github.com/guilhermearpassos/database_monitoring_v1/collector;collectorv1";
 import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/sample.proto";
 
 message DatabaseMetrics {
+  message QueryMetricSample{
+    repeated QueryMetric query_metrics = 1;
+  }
   string database_id = 1;
   google.protobuf.Timestamp timestamp = 2;
-//  repeated QueryMetric query_metrics = 3;
-  SystemMetrics system_metrics = 4;
+  oneof metrics {
+    QueryMetricSample query_metrics = 3;
+    SystemMetrics system_metrics = 4;
+
+  }
 }
+
 
 message SystemMetrics {
   double cpu_usage = 1;

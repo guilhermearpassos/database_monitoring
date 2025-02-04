@@ -23,6 +23,7 @@ const (
 	DBMApi_GetSnapshot_FullMethodName       = "/database_monitoring.v1.DBMApi/GetSnapshot"
 	DBMApi_ListServerSummary_FullMethodName = "/database_monitoring.v1.DBMApi/ListServerSummary"
 	DBMApi_ListServers_FullMethodName       = "/database_monitoring.v1.DBMApi/ListServers"
+	DBMApi_ListQueryMetrics_FullMethodName  = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
 )
 
 // DBMApiClient is the client API for DBMApi service.
@@ -33,6 +34,7 @@ type DBMApiClient interface {
 	GetSnapshot(ctx context.Context, in *GetSnapshotRequest, opts ...grpc.CallOption) (*GetSnapshotResponse, error)
 	ListServerSummary(ctx context.Context, in *ListServerSummaryRequest, opts ...grpc.CallOption) (*ListServerSummaryResponse, error)
 	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
+	ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error)
 }
 
 type dBMApiClient struct {
@@ -83,6 +85,16 @@ func (c *dBMApiClient) ListServers(ctx context.Context, in *ListServersRequest, 
 	return out, nil
 }
 
+func (c *dBMApiClient) ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListQueryMetricsResponse)
+	err := c.cc.Invoke(ctx, DBMApi_ListQueryMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DBMApiServer is the server API for DBMApi service.
 // All implementations must embed UnimplementedDBMApiServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type DBMApiServer interface {
 	GetSnapshot(context.Context, *GetSnapshotRequest) (*GetSnapshotResponse, error)
 	ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error)
 	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
+	ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error)
 	mustEmbedUnimplementedDBMApiServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedDBMApiServer) ListServerSummary(context.Context, *ListServerS
 }
 func (UnimplementedDBMApiServer) ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListServers not implemented")
+}
+func (UnimplementedDBMApiServer) ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListQueryMetrics not implemented")
 }
 func (UnimplementedDBMApiServer) mustEmbedUnimplementedDBMApiServer() {}
 func (UnimplementedDBMApiServer) testEmbeddedByValue()                {}
@@ -206,6 +222,24 @@ func _DBMApi_ListServers_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DBMApi_ListQueryMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListQueryMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DBMApiServer).ListQueryMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DBMApi_ListQueryMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DBMApiServer).ListQueryMetrics(ctx, req.(*ListQueryMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DBMApi_ServiceDesc is the grpc.ServiceDesc for DBMApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +262,10 @@ var DBMApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListServers",
 			Handler:    _DBMApi_ListServers_Handler,
+		},
+		{
+			MethodName: "ListQueryMetrics",
+			Handler:    _DBMApi_ListQueryMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

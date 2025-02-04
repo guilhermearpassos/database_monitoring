@@ -63,3 +63,15 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 		},
 	}
 }
+
+func QueryMetricToProto(metric *common_domain.QueryMetric) (*dbmv1.QueryMetric, error) {
+	return &dbmv1.QueryMetric{
+		QueryHash:             metric.QueryHash,
+		Text:                  metric.Text,
+		Db:                    &dbmv1.DBMetadata{DatabaseId: metric.Database.DatabaseID, DatabaseName: metric.Database.DatabaseName},
+		LastExecutionTime:     timestamppb.New(metric.LastExecutionTime),
+		LastElapsedTimeMicros: int64(metric.LastElapsedTime),
+		Counters:              metric.Counters,
+		Rates:                 metric.Rates,
+	}, nil
+}

@@ -10,11 +10,13 @@ type Application struct {
 }
 
 type Commands struct {
-	StoreSnapshot command.StoreSnapShotHandler
+	StoreSnapshot     command.StoreSnapShotHandler
+	StoreQueryMetrics command.StoreQueryMetricsHandler
 }
 
-func NewApplication(repo domain.SampleRepository) *Application {
+func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryMetricsRepository) *Application {
 	return &Application{
-		Commands: Commands{StoreSnapshot: command.NewStoreSnapShotHandler(repo)},
+		Commands: Commands{StoreSnapshot: command.NewStoreSnapShotHandler(repo),
+			StoreQueryMetrics: command.NewStoreQueryMetricsHandler(queryMetricsRepo)},
 	}
 }

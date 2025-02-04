@@ -3,6 +3,7 @@ package converters
 import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"time"
 )
 
 func DatabaseSnapshotToDomain(p *dbmv1.DBSnapshot) common_domain.DataBaseSnapshot {
@@ -61,4 +62,16 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 		},
 		Cmd: "",
 	}
+}
+
+func QueryMetricToDomain(metric *dbmv1.QueryMetric) (*common_domain.QueryMetric, error) {
+	return &common_domain.QueryMetric{
+		QueryHash:         metric.QueryHash,
+		Text:              metric.Text,
+		Database:          common_domain.DataBaseMetadata{DatabaseID: metric.Db.DatabaseId, DatabaseName: metric.Db.DatabaseName},
+		LastExecutionTime: metric.LastExecutionTime.AsTime(),
+		LastElapsedTime:   time.Duration(metric.LastElapsedTimeMicros) * time.Microsecond,
+		Counters:          metric.Counters,
+		Rates:             metric.Rates,
+	}, nil
 }
