@@ -391,10 +391,30 @@ from qstats_aggr_split qas
 		if err != nil {
 			return nil, fmt.Errorf("collecting metrics - scan: %w", err)
 		}
-		var counters map[string]int64
+		counters := map[string]int64{
+			"executionCount":               executionCount,
+			"totalWorkerTime":              totalWorkerTime,
+			"totalPhysicalReads":           totalPhysicalReads,
+			"totalLogicalWrites":           totalLogicalWrites,
+			"totalLogicalReads":            totalLogicalReads,
+			"totalClrTime":                 totalClrTime,
+			"totalElapsedTime":             totalElapsedTime,
+			"totalRows":                    totalRows,
+			"totalDop":                     totalDop,
+			"totalGrantKb":                 totalGrantKb,
+			"totalUsedGrantKb":             totalUsedGrantKb,
+			"totalIdealGrantKb":            totalIdealGrantKb,
+			"totalReservedThreads":         totalReservedThreads,
+			"totalUsedThreads":             totalUsedThreads,
+			"totalColumnstoreSegmentReads": totalColumnstoreSegmentReads,
+			"totalColumnstoreSegmentSkips": totalColumnstoreSegmentSkips,
+			"totalSpills":                  totalSpills,
+		}
 		lastCounters, ok := S.lastQueryCounters[string(queryHash)]
+		S.lastQueryCounters[string(queryHash)] = counters
+		digestedCounters := counters
 		if ok {
-			counters = map[string]int64{
+			digestedCounters = map[string]int64{
 				"executionCount":               executionCount - lastCounters["executionCount"],
 				"totalWorkerTime":              totalWorkerTime - lastCounters["totalWorkerTime"],
 				"totalPhysicalReads":           totalPhysicalReads - lastCounters["totalPhysicalReads"],
@@ -414,25 +434,8 @@ from qstats_aggr_split qas
 				"totalSpills":                  totalSpills - lastCounters["totalSpills"],
 			}
 		} else {
-
-			counters = map[string]int64{
-				"executionCount":               executionCount,
-				"totalWorkerTime":              totalWorkerTime,
-				"totalPhysicalReads":           totalPhysicalReads,
-				"totalLogicalWrites":           totalLogicalWrites,
-				"totalLogicalReads":            totalLogicalReads,
-				"totalClrTime":                 totalClrTime,
-				"totalElapsedTime":             totalElapsedTime,
-				"totalRows":                    totalRows,
-				"totalDop":                     totalDop,
-				"totalGrantKb":                 totalGrantKb,
-				"totalUsedGrantKb":             totalUsedGrantKb,
-				"totalIdealGrantKb":            totalIdealGrantKb,
-				"totalReservedThreads":         totalReservedThreads,
-				"totalUsedThreads":             totalUsedThreads,
-				"totalColumnstoreSegmentReads": totalColumnstoreSegmentReads,
-				"totalColumnstoreSegmentSkips": totalColumnstoreSegmentSkips,
-				"totalSpills":                  totalSpills,
+			if executionCount > 30 {
+				continue
 			}
 		}
 		ret = append(ret, &common_domain.QueryMetric{
@@ -441,10 +444,9 @@ from qstats_aggr_split qas
 			Database:          common_domain.DataBaseMetadata{},
 			LastExecutionTime: lastExecutionTime,
 			LastElapsedTime:   time.Duration(lastElapsedTime) * time.Microsecond,
-			Counters:          counters,
+			Counters:          digestedCounters,
 			Rates:             nil,
 		})
-		S.lastQueryCounters[string(queryHash)] = counters
 	}
 	err = rows.Err()
 	if err != nil {
