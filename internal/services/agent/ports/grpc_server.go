@@ -136,3 +136,20 @@ func (s GRPCServer) GetSnapshot(ctx context.Context, request *dbmv1.GetSnapshotR
 	}
 	return &dbmv1.GetSnapshotResponse{Snapshot: converters.DatabaseSnapshotToProto(&snap)}, nil
 }
+
+func (s GRPCServer) ListQueryMetrics(ctx context.Context, in *dbmv1.ListQueryMetricsRequest) (*dbmv1.ListQueryMetricsResponse, error) {
+	resp, err := s.app.Queries.ListQueryMetrics.Handle(ctx, in.Start.AsTime(), in.End.AsTime())
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]*dbmv1.QueryMetric, len(resp))
+	for i, metric := range resp {
+		protoMetric, err2 := converters.QueryMetricToProto(metric)
+		if err2 != nil {
+			return nil, err2
+		}
+		ret[i] = protoMetric
+	}
+
+	return &dbmv1.ListQueryMetricsResponse{Metrics: ret}, nil
+}

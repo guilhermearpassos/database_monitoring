@@ -11,3 +11,7 @@ type SampleRepository interface {
 	ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int, serverID string) ([]common_domain.DataBaseSnapshot, int, error)
 	GetSnapshot(ctx context.Context, id string) (common_domain.DataBaseSnapshot, error)
 }
+
+type QueryMetricsRepository interface {
+	GetQueryMetrics(ctx context.Context, start time.Time, end time.Time) ([]*common_domain.QueryMetric, error)
+}

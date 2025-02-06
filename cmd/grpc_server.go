@@ -64,7 +64,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 		panic(err)
 	}
 	elk := adapters.NewELKRepository(client)
-	application := app.NewApplication(elk)
+	application := app.NewApplication(elk, elk)
 	server := ports.NewGRPCServer(application)
 	dbmv1.RegisterDBMApiServer(grpcServer, server)
 	dbmv1.RegisterDBMSupportApiServer(grpcServer, server)
