@@ -318,6 +318,11 @@ func (r ELKRepository) GetQueryMetrics(ctx context.Context, start time.Time, end
   "aggs": {
     "by_queryhash": {
       "aggs": {
+        "sample": {
+          "top_hits": {
+            "size": 1
+          }
+        },
         "executionCount": {
           "sum": {
             "field": "Counters.executionCount"
@@ -459,53 +464,53 @@ func (r ELKRepository) GetQueryMetrics(ctx context.Context, start time.Time, end
 	//return ret, nil
 	ret := make([]*common_domain.QueryMetric, len(decodedResp.Aggregations.ByQueryhash.Buckets))
 	for i, agg := range decodedResp.Aggregations.ByQueryhash.Buckets {
-		lasExec := time.Unix(0, int64(agg.LastExecutionTime.Value)*1000000)
-		//if err != nil {
-		//	return nil, fmt.Errorf("parsing last execution time: %w", err)
-		//}
-
-		executionCount := agg.ExecutionCount["value"]
+		lasExec := agg.LastExecutionTime()
+		sample := agg.Sample()
+		if sample == nil {
+			continue
+		}
+		executionCount := agg.ExecutionCount()
 		counters := map[string]int64{
-			"executionCount":               int64(executionCount),
-			"totalWorkerTime":              int64(agg.TotalWorkerTime["value"]),
-			"totalPhysicalReads":           int64(agg.TotalPhysicalReads["value"]),
-			"totalLogicalWrites":           int64(agg.TotalLogicalWrites["value"]),
-			"totalLogicalReads":            int64(agg.TotalLogicalReads["value"]),
-			"totalClrTime":                 int64(agg.TotalClrTime["value"]),
-			"totalElapsedTime":             int64(agg.TotalElapsedTime["value"]),
-			"totalRows":                    int64(agg.TotalRows["value"]),
-			"totalDop":                     int64(agg.TotalDop["value"]),
-			"totalGrantKb":                 int64(agg.TotalGrantKb["value"]),
-			"totalUsedGrantKb":             int64(agg.TotalUsedGrantKb["value"]),
-			"totalIdealGrantKb":            int64(agg.TotalIdealGrantKb["value"]),
-			"totalReservedThreads":         int64(agg.TotalReservedThreads["value"]),
-			"totalUsedThreads":             int64(agg.TotalUsedThreads["value"]),
-			"totalColumnstoreSegmentReads": int64(agg.TotalColumnstoreSegmentReads["value"]),
-			"totalColumnstoreSegmentSkips": int64(agg.TotalColumnstoreSegmentSkips["value"]),
-			"totalSpills":                  int64(agg.TotalSpills["value"]),
+			"executionCount":               executionCount,
+			"totalWorkerTime":              agg.TotalWorkerTime(),
+			"totalPhysicalReads":           agg.TotalPhysicalReads(),
+			"totalLogicalWrites":           agg.TotalLogicalWrites(),
+			"totalLogicalReads":            agg.TotalLogicalReads(),
+			"totalClrTime":                 agg.TotalClrTime(),
+			"totalElapsedTime":             agg.TotalElapsedTime(),
+			"totalRows":                    agg.TotalRows(),
+			"totalDop":                     agg.TotalDop(),
+			"totalGrantKb":                 agg.TotalGrantKb(),
+			"totalUsedGrantKb":             agg.TotalUsedGrantKb(),
+			"totalIdealGrantKb":            agg.TotalIdealGrantKb(),
+			"totalReservedThreads":         agg.TotalReservedThreads(),
+			"totalUsedThreads":             agg.TotalUsedThreads(),
+			"totalColumnstoreSegmentReads": agg.TotalColumnstoreSegmentReads(),
+			"totalColumnstoreSegmentSkips": agg.TotalColumnstoreSegmentSkips(),
+			"totalSpills":                  agg.TotalSpills(),
 		}
 		rates := map[string]float64{
-			"avgWorkerTime":              agg.TotalWorkerTime["value"] / executionCount,
-			"avgPhysicalReads":           agg.TotalPhysicalReads["value"] / executionCount,
-			"avgLogicalWrites":           agg.TotalLogicalWrites["value"] / executionCount,
-			"avgLogicalReads":            agg.TotalLogicalReads["value"] / executionCount,
-			"avgClrTime":                 agg.TotalClrTime["value"] / executionCount,
-			"avgElapsedTime":             agg.TotalElapsedTime["value"] / executionCount,
-			"avgRows":                    agg.TotalRows["value"] / executionCount,
-			"avgDop":                     agg.TotalDop["value"] / executionCount,
-			"avgGrantKb":                 agg.TotalGrantKb["value"] / executionCount,
-			"avgUsedGrantKb":             agg.TotalUsedGrantKb["value"] / executionCount,
-			"avgIdealGrantKb":            agg.TotalIdealGrantKb["value"] / executionCount,
-			"avgReservedThreads":         agg.TotalReservedThreads["value"] / executionCount,
-			"avgUsedThreads":             agg.TotalUsedThreads["value"] / executionCount,
-			"avgColumnstoreSegmentReads": agg.TotalColumnstoreSegmentReads["value"] / executionCount,
-			"avgColumnstoreSegmentSkips": agg.TotalColumnstoreSegmentSkips["value"] / executionCount,
-			"avgSpills":                  agg.TotalSpills["value"] / executionCount,
+			"avgWorkerTime":              float64(agg.TotalWorkerTime()) / float64(executionCount),
+			"avgPhysicalReads":           float64(agg.TotalPhysicalReads()) / float64(executionCount),
+			"avgLogicalWrites":           float64(agg.TotalLogicalWrites()) / float64(executionCount),
+			"avgLogicalReads":            float64(agg.TotalLogicalReads()) / float64(executionCount),
+			"avgClrTime":                 float64(agg.TotalClrTime()) / float64(executionCount),
+			"avgElapsedTime":             float64(agg.TotalElapsedTime()) / float64(executionCount),
+			"avgRows":                    float64(agg.TotalRows()) / float64(executionCount),
+			"avgDop":                     float64(agg.TotalDop()) / float64(executionCount),
+			"avgGrantKb":                 float64(agg.TotalGrantKb()) / float64(executionCount),
+			"avgUsedGrantKb":             float64(agg.TotalUsedGrantKb()) / float64(executionCount),
+			"avgIdealGrantKb":            float64(agg.TotalIdealGrantKb()) / float64(executionCount),
+			"avgReservedThreads":         float64(agg.TotalReservedThreads()) / float64(executionCount),
+			"avgUsedThreads":             float64(agg.TotalUsedThreads()) / float64(executionCount),
+			"avgColumnstoreSegmentReads": float64(agg.TotalColumnstoreSegmentReads()) / float64(executionCount),
+			"avgColumnstoreSegmentSkips": float64(agg.TotalColumnstoreSegmentSkips()) / float64(executionCount),
+			"avgSpills":                  float64(agg.TotalSpills()) / float64(executionCount),
 		}
 		ret[i] = &common_domain.QueryMetric{
 			QueryHash:         agg.QueryHash,
-			Text:              "",
-			Database:          common_domain.DataBaseMetadata{},
+			Text:              sample.Text,
+			Database:          sample.Database,
 			LastExecutionTime: lasExec,
 			LastElapsedTime:   0,
 			Counters:          counters,
@@ -525,26 +530,95 @@ type QueryMetricsResponse struct {
 	}
 }
 type QueryMetricsHit struct {
-	ExecutionCount               map[string]float64 `json:"executionCount"`
-	TotalWorkerTime              map[string]float64 `json:"totalWorkerTime"`
-	TotalPhysicalReads           map[string]float64 `json:"totalPhysicalReads"`
-	TotalLogicalWrites           map[string]float64 `json:"totalLogicalWrites"`
-	TotalLogicalReads            map[string]float64 `json:"totalLogicalReads"`
-	TotalClrTime                 map[string]float64 `json:"totalClrTime"`
-	TotalElapsedTime             map[string]float64 `json:"totalElapsedTime"`
-	TotalRows                    map[string]float64 `json:"totalRows"`
-	TotalDop                     map[string]float64 `json:"totalDop"`
-	TotalGrantKb                 map[string]float64 `json:"totalGrantKb"`
-	TotalUsedGrantKb             map[string]float64 `json:"totalUsedGrantKb"`
-	TotalIdealGrantKb            map[string]float64 `json:"totalIdealGrantKb"`
-	TotalReservedThreads         map[string]float64 `json:"totalReservedThreads"`
-	TotalUsedThreads             map[string]float64 `json:"totalUsedThreads"`
-	TotalColumnstoreSegmentReads map[string]float64 `json:"totalColumnstoreSegmentReads"`
-	TotalColumnstoreSegmentSkips map[string]float64 `json:"totalColumnstoreSegmentSkips"`
-	TotalSpills                  map[string]float64 `json:"totalSpills"`
-	LastExecutionTime            struct {
+	ExecutionCountMap               map[string]float64 `json:"executionCount"`
+	TotalWorkerTimeMap              map[string]float64 `json:"totalWorkerTime"`
+	TotalPhysicalReadsMap           map[string]float64 `json:"totalPhysicalReads"`
+	TotalLogicalWritesMap           map[string]float64 `json:"totalLogicalWrites"`
+	TotalLogicalReadsMap            map[string]float64 `json:"totalLogicalReads"`
+	TotalClrTimeMap                 map[string]float64 `json:"totalClrTime"`
+	TotalElapsedTimeMap             map[string]float64 `json:"totalElapsedTime"`
+	TotalRowsMap                    map[string]float64 `json:"totalRows"`
+	TotalDopMap                     map[string]float64 `json:"totalDop"`
+	TotalGrantKbMap                 map[string]float64 `json:"totalGrantKb"`
+	TotalUsedGrantKbMap             map[string]float64 `json:"totalUsedGrantKb"`
+	TotalIdealGrantKbMap            map[string]float64 `json:"totalIdealGrantKb"`
+	TotalReservedThreadsMap         map[string]float64 `json:"totalReservedThreads"`
+	TotalUsedThreadsMap             map[string]float64 `json:"totalUsedThreads"`
+	TotalColumnstoreSegmentReadsMap map[string]float64 `json:"totalColumnstoreSegmentReads"`
+	TotalColumnstoreSegmentSkipsMap map[string]float64 `json:"totalColumnstoreSegmentSkips"`
+	TotalSpillsMap                  map[string]float64 `json:"totalSpills"`
+	LastExecutionTimeMap            struct {
 		Value         float64
 		ValueAsString string
 	} `json:"last_exec"`
+	SampleMap struct {
+		Hits struct {
+			Hits []struct {
+				Source *common_domain.QueryMetric `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	} `json:"sample"`
 	QueryHash []byte `json:"key"`
+}
+
+func (q QueryMetricsHit) ExecutionCount() int64 {
+	return int64(q.ExecutionCountMap["value"])
+}
+func (q QueryMetricsHit) TotalWorkerTime() int64 {
+	return int64(q.TotalWorkerTimeMap["value"])
+}
+func (q QueryMetricsHit) TotalPhysicalReads() int64 {
+	return int64(q.TotalPhysicalReadsMap["value"])
+}
+func (q QueryMetricsHit) TotalLogicalWrites() int64 {
+	return int64(q.TotalLogicalWritesMap["value"])
+}
+func (q QueryMetricsHit) TotalLogicalReads() int64 {
+	return int64(q.TotalLogicalReadsMap["value"])
+}
+func (q QueryMetricsHit) TotalClrTime() int64 {
+	return int64(q.TotalClrTimeMap["value"])
+}
+func (q QueryMetricsHit) TotalElapsedTime() int64 {
+	return int64(q.TotalElapsedTimeMap["value"])
+}
+func (q QueryMetricsHit) TotalRows() int64 {
+	return int64(q.TotalRowsMap["value"])
+}
+func (q QueryMetricsHit) TotalDop() int64 {
+	return int64(q.TotalDopMap["value"])
+}
+func (q QueryMetricsHit) TotalGrantKb() int64 {
+	return int64(q.TotalGrantKbMap["value"])
+}
+func (q QueryMetricsHit) TotalUsedGrantKb() int64 {
+	return int64(q.TotalUsedGrantKbMap["value"])
+}
+func (q QueryMetricsHit) TotalIdealGrantKb() int64 {
+	return int64(q.TotalIdealGrantKbMap["value"])
+}
+func (q QueryMetricsHit) TotalReservedThreads() int64 {
+	return int64(q.TotalReservedThreadsMap["value"])
+}
+func (q QueryMetricsHit) TotalUsedThreads() int64 {
+	return int64(q.TotalUsedThreadsMap["value"])
+}
+func (q QueryMetricsHit) TotalColumnstoreSegmentReads() int64 {
+	return int64(q.TotalColumnstoreSegmentReadsMap["value"])
+}
+func (q QueryMetricsHit) TotalColumnstoreSegmentSkips() int64 {
+	return int64(q.TotalColumnstoreSegmentSkipsMap["value"])
+}
+func (q QueryMetricsHit) TotalSpills() int64 {
+	return int64(q.TotalSpillsMap["value"])
+}
+func (q QueryMetricsHit) LastExecutionTime() time.Time {
+	return time.Unix(0, int64(q.LastExecutionTimeMap.Value)*1000000)
+}
+
+func (q QueryMetricsHit) Sample() *common_domain.QueryMetric {
+	if len(q.SampleMap.Hits.Hits) == 0 {
+		return nil
+	}
+	return q.SampleMap.Hits.Hits[0].Source
 }
