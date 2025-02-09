@@ -8,7 +8,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/esutil"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
-	io "io"
+	"io"
 	"strings"
 	"time"
 )
@@ -134,7 +134,9 @@ func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumbe
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("getting snapshots: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	if resp.IsError() {
 		return nil, nil, 0, fmt.Errorf("getting snapshots: (code %d), %s:  %s", resp.StatusCode, resp.Status(), resp.String())
 	}
@@ -174,7 +176,9 @@ func (r ELKRepository) getSnapSamples(ctx context.Context, ids []string) (map[st
 	if err != nil {
 		return nil, fmt.Errorf("getting samples: %w", err)
 	}
-	defer resp2.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp2.Body)
 	if resp2.IsError() {
 		return nil, fmt.Errorf("getting samples: (code %d), %s: %s", resp2.StatusCode, resp2.Status(), resp2.String())
 	}
@@ -287,7 +291,9 @@ func (r ELKRepository) GetSnapshot(ctx context.Context, id string) (common_domai
 	if err != nil {
 		return common_domain.DataBaseSnapshot{}, fmt.Errorf("getting snapshot: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	if resp.IsError() {
 		return common_domain.DataBaseSnapshot{}, fmt.Errorf("getting snapshot: (code %d), %s:  %s", resp.StatusCode, resp.Status(), resp.String())
 	}
@@ -434,7 +440,6 @@ func (r ELKRepository) GetQueryMetrics(ctx context.Context, start time.Time, end
 }`, start.Format("2006-01-02T15:04:05"), end.Format("2006-01-02T15:04:05"))
 	jsonBody, err := json.Marshal(query)
 	fmt.Println(string(jsonBody))
-	//esutil.NewJSONReader(query).Read(jsonBody)
 	resp, err := r.client.Search(
 		r.client.Search.WithContext(ctx),
 		r.client.Search.WithIndex("query_metrics"),
