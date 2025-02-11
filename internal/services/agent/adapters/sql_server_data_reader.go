@@ -9,20 +9,24 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/microsoft/go-mssqldb"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type SQLServerDataReader struct {
 	db                *sqlx.DB
 	lastQueryCounters map[string]map[string]int64
+	knowPlanHandles   map[string]struct{}
+	serverData        common_domain.ServerMeta
 }
 
 var _ domain.SamplesReader = (*SQLServerDataReader)(nil)
 var _ domain.QueryMetricsReader = (*SQLServerDataReader)(nil)
 
-func NewSQLServerDataReader(db *sqlx.DB) SQLServerDataReader {
-	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64)}
+func NewSQLServerDataReader(db *sqlx.DB, serverData common_domain.ServerMeta) SQLServerDataReader {
+	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64), knowPlanHandles: make(map[string]struct{}), serverData: serverData}
 }
 
 func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error) {
@@ -77,6 +81,7 @@ SELECT s.session_id,
        p.wait_resource,
        p.status,
        sql_handle,
+  plan_handle,
        text
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
@@ -115,6 +120,7 @@ FROM sys.dm_exec_sessions s
 		var waitResource string
 		var pStatus string
 		var sqlHandle []byte
+		var planHandle []byte
 		var text string
 		err = rows.Scan(&sessionID,
 			&loginTime,
@@ -139,6 +145,7 @@ FROM sys.dm_exec_sessions s
 			&waitResource,
 			&pStatus,
 			&sqlHandle,
+			&planHandle,
 			&text,
 		)
 		if err != nil {
@@ -155,12 +162,13 @@ FROM sys.dm_exec_sessions s
 			blockingMap[blockingSessionId] = bl
 		}
 		qs := common_domain.QuerySample{
-			Status:    pStatus,
-			Cmd:       "",
-			SqlHandle: sqlHandle,
-			Text:      text,
-			IsBlocked: blockingSessionId != 0,
-			IsBlocker: false,
+			Status:     pStatus,
+			Cmd:        "",
+			SqlHandle:  sqlHandle,
+			PlanHandle: planHandle,
+			Text:       text,
+			IsBlocked:  blockingSessionId != 0,
+			IsBlocker:  false,
 			Session: common_domain.SessionMetadata{
 				SessionID:            strconv.Itoa(sessionID),
 				LoginTime:            loginTime,
@@ -304,7 +312,7 @@ select plan_handle,
        query_hash,
        query_plan_hash,
        qas.dbid,
-       db_name,
+       isnull(db_name, '') as db_name,
        last_execution_time,
        last_elapsed_time,
        execution_count,
@@ -451,6 +459,67 @@ from qstats_aggr_split qas
 	err = rows.Err()
 	if err != nil {
 		return nil, fmt.Errorf("collecting metrics - rows.Err: %w", err)
+	}
+	return ret, nil
+}
+
+func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles [][]byte, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error) {
+	handles2 := make([]interface{}, 0, len(handles))
+	for _, handle := range handles {
+		if _, ok := S.knowPlanHandles[string(handle)]; ok && ignoreKnown {
+			continue
+		}
+		handles2 = append(handles2, handle)
+	}
+	tx, err := S.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func(tx *sql.Tx) {
+		_ = tx.Rollback()
+	}(tx)
+	createTempTable := `
+create table #temp_plans (handle varbinary(64) not null)`
+	insertIds := fmt.Sprintf(`
+insert into #temp_plans (handle) values %s
+`, strings.Join(slices.Repeat([]string{"(?)"}, len(handles2)), ","))
+	query := `
+select handle, query_plan from #temp_plans
+    cross apply sys.dm_exec_query_plan(handle)
+`
+	_, err = tx.ExecContext(ctx, createTempTable)
+	if err != nil {
+		return nil, fmt.Errorf("create id table: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, insertIds, handles2...)
+	if err != nil {
+		return nil, fmt.Errorf("insert ids: %w", err)
+	}
+	rows, err2 := tx.QueryContext(ctx, query)
+	if err2 != nil {
+		return nil, fmt.Errorf("fetch plans: %w", err2)
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+	ret := make(map[string]*common_domain.ExecutionPlan)
+	for rows.Next() {
+		var handle []byte
+		var queryPlan string
+		err = rows.Scan(&handle, &queryPlan)
+		if err != nil {
+			return nil, fmt.Errorf("fetch plans - scan: %w", err)
+		}
+		ret[string(handle)] = &common_domain.ExecutionPlan{
+			PlanHandle: handle,
+			XmlData:    queryPlan,
+			Server:     S.serverData,
+		}
+
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("fetch plans - err: %w", err)
 	}
 	return ret, nil
 }

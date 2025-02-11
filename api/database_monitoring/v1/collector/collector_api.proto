@@ -4,11 +4,20 @@ option go_package = "github.com/guilhermearpassos/database_monitoring_v1/collect
 import "google/protobuf/timestamp.proto";
 import "database_monitoring/v1/collector/metrics.proto";
 import "database_monitoring/v1/snapshot.proto";
+import "database_monitoring/v1/execution_plan.proto";
 
 service IngestionService{
   rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
   rpc IngestMetrics(DatabaseMetrics) returns (IngestMetricsResponse);
   rpc IngestSnapshot(IngestSnapshotRequest) returns (IngestSnapshotResponse);
+  rpc IngestExecutionPlans(IngestExecutionPlansRequest) returns (IngestExecutionPlansResponse);
+}
+
+message IngestExecutionPlansRequest{
+  repeated ExecutionPlan plans = 1;
+}
+message IngestExecutionPlansResponse{
+
 }
 
 message RegisterAgentRequest{

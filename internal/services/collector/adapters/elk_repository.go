@@ -157,3 +157,7 @@ func (r ELKRepository) StoreQueryMetrics(ctx context.Context, metrics []*common_
 	}
 	return nil
 }
+
+func (r ELKRepository) StoreExecutionPlans(ctx context.Context, snapshot []*common_domain.ExecutionPlan) error {
+	return nil
+}

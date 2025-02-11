@@ -37,7 +37,10 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(err)
 	}
-	dataReader := adapters.NewSQLServerDataReader(db)
+	dataReader := adapters.NewSQLServerDataReader(db, common_domain.ServerMeta{
+		Host: "localhost",
+		Type: "mssql",
+	})
 	go collectSnapshots(dataReader, client)
 	go collectQueryMetrics(dataReader, client)
 	for {
@@ -85,6 +88,7 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 		if err != nil {
 			panic(err)
 		}
+		planHandleStrings := make(map[string]struct{})
 		for _, snapshot := range snapshots {
 			if snapshot == nil {
 				continue
@@ -95,8 +99,37 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 			if err != nil {
 				panic(err)
 			}
-		}
+			for _, qs := range snapshot.Samples {
+				if qs.PlanHandle == nil {
+					continue
+				}
+				planHandleStrings[string(qs.PlanHandle)] = struct{}{}
+			}
 
+		}
+		planHandles := make([][]byte, 0)
+		for k := range planHandleStrings {
+			planHandles = append(planHandles, []byte(k))
+		}
+		executionPlans, err := dataReader.GetPlanHandles(context.Background(), planHandles, true)
+		if err != nil {
+			panic(err)
+		}
+		protoPlans := make([]*dbmv1.ExecutionPlan, 0, len(executionPlans))
+		for _, p := range executionPlans {
+			protoPlan, err2 := converters.ExecutionPlanToProto(p)
+			if err2 != nil {
+				panic(err2)
+			}
+			protoPlans = append(protoPlans, protoPlan)
+		}
+		if len(protoPlans) != 0 {
+
+			_, err = client.IngestExecutionPlans(context.Background(), &collectorv1.IngestExecutionPlansRequest{Plans: protoPlans})
+			if err != nil {
+				panic(err)
+			}
+		}
 		time.Sleep(10 * time.Second)
 	}
 }

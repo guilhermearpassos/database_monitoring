@@ -75,3 +75,14 @@ func QueryMetricToDomain(metric *dbmv1.QueryMetric) (*common_domain.QueryMetric,
 		Rates:             metric.Rates,
 	}, nil
 }
+
+func ExecutionPlanToDomain(plan *dbmv1.ExecutionPlan) (*common_domain.ExecutionPlan, error) {
+	return &common_domain.ExecutionPlan{
+		PlanHandle: plan.PlanHandle,
+		Server: common_domain.ServerMeta{
+			Host: plan.Server.Host,
+			Type: plan.Server.Type,
+		},
+		XmlData: plan.XmlPlan,
+	}, nil
+}

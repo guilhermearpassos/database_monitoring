@@ -6,6 +6,7 @@ type QuerySample struct {
 	Status        string
 	Cmd           string
 	SqlHandle     []byte
+	PlanHandle    []byte
 	Text          string
 	IsBlocked     bool
 	IsBlocker     bool

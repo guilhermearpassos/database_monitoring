@@ -75,3 +75,14 @@ func QueryMetricToProto(metric *common_domain.QueryMetric) (*dbmv1.QueryMetric, 
 		Rates:                 metric.Rates,
 	}, nil
 }
+
+func ExecutionPlanToProto(plan *common_domain.ExecutionPlan) (*dbmv1.ExecutionPlan, error) {
+	return &dbmv1.ExecutionPlan{
+		PlanHandle: plan.PlanHandle,
+		Server: &dbmv1.ServerMetadata{
+			Host: plan.Server.Host,
+			Type: plan.Server.Type,
+		},
+		XmlPlan: plan.XmlData,
+	}, nil
+}

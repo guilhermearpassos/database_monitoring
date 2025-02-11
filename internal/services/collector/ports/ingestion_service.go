@@ -65,3 +65,18 @@ func (s IngestionSvc) IngestSnapshot(ctx context.Context, request *collectorv1.I
 		Message: "",
 	}, nil
 }
+func (s IngestionSvc) IngestExecutionPlans(ctx context.Context, in *collectorv1.IngestExecutionPlansRequest) (*collectorv1.IngestExecutionPlansResponse, error) {
+	domainPlans := make([]*common_domain.ExecutionPlan, len(in.GetPlans()))
+	for i, plan := range in.GetPlans() {
+		protoPlan, err := converters.ExecutionPlanToDomain(plan)
+		if err != nil {
+			return nil, err
+		}
+		domainPlans[i] = protoPlan
+	}
+	err := s.app.Commands.StoreExecutionPlans.Handle(ctx, domainPlans)
+	if err != nil {
+		return nil, err
+	}
+	return &collectorv1.IngestExecutionPlansResponse{}, nil
+}
