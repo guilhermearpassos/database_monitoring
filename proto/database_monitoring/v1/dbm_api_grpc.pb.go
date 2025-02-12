@@ -24,6 +24,7 @@ const (
 	DBMApi_ListServerSummary_FullMethodName = "/database_monitoring.v1.DBMApi/ListServerSummary"
 	DBMApi_ListServers_FullMethodName       = "/database_monitoring.v1.DBMApi/ListServers"
 	DBMApi_ListQueryMetrics_FullMethodName  = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
+	DBMApi_GetSampleDetails_FullMethodName  = "/database_monitoring.v1.DBMApi/GetSampleDetails"
 )
 
 // DBMApiClient is the client API for DBMApi service.
@@ -35,6 +36,7 @@ type DBMApiClient interface {
 	ListServerSummary(ctx context.Context, in *ListServerSummaryRequest, opts ...grpc.CallOption) (*ListServerSummaryResponse, error)
 	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
 	ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error)
+	GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error)
 }
 
 type dBMApiClient struct {
@@ -95,6 +97,16 @@ func (c *dBMApiClient) ListQueryMetrics(ctx context.Context, in *ListQueryMetric
 	return out, nil
 }
 
+func (c *dBMApiClient) GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSampleDetailsResponse)
+	err := c.cc.Invoke(ctx, DBMApi_GetSampleDetails_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DBMApiServer is the server API for DBMApi service.
 // All implementations must embed UnimplementedDBMApiServer
 // for forward compatibility.
@@ -104,6 +116,7 @@ type DBMApiServer interface {
 	ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error)
 	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
 	ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error)
+	GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error)
 	mustEmbedUnimplementedDBMApiServer()
 }
 
@@ -128,6 +141,9 @@ func (UnimplementedDBMApiServer) ListServers(context.Context, *ListServersReques
 }
 func (UnimplementedDBMApiServer) ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListQueryMetrics not implemented")
+}
+func (UnimplementedDBMApiServer) GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSampleDetails not implemented")
 }
 func (UnimplementedDBMApiServer) mustEmbedUnimplementedDBMApiServer() {}
 func (UnimplementedDBMApiServer) testEmbeddedByValue()                {}
@@ -240,6 +256,24 @@ func _DBMApi_ListQueryMetrics_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DBMApi_GetSampleDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSampleDetailsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DBMApiServer).GetSampleDetails(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DBMApi_GetSampleDetails_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DBMApiServer).GetSampleDetails(ctx, req.(*GetSampleDetailsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DBMApi_ServiceDesc is the grpc.ServiceDesc for DBMApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -266,6 +300,10 @@ var DBMApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListQueryMetrics",
 			Handler:    _DBMApi_ListQueryMetrics_Handler,
+		},
+		{
+			MethodName: "GetSampleDetails",
+			Handler:    _DBMApi_GetSampleDetails_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

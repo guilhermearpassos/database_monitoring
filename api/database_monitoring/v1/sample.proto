@@ -16,6 +16,7 @@ message QuerySample {
   BlockMetadata block_info = 8;
   WaitMetadata wait_info = 9;
   SnapMetadata snap_info = 11;
+  bytes plan_handle = 12;
 }
 
 message SnapMetadata {
