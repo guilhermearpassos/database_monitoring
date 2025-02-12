@@ -25,8 +25,12 @@ type SQLServerDataReader struct {
 var _ domain.SamplesReader = (*SQLServerDataReader)(nil)
 var _ domain.QueryMetricsReader = (*SQLServerDataReader)(nil)
 
-func NewSQLServerDataReader(db *sqlx.DB, serverData common_domain.ServerMeta) SQLServerDataReader {
-	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64), knowPlanHandles: make(map[string]struct{}), serverData: serverData}
+func NewSQLServerDataReader(db *sqlx.DB, serverData common_domain.ServerMeta, knowPlanHandles []string) SQLServerDataReader {
+	knowPlanHandlesMap := make(map[string]struct{}, len(knowPlanHandles))
+	for _, knowPlanHandle := range knowPlanHandles {
+		knowPlanHandlesMap[knowPlanHandle] = struct{}{}
+	}
+	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64), knowPlanHandles: knowPlanHandlesMap, serverData: serverData}
 }
 
 func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error) {
@@ -464,12 +468,16 @@ from qstats_aggr_split qas
 }
 
 func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles [][]byte, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error) {
+
 	handles2 := make([]interface{}, 0, len(handles))
 	for _, handle := range handles {
 		if _, ok := S.knowPlanHandles[string(handle)]; ok && ignoreKnown {
 			continue
 		}
 		handles2 = append(handles2, handle)
+	}
+	if len(handles2) == 0 {
+		return make(map[string]*common_domain.ExecutionPlan), nil
 	}
 	tx, err := S.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -520,6 +528,9 @@ select handle, query_plan from #temp_plans
 	err = rows.Err()
 	if err != nil {
 		return nil, fmt.Errorf("fetch plans - err: %w", err)
+	}
+	for k := range ret {
+		S.knowPlanHandles[k] = struct{}{}
 	}
 	return ret, nil
 }

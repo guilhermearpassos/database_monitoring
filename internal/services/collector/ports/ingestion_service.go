@@ -2,12 +2,16 @@ package ports
 
 import (
 	"context"
+	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/errors"
 	"github.com/google/uuid"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type IngestionSvc struct {
@@ -79,4 +83,18 @@ func (s IngestionSvc) IngestExecutionPlans(ctx context.Context, in *collectorv1.
 		return nil, err
 	}
 	return &collectorv1.IngestExecutionPlansResponse{}, nil
+}
+
+func (s IngestionSvc) GetKnownPlanHandles(ctx context.Context, in *collectorv1.GetKnownPlanHandlesRequest) (*collectorv1.GetKnownPlanHandlesResponse, error) {
+	ret, err := s.app.Queries.GetKnownPlanHandlesHandler.Handle(ctx, &common_domain.ServerMeta{
+		Host: in.GetServer().Host,
+		Type: in.GetServer().Type,
+	})
+	if err != nil {
+		if errors.As(err, &custom_errors.NotFoundErr{}) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		return nil, err
+	}
+	return &collectorv1.GetKnownPlanHandlesResponse{Handles: ret}, nil
 }

@@ -11,6 +11,15 @@ service IngestionService{
   rpc IngestMetrics(DatabaseMetrics) returns (IngestMetricsResponse);
   rpc IngestSnapshot(IngestSnapshotRequest) returns (IngestSnapshotResponse);
   rpc IngestExecutionPlans(IngestExecutionPlansRequest) returns (IngestExecutionPlansResponse);
+  rpc GetKnownPlanHandles(GetKnownPlanHandlesRequest) returns (GetKnownPlanHandlesResponse);
+}
+
+message GetKnownPlanHandlesRequest {
+  ServerMetadata server = 1;
+}
+
+message GetKnownPlanHandlesResponse {
+  repeated string handles = 1;
 }
 
 message IngestExecutionPlansRequest{

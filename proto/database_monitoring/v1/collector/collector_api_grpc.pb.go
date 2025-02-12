@@ -23,6 +23,7 @@ const (
 	IngestionService_IngestMetrics_FullMethodName        = "/database_monitoring.v1.IngestionService/IngestMetrics"
 	IngestionService_IngestSnapshot_FullMethodName       = "/database_monitoring.v1.IngestionService/IngestSnapshot"
 	IngestionService_IngestExecutionPlans_FullMethodName = "/database_monitoring.v1.IngestionService/IngestExecutionPlans"
+	IngestionService_GetKnownPlanHandles_FullMethodName  = "/database_monitoring.v1.IngestionService/GetKnownPlanHandles"
 )
 
 // IngestionServiceClient is the client API for IngestionService service.
@@ -33,6 +34,7 @@ type IngestionServiceClient interface {
 	IngestMetrics(ctx context.Context, in *DatabaseMetrics, opts ...grpc.CallOption) (*IngestMetricsResponse, error)
 	IngestSnapshot(ctx context.Context, in *IngestSnapshotRequest, opts ...grpc.CallOption) (*IngestSnapshotResponse, error)
 	IngestExecutionPlans(ctx context.Context, in *IngestExecutionPlansRequest, opts ...grpc.CallOption) (*IngestExecutionPlansResponse, error)
+	GetKnownPlanHandles(ctx context.Context, in *GetKnownPlanHandlesRequest, opts ...grpc.CallOption) (*GetKnownPlanHandlesResponse, error)
 }
 
 type ingestionServiceClient struct {
@@ -83,6 +85,16 @@ func (c *ingestionServiceClient) IngestExecutionPlans(ctx context.Context, in *I
 	return out, nil
 }
 
+func (c *ingestionServiceClient) GetKnownPlanHandles(ctx context.Context, in *GetKnownPlanHandlesRequest, opts ...grpc.CallOption) (*GetKnownPlanHandlesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetKnownPlanHandlesResponse)
+	err := c.cc.Invoke(ctx, IngestionService_GetKnownPlanHandles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IngestionServiceServer is the server API for IngestionService service.
 // All implementations must embed UnimplementedIngestionServiceServer
 // for forward compatibility.
@@ -91,6 +103,7 @@ type IngestionServiceServer interface {
 	IngestMetrics(context.Context, *DatabaseMetrics) (*IngestMetricsResponse, error)
 	IngestSnapshot(context.Context, *IngestSnapshotRequest) (*IngestSnapshotResponse, error)
 	IngestExecutionPlans(context.Context, *IngestExecutionPlansRequest) (*IngestExecutionPlansResponse, error)
+	GetKnownPlanHandles(context.Context, *GetKnownPlanHandlesRequest) (*GetKnownPlanHandlesResponse, error)
 	mustEmbedUnimplementedIngestionServiceServer()
 }
 
@@ -112,6 +125,9 @@ func (UnimplementedIngestionServiceServer) IngestSnapshot(context.Context, *Inge
 }
 func (UnimplementedIngestionServiceServer) IngestExecutionPlans(context.Context, *IngestExecutionPlansRequest) (*IngestExecutionPlansResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IngestExecutionPlans not implemented")
+}
+func (UnimplementedIngestionServiceServer) GetKnownPlanHandles(context.Context, *GetKnownPlanHandlesRequest) (*GetKnownPlanHandlesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetKnownPlanHandles not implemented")
 }
 func (UnimplementedIngestionServiceServer) mustEmbedUnimplementedIngestionServiceServer() {}
 func (UnimplementedIngestionServiceServer) testEmbeddedByValue()                          {}
@@ -206,6 +222,24 @@ func _IngestionService_IngestExecutionPlans_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IngestionService_GetKnownPlanHandles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetKnownPlanHandlesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IngestionServiceServer).GetKnownPlanHandles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IngestionService_GetKnownPlanHandles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IngestionServiceServer).GetKnownPlanHandles(ctx, req.(*GetKnownPlanHandlesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IngestionService_ServiceDesc is the grpc.ServiceDesc for IngestionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +262,10 @@ var IngestionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IngestExecutionPlans",
 			Handler:    _IngestionService_IngestExecutionPlans_Handler,
+		},
+		{
+			MethodName: "GetKnownPlanHandles",
+			Handler:    _IngestionService_GetKnownPlanHandles_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

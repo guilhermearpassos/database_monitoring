@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
@@ -11,7 +12,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 )
@@ -37,10 +40,33 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(err)
 	}
+	knownHandles, err := client.GetKnownPlanHandles(context.Background(), &collectorv1.GetKnownPlanHandlesRequest{Server: &dbmv1.ServerMetadata{
+		Host: "localhost",
+		Type: "mssql",
+	}})
+	var knownHandlesSlice []string
+	if err != nil {
+		if grpcErr, ok := status.FromError(err); ok {
+			if grpcErr.Code() == codes.NotFound {
+				knownHandlesSlice = []string{}
+			} else {
+				panic(err)
+			}
+
+		} else {
+
+			panic(err)
+		}
+	} else {
+
+		knownHandlesSlice = knownHandles.Handles
+	}
+	fmt.Println(knownHandles)
+
 	dataReader := adapters.NewSQLServerDataReader(db, common_domain.ServerMeta{
 		Host: "localhost",
 		Type: "mssql",
-	})
+	}, knownHandlesSlice)
 	go collectSnapshots(dataReader, client)
 	go collectQueryMetrics(dataReader, client)
 	for {

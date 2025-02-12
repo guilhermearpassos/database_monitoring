@@ -9,6 +9,8 @@ import (
 type SampleRepository interface {
 	StoreSnapshot(ctx context.Context, snapshot common_domain.DataBaseSnapshot) error
 	StoreExecutionPlans(ctx context.Context, snapshot []*common_domain.ExecutionPlan) error
+	GetKnownPlanHandles(ctx context.Context, server *common_domain.ServerMeta) ([]string, error)
+
 	//ListServers(ctx context.Context, start time.Time, end time.Time) ([]common_domain.ServerSummary, error)
 	//ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int) ([]DataBaseSnapshot, int, error)
 }
