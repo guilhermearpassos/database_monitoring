@@ -3,9 +3,52 @@ package database_monitoring.v1;
 option go_package = "github.com/guilhermearpassos/database_monitoring_v1;dbmv1";
 import "database_monitoring/v1/snapshot.proto";
 
-
 message ExecutionPlan {
   bytes plan_handle = 1;
   ServerMetadata server = 2;
   string xml_plan = 3;
+}
+
+message ParsedExecutionPlan{
+  ExecutionPlan plan = 1;
+  repeated StatisticsInfo stats_usage = 2;
+  repeated PlanWarning warnings = 3;
+  repeated PlanNode nodes = 4;
+}
+
+message PlanNode {
+  message Header {
+    string physical_op = 1;
+    string logical_op = 2;
+    double estimate_cpu = 3;
+    double estimate_io = 4;
+    double estimate_rows = 5;
+    double estimated_cost = 6;
+    string parallel = 7;
+  }
+  string name = 1;
+  double estimated_rows = 2;
+  double subtree_cost = 3;
+  double node_cost = 4;
+  Header header = 5;
+  repeated PlanNode nodes = 7;
+
+}
+
+message StatisticsInfo{
+  string last_update = 1;
+  int64 modification_count = 2;
+  double  sampling_percent = 3;
+  string statistics = 4;
+  string table = 5;
+}
+
+message PlanWarning{
+  message PlanAffectingConvert{
+    string convert_issue = 1;
+    string expression = 2;
+  }
+  oneof warning {
+    PlanAffectingConvert convert = 1;
+  }
 }

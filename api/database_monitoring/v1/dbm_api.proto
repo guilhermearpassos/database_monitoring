@@ -4,6 +4,7 @@ option go_package = "github.com/guilhermearpassos/database_monitoring_v1;dbmv1";
 import "google/protobuf/timestamp.proto";
 import "database_monitoring/v1/snapshot.proto";
 import "database_monitoring/v1/sample.proto";
+import "database_monitoring/v1/execution_plan.proto";
 
 service DBMApi {
   rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
@@ -80,10 +81,14 @@ message GetSampleDetailsRequest {
   string sample_id = 1;
 }
 
+message BlockChain{
+  repeated QuerySample query_sample = 1;
+}
+
 message GetSampleDetailsResponse {
-//  ExecutionPlan
-//  Recommendations
-//  BlockChain
+  QuerySample query_sample = 1;
+  ParsedExecutionPlan parsed_plan = 2;
+  BlockChain block_chain = 3;
 }
 
 message GetNormalizedQueryDetailsRequest {
