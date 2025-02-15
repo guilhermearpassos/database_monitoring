@@ -2,10 +2,12 @@ package adapters
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"io"
@@ -524,6 +526,93 @@ func (r ELKRepository) GetQueryMetrics(ctx context.Context, start time.Time, end
 		}
 	}
 	return ret, nil
+}
+
+func (r ELKRepository) GetExecutionPlan(ctx context.Context, planHandle []byte, server *common_domain.ServerMeta) (*common_domain.ExecutionPlan, error) {
+
+	// Define the query
+	query := map[string]interface{}{
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"must": []map[string]interface{}{
+					{
+						"term": map[string]interface{}{
+							"Server.Host": server.Host,
+						},
+					},
+					{
+						"term": map[string]interface{}{
+							"PlanHandle.keyword": base64.StdEncoding.EncodeToString(planHandle),
+						},
+					},
+					//{
+					//	"term": map[string]interface{}{
+					//		"Server.Type": "mssql",
+					//	},
+					//},
+				},
+			},
+		},
+	}
+	//
+	//// Convert the query to JSON
+	//queryJSON, err := json.Marshal(query)
+	//if err != nil {
+	//	log.Fatalf("Error marshaling the query: %s", err)
+	//}
+	resp2, err := r.client.Search(
+		r.client.Search.WithContext(ctx),
+		r.client.Search.WithIndex("exec_plans"),
+		r.client.Search.WithBody(esutil.NewJSONReader(&query)),
+		r.client.Search.WithSize(10000),
+		//r.client.Search.WithSort("Snapshot.ID, Session.SessionID"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("getting exec plans: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp2.Body)
+	if resp2.IsError() {
+		if resp2.StatusCode == 404 {
+			return nil, custom_errors.NotFoundErr{Message: fmt.Sprintf("getting exec plans: (code %d), %s: %s", resp2.StatusCode, resp2.Status(), resp2.String())}
+		}
+		return nil, fmt.Errorf("getting exec plans: (code %d), %s: %s", resp2.StatusCode, resp2.Status(), resp2.String())
+	}
+
+	var decodedResp struct {
+		Took int64
+		Hits struct {
+			Total struct {
+				Value int64
+			}
+			Hits []*struct {
+				Index   string                       `json:"_index"`
+				ID      string                       `json:"_id"`
+				Score   float64                      `json:"_score"`
+				Ignored []string                     `json:"_ignored"`
+				Source  *common_domain.ExecutionPlan `json:"_source"`
+				Type    string                       `json:"_type"`
+				Version int64                        `json:"_version,omitempty"`
+			}
+		}
+	}
+
+	err = json.NewDecoder(resp2.Body).Decode(&decodedResp)
+	if err != nil {
+		print(resp2.String())
+		return nil, fmt.Errorf("decoding response body: %w", err)
+	}
+	ret := make([]*common_domain.ExecutionPlan, len(decodedResp.Hits.Hits))
+	for i, h := range decodedResp.Hits.Hits {
+		ret[i] = h.Source
+	}
+	if len(ret) == 0 {
+		return nil, custom_errors.NotFoundErr{Message: fmt.Sprintf("no plan found for handle %s", base64.StdEncoding.EncodeToString(planHandle))}
+	}
+
+	return ret[0], nil
+
 }
 
 type QueryMetricsResponse struct {

@@ -222,12 +222,12 @@ func (r ELKRepository) GetKnownPlanHandles(ctx context.Context, server *common_d
 				"must": []map[string]interface{}{
 					{
 						"term": map[string]interface{}{
-							"Server.Host": "localhost",
+							"Server.Host": server.Host,
 						},
 					},
 					{
 						"term": map[string]interface{}{
-							"Server.Type": "mssql",
+							"Server.Type": server.Type,
 						},
 					},
 				},

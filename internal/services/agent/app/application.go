@@ -10,19 +10,21 @@ type Application struct {
 }
 
 type Queries struct {
-	ListServerSummary query.ListServerSummaryHandler
-	ListSnapshots     query.ListSnapshotsHandler
-	GetSnapshot       query.GetSnapshotHandler
-	ListQueryMetrics  query.ListQueryMetricsHandler
+	ListServerSummary     query.ListServerSummaryHandler
+	ListSnapshots         query.ListSnapshotsHandler
+	GetSnapshot           query.GetSnapshotHandler
+	ListQueryMetrics      query.ListQueryMetricsHandler
+	GetQuerySampleDetails query.GetQuerySampleDetailsHandler
 }
 
 func NewApplication(repo domain.SampleRepository, metricsRepo domain.QueryMetricsRepository) Application {
 	return Application{
 		Queries: Queries{
-			ListServerSummary: query.NewListServerSummaryHandler(repo),
-			ListSnapshots:     query.NewListSnapshotsHandler(repo),
-			GetSnapshot:       query.NewGetSnapshotHandler(repo),
-			ListQueryMetrics:  query.NewListQueryMetricsHandler(metricsRepo),
+			ListServerSummary:     query.NewListServerSummaryHandler(repo),
+			ListSnapshots:         query.NewListSnapshotsHandler(repo),
+			GetSnapshot:           query.NewGetSnapshotHandler(repo),
+			ListQueryMetrics:      query.NewListQueryMetricsHandler(metricsRepo),
+			GetQuerySampleDetails: query.NewGetQuerySampleDetailsHandler(repo),
 		},
 	}
 }

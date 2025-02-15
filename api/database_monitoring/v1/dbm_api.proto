@@ -78,11 +78,16 @@ message ServerSummary {
 }
 
 message GetSampleDetailsRequest {
-  string sample_id = 1;
+  bytes sql_handle = 1;
+  string snap_id = 2;
 }
 
 message BlockChain{
-  repeated QuerySample query_sample = 1;
+  message BlockingNode {
+    QuerySample query_sample = 1;
+    repeated BlockingNode child_nodes = 2;
+  }
+  repeated BlockingNode roots = 1;
 }
 
 message GetSampleDetailsResponse {
