@@ -78,7 +78,7 @@ message ServerSummary {
 }
 
 message GetSampleDetailsRequest {
-  bytes sql_handle = 1;
+  bytes sample_id = 1;
   string snap_id = 2;
 }
 

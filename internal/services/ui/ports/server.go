@@ -624,13 +624,12 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := s.client.GetSnapshot(r.Context(), &dbmv1.GetSnapshotRequest{Id: snapshotID})
-	var querySamplesForSnapshot []domain.QuerySample
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	querySamplesForSnapshot = make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
+	querySamplesForSnapshot := make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
 	for i, sample := range resp.Snapshot.Samples {
 		var blockTime, blockDetails string
 		if sample.Blocker {
@@ -658,6 +657,7 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 			BlockDetails:  blockDetails,
 			WaitEvent:     sample.WaitInfo.WaitType,
 			Database:      sample.Db.DatabaseName,
+			SampleID:      string(sample.Id),
 		}
 	}
 

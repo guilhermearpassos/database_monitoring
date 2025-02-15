@@ -9,6 +9,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/microsoft/go-mssqldb"
+	mssql "github.com/microsoft/go-mssqldb"
 	"slices"
 	"strconv"
 	"strings"
@@ -86,7 +87,7 @@ SELECT s.session_id,
        p.status,
        sql_handle,
   plan_handle,
-       text
+       text, p.request_id, p.transaction_id, p.connection_id
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
@@ -126,6 +127,9 @@ FROM sys.dm_exec_sessions s
 		var sqlHandle []byte
 		var planHandle []byte
 		var text string
+		var requestId int
+		var transactionId int
+		var connectionId mssql.UniqueIdentifier
 		err = rows.Scan(&sessionID,
 			&loginTime,
 			&hostName,
@@ -151,6 +155,9 @@ FROM sys.dm_exec_sessions s
 			&sqlHandle,
 			&planHandle,
 			&text,
+			&requestId,
+			&transactionId,
+			&connectionId,
 		)
 		if err != nil {
 			return nil, err
@@ -165,7 +172,9 @@ FROM sys.dm_exec_sessions s
 			bl = append(bl, strconv.Itoa(sessionID))
 			blockingMap[blockingSessionId] = bl
 		}
+		sampleId := []byte(fmt.Sprintf("%s_%d_%d_%d", connectionId, sessionID, transactionId, requestId))
 		qs := common_domain.QuerySample{
+			Id:         sampleId,
 			Status:     pStatus,
 			Cmd:        "",
 			SqlHandle:  sqlHandle,

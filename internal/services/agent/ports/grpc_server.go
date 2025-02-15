@@ -155,7 +155,7 @@ func (s GRPCServer) ListQueryMetrics(ctx context.Context, in *dbmv1.ListQueryMet
 }
 
 func (s GRPCServer) GetSampleDetails(ctx context.Context, in *dbmv1.GetSampleDetailsRequest) (*dbmv1.GetSampleDetailsResponse, error) {
-	resp, err := s.app.Queries.GetQuerySampleDetails.Handle(ctx, in.GetSnapId(), in.SqlHandle)
+	resp, err := s.app.Queries.GetQuerySampleDetails.Handle(ctx, in.GetSnapId(), in.SampleId)
 	if err != nil {
 		return nil, err
 	}

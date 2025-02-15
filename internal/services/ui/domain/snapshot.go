@@ -92,4 +92,5 @@ type QuerySample struct {
 	BlockDetails  string
 	WaitEvent     string
 	Database      string
+	SampleID      string
 }

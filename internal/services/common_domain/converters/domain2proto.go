@@ -62,6 +62,7 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 			Timestamp: timestamppb.New(sample.Snapshot.Timestamp),
 		},
 		PlanHandle: sample.PlanHandle,
+		Id:         sample.Id,
 	}
 }
 

@@ -62,6 +62,7 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 		},
 		Cmd:        "",
 		PlanHandle: sample.PlanHandle,
+		Id:         sample.Id,
 	}
 }
 

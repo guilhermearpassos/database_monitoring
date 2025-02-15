@@ -17,6 +17,7 @@ message QuerySample {
   WaitMetadata wait_info = 9;
   SnapMetadata snap_info = 11;
   bytes plan_handle = 12;
+  bytes id = 13;
 }
 
 message SnapMetadata {

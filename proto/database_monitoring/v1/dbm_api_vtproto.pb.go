@@ -667,10 +667,10 @@ func (m *GetSampleDetailsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.SqlHandle) > 0 {
-		i -= len(m.SqlHandle)
-		copy(dAtA[i:], m.SqlHandle)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SqlHandle)))
+	if len(m.SampleId) > 0 {
+		i -= len(m.SampleId)
+		copy(dAtA[i:], m.SampleId)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SampleId)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -1169,7 +1169,7 @@ func (m *GetSampleDetailsRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.SqlHandle)
+	l = len(m.SampleId)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -2804,7 +2804,7 @@ func (m *GetSampleDetailsRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SqlHandle", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SampleId", wireType)
 			}
 			var byteLen int
 			for shift := uint(0); ; shift += 7 {
@@ -2831,9 +2831,9 @@ func (m *GetSampleDetailsRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.SqlHandle = append(m.SqlHandle[:0], dAtA[iNdEx:postIndex]...)
-			if m.SqlHandle == nil {
-				m.SqlHandle = []byte{}
+			m.SampleId = append(m.SampleId[:0], dAtA[iNdEx:postIndex]...)
+			if m.SampleId == nil {
+				m.SampleId = []byte{}
 			}
 			iNdEx = postIndex
 		case 2:

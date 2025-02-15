@@ -19,7 +19,7 @@ type GetQuerySampleDetailsHandler struct {
 func NewGetQuerySampleDetailsHandler(repo domain.SampleRepository) GetQuerySampleDetailsHandler {
 	return GetQuerySampleDetailsHandler{repo: repo}
 }
-func (h *GetQuerySampleDetailsHandler) Handle(ctx context.Context, snapID string, queryHandle []byte) (*dbmv1.GetSampleDetailsResponse, error) {
+func (h *GetQuerySampleDetailsHandler) Handle(ctx context.Context, snapID string, sampleID []byte) (*dbmv1.GetSampleDetailsResponse, error) {
 	snap, err := h.repo.GetSnapshot(ctx, snapID)
 	if err != nil {
 		return nil, fmt.Errorf("get snapshot %s error: %w", snapID, err)
@@ -28,7 +28,7 @@ func (h *GetQuerySampleDetailsHandler) Handle(ctx context.Context, snapID string
 	var baseQuery *common_domain.QuerySample
 	found := false
 	for _, sample := range snap.Samples {
-		if string(sample.SqlHandle) == string(queryHandle) {
+		if string(sample.Id) == string(sampleID) {
 			found = true
 			baseQuery = sample
 		}
