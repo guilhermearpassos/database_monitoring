@@ -15,7 +15,7 @@
         {{range $sample := .QuerySamples}}
         <tr>
             <td {{if eq $sample.IsBlocker true}}style=" color:#ff2f2f" {{end}}
-                hx-trigger="click" hx-include="#selected-timerange,#selected-server"
+                hx-trigger="click" hx-include="#selected-timerange,#selected-server" hx-target="#samples_modal_container" hx-swap="outerHTML"
                 hx-get="/query-details?snapID={{$sample.SnapID}}&sampleID={{$sample.SampleID}}">
                 {{if eq $sample.IsBlocker true}}<i class="fas fa-lock" style="padding-right: 6px;"></i>
                 {{else}}
