@@ -1,6 +1,5 @@
 .truncated-sql-text .sql-text {
     display: inline-block;
-    max-width: 500px; /* Adjust as needed */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

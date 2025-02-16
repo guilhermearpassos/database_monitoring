@@ -449,21 +449,29 @@ func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	blockChain, err2 := blockChainFromProto(resp.BlockChain)
+	if err2 != nil {
+		http.Error(w, err2.Error(), http.StatusInternalServerError)
+		return
+	}
+	var plan domain.ParsedExecutionPlan
+	if resp.ParsedPlan != nil {
+		plan = domain.ProtoParsedPlanToDomain(resp.ParsedPlan)
+
+	}
 	if r.Header.Get("Hx-request") == "true" {
-		blockChain, err2 := blockChainFromProto(resp.BlockChain)
-		if err2 != nil {
-			http.Error(w, err2.Error(), http.StatusInternalServerError)
-			return
-		}
 		//partial render
 		err = s.templates.ExecuteTemplate(w, "samples_modal.html", struct {
-			State       string
-			QuerySample domain.QuerySample
-			BlockChain  domain.BlockChain
+			State         string
+			QuerySample   domain.QuerySample
+			BlockChain    domain.BlockChain
+			ExecutionPlan domain.ParsedExecutionPlan
 		}{
-			State:       "open",
-			QuerySample: dSample,
-			BlockChain:  blockChain,
+			State:         "open",
+			QuerySample:   dSample,
+			BlockChain:    blockChain,
+			ExecutionPlan: plan,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

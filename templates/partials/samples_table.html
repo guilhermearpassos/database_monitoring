@@ -24,8 +24,8 @@
                 {{end}}
                 <span>{{$sample.SID}}</span>
             </td>
-            <td class="truncated-sql-text">
-                <span class="sql-text">{{$sample.Query}}</span>
+            <td class="truncated-sql-text" style="max-width: 500px;">
+                <span class="sql-text" style="max-width: 500px;">{{$sample.Query}}</span>
             </td>
             <td>{{$sample.ExecutionTime}}</td>
             <td>{{$sample.BlockDetails}}</td>
