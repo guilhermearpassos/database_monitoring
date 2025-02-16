@@ -93,4 +93,22 @@ type QuerySample struct {
 	WaitEvent     string
 	Database      string
 	SampleID      string
+	SnapID        string
+	SQLHandle     string
+	PlanHandle    string
+	Status        string
+}
+
+type BlockingNode struct {
+	QuerySample QuerySample
+	ChildNodes  []BlockingNode
+	Level       int // Added for template rendering
+}
+type BlockChain struct {
+	Roots []BlockingNode
+}
+
+type QueryDetailsData struct {
+	QuerySample QuerySample
+	BlockChain  BlockChain
 }

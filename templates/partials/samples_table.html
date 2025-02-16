@@ -1,4 +1,3 @@
-
 <td colspan="10">
     <table class="table table-sm table-bordered">
         <thead>
@@ -15,7 +14,16 @@
         <tbody>
         {{range $sample := .QuerySamples}}
         <tr>
-            <td {{if eq $sample.IsBlocker true}}style=" color:#ff2f2f"{{end}}>{{if eq $sample.IsBlocker true}}<i class="fas fa-lock" style="padding-right: 6px;"></i>{{else}}{{if eq $sample.IsWaiter true}}<i class="fa-regular fa-clock" style="padding-right: 6px;"></i>{{end}}{{end}}<span>{{$sample.SID}}</span></td>
+            <td {{if eq $sample.IsBlocker true}}style=" color:#ff2f2f" {{end}}
+                hx-trigger="click" hx-include="#selected-timerange,#selected-server"
+                hx-get="/query-details?snapID={{$sample.SnapID}}&sampleID={{$sample.SampleID}}">
+                {{if eq $sample.IsBlocker true}}<i class="fas fa-lock" style="padding-right: 6px;"></i>
+                {{else}}
+                {{if eq $sample.IsWaiter true}}<i class="fa-regular fa-clock" style="padding-right: 6px;"></i>
+                {{end}}
+                {{end}}
+                <span>{{$sample.SID}}</span>
+            </td>
             <td class="truncated-sql-text">
                 <span class="sql-text">{{$sample.Query}}</span>
             </td>

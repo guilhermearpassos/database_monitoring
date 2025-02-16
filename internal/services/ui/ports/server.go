@@ -243,6 +243,7 @@ func (s *HtmxServer) StartServer(addr string) error {
 	http.HandleFunc("/servers", s.HandleServerRefresh)
 	http.HandleFunc("/snapshots/", s.HandleSnapshots)
 	http.HandleFunc("/server-drilldown", s.HandleServerDrillDown)
+	http.HandleFunc("/query-details", s.HandleQuerySampleDetails)
 	http.HandleFunc("/samples/", s.HandleSamples)
 	// Serve static files
 	staticFS := http.FileServer(http.Dir("static"))
@@ -263,6 +264,7 @@ func (s *HtmxServer) HandleBaseLayout(w http.ResponseWriter, r *http.Request) {
 		"Slideover": map[string]interface{}{
 			"State":      "",
 			"ServerName": "",
+			"ModalState": "",
 		},
 	})
 	if err != nil {
@@ -426,6 +428,98 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
+}
+
+func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Request) {
+	snapID := r.URL.Query().Get("snapID")
+	sampleID := r.URL.Query().Get("sampleID")
+	resp, err := s.client.GetSampleDetails(r.Context(), &dbmv1.GetSampleDetailsRequest{
+		SampleId: []byte(sampleID),
+		SnapId:   snapID,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_ = resp.QuerySample
+	w.Header().Set("Content-Type", "text/html")
+	dSample, err := protoSampleToDomain(resp.QuerySample)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Header.Get("Hx-request") == "true" {
+		blockChain, err2 := blockChainFromProto(resp.BlockChain)
+		if err2 != nil {
+			http.Error(w, err2.Error(), http.StatusInternalServerError)
+			return
+		}
+		//partial render
+		err = s.templates.ExecuteTemplate(w, "samples_modal.html", struct {
+			State       string
+			QuerySample domain.QuerySample
+			BlockChain  domain.BlockChain
+		}{
+			State:       "open",
+			QuerySample: dSample,
+			BlockChain:  blockChain,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	err = s.templates.ExecuteTemplate(w, "base.html", map[string]interface{}{
+		"ServerList": domain.SampleServers,
+		"Slideover": struct {
+			State string
+		}{
+			State: "closed",
+		},
+		"SampleModal": struct {
+			State string
+		}{State: "open"},
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+}
+
+func blockChainFromProto(chain *dbmv1.BlockChain) (domain.BlockChain, error) {
+	roots := make([]domain.BlockingNode, len(chain.Roots))
+	for i, root := range chain.Roots {
+		node, err2 := nodeFromProto(root, i)
+		if err2 != nil {
+			return domain.BlockChain{}, err2
+		}
+		roots[i] = node
+	}
+	return domain.BlockChain{
+		Roots: roots,
+	}, nil
+}
+
+func nodeFromProto(root *dbmv1.BlockChain_BlockingNode, i int) (domain.BlockingNode, error) {
+	ds, err := protoSampleToDomain(root.QuerySample)
+	if err != nil {
+		return domain.BlockingNode{}, err
+	}
+	childNodes := make([]domain.BlockingNode, len(root.ChildNodes))
+	for j, child := range root.ChildNodes {
+		cn, err2 := nodeFromProto(child, i+1)
+		if err2 != nil {
+			return domain.BlockingNode{}, err2
+		}
+		childNodes[j] = cn
+	}
+	node := domain.BlockingNode{
+		QuerySample: ds,
+		ChildNodes:  childNodes,
+		Level:       i,
+	}
+	return node, nil
 }
 
 func getTimeRange(r *http.Request) (time.Time, time.Time, error) {
@@ -631,34 +725,12 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 
 	querySamplesForSnapshot := make([]domain.QuerySample, len(resp.GetSnapshot().GetSamples()))
 	for i, sample := range resp.Snapshot.Samples {
-		var blockTime, blockDetails string
-		if sample.Blocker {
-			blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
-			if sample.Blocked {
-				blockDetails += " | "
-			}
+		dSample, err3 := protoSampleToDomain(sample)
+		if err3 != nil {
+			http.Error(w, err3.Error(), http.StatusInternalServerError)
+			return
 		}
-		if sample.Blocked {
-			blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
-			blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
-		}
-		sid, err2 := strconv.Atoi(sample.Session.SessionId)
-		if err2 != nil {
-			http.Error(w, err2.Error(), http.StatusInternalServerError)
-		}
-		querySamplesForSnapshot[i] = domain.QuerySample{
-			SID:           sid,
-			Query:         sample.Text,
-			ExecutionTime: fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
-			User:          sample.Session.LoginName,
-			IsBlocker:     sample.Blocker,
-			IsWaiter:      sample.Blocked,
-			BlockingTime:  blockTime,
-			BlockDetails:  blockDetails,
-			WaitEvent:     sample.WaitInfo.WaitType,
-			Database:      sample.Db.DatabaseName,
-			SampleID:      string(sample.Id),
-		}
+		querySamplesForSnapshot[i] = dSample
 	}
 
 	sort.Slice(querySamplesForSnapshot, func(i, j int) bool {
@@ -711,4 +783,41 @@ func (s *HtmxServer) HandleSamples(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
+}
+
+func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) {
+	var blockTime, blockDetails string
+	if sample.Blocker {
+		blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
+		if sample.Blocked {
+			blockDetails += " | "
+		}
+	}
+	if sample.Blocked {
+		blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
+		blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
+	}
+	sid, err2 := strconv.Atoi(sample.Session.SessionId)
+	if err2 != nil {
+		return domain.QuerySample{}, err2
+	}
+
+	dSample := domain.QuerySample{
+		SID:           sid,
+		Query:         sample.Text,
+		ExecutionTime: fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
+		User:          sample.Session.LoginName,
+		IsBlocker:     sample.Blocker,
+		IsWaiter:      sample.Blocked,
+		BlockingTime:  blockTime,
+		BlockDetails:  blockDetails,
+		WaitEvent:     sample.WaitInfo.WaitType,
+		Database:      sample.Db.DatabaseName,
+		SampleID:      string(sample.Id),
+		SnapID:        sample.SnapInfo.Id,
+		SQLHandle:     string(sample.SqlHandle),
+		PlanHandle:    string(sample.PlanHandle),
+		Status:        sample.Status,
+	}
+	return dSample, nil
 }
