@@ -24,7 +24,12 @@ import (
 )
 
 var (
-	CollectorCmd = &cobra.Command{
+	collectorAddr string
+	elkAddr       string
+	grpcuiAddr    string
+	elkUsername   string
+	elkPassword   string
+	CollectorCmd  = &cobra.Command{
 		Use:     "collector",
 		Short:   "run dbm collector",
 		Long:    "run dbm collector",
@@ -34,11 +39,18 @@ var (
 	}
 )
 
+func init() {
+	CollectorCmd.Flags().StringVar(&elkAddr, "elk-addr", "", "")
+	CollectorCmd.Flags().StringVar(&collectorAddr, "collector-addr", "", "")
+	CollectorCmd.Flags().StringVar(&grpcuiAddr, "grpcui-addr", "", "")
+	CollectorCmd.Flags().StringVar(&elkUsername, "elk-user", "", "")
+	CollectorCmd.Flags().StringVar(&elkPassword, "elk-pwd", "", "")
+}
+
 func StartCollector(cmd *cobra.Command, args []string) error {
-	address := "localhost:7080"
-	lis, err := net.Listen("tcp", address)
+	lis, err := net.Listen("tcp", collectorAddr)
 	if err != nil {
-		log.Fatal("failed to listen on 8082: %w", err)
+		log.Fatalf("failed to listen on %s: %s", collectorAddr, err)
 	}
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		grpc_prometheus.UnaryServerInterceptor,
@@ -54,9 +66,9 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 	}
 	grpcServer := grpc.NewServer(opts...)
 	client, err := elasticsearch.NewClient(elasticsearch.Config{
-		Addresses:     []string{"https://localhost:9200"},
-		Username:      "elastic",
-		Password:      "changeme",
+		Addresses:     []string{elkAddr},
+		Username:      elkUsername,
+		Password:      elkPassword,
 		EnableMetrics: false,
 		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 	})
@@ -75,7 +87,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 		}
 	}()
 	ctx := context.Background()
-	cc, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(collectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
@@ -83,7 +95,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(err)
 	}
-	err2 := http.ListenAndServe(":7081", h)
+	err2 := http.ListenAndServe(grpcuiAddr, h)
 	if err2 != nil {
 		panic(err2)
 	}

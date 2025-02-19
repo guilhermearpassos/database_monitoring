@@ -24,7 +24,9 @@ import (
 )
 
 var (
-	GrpcCmd = &cobra.Command{
+	grpcServerAddr   string
+	grpcServeruiAddr string
+	GrpcCmd          = &cobra.Command{
 		Use:     "grpc",
 		Short:   "run grpc server",
 		Long:    "run grpc server",
@@ -34,11 +36,18 @@ var (
 	}
 )
 
+func init() {
+	GrpcCmd.Flags().StringVar(&grpcServerAddr, "grpc-addr", "", "")
+	GrpcCmd.Flags().StringVar(&grpcServeruiAddr, "grpcui-addr", "", "")
+	GrpcCmd.Flags().StringVar(&elkAddr, "elk-addr", "", "")
+	GrpcCmd.Flags().StringVar(&elkUsername, "elk-user", "", "")
+	GrpcCmd.Flags().StringVar(&elkPassword, "elk-pwd", "", "")
+}
+
 func StartGrpc(cmd *cobra.Command, args []string) error {
-	address := "localhost:8082"
-	lis, err := net.Listen("tcp", address)
+	lis, err := net.Listen("tcp", grpcServerAddr)
 	if err != nil {
-		log.Fatal("failed to listen on 8082: %w", err)
+		log.Fatalf("failed to listen on %s: %s", grpcuiAddr, err)
 	}
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		grpc_prometheus.UnaryServerInterceptor,
@@ -54,9 +63,9 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 	}
 	grpcServer := grpc.NewServer(opts...)
 	client, err := elasticsearch.NewClient(elasticsearch.Config{
-		Addresses:     []string{"https://localhost:9200"},
-		Username:      "elastic",
-		Password:      "changeme",
+		Addresses:     []string{elkAddr},
+		Username:      elkUsername,
+		Password:      elkPassword,
 		EnableMetrics: false,
 		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 	})
@@ -76,7 +85,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 		}
 	}()
 	ctx := context.Background()
-	cc, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(grpcServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
@@ -84,7 +93,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(err)
 	}
-	err2 := http.ListenAndServe(":8083", h)
+	err2 := http.ListenAndServe(grpcServeruiAddr, h)
 	if err2 != nil {
 		panic(err2)
 	}

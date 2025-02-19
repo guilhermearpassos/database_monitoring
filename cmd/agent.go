@@ -20,7 +20,13 @@ import (
 )
 
 var (
-	AgentCmd = &cobra.Command{
+	collectorUrl string
+	targetHost   string
+	targetPort   string
+	dbUser       string
+	dbPwd        string
+	targetAlias  string
+	AgentCmd     = &cobra.Command{
 		Use:     "agent",
 		Short:   "run dbm agent",
 		Long:    "run dbm agent",
@@ -30,18 +36,27 @@ var (
 	}
 )
 
+func init() {
+	AgentCmd.Flags().StringVar(&collectorUrl, "collector-url", "", "")
+	AgentCmd.Flags().StringVar(&targetHost, "target-host", "", "")
+	AgentCmd.Flags().StringVar(&targetPort, "target-port", "1433", "")
+	AgentCmd.Flags().StringVar(&dbUser, "target-user", "", "")
+	AgentCmd.Flags().StringVar(&dbPwd, "target-pwd", "", "")
+	AgentCmd.Flags().StringVar(&targetAlias, "target-alias", "", "")
+}
+
 func StartAgent(cmd *cobra.Command, args []string) error {
-	cc, err := grpc.NewClient("localhost:7080", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(collectorUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
 	client := collectorv1.NewIngestionServiceClient(cc)
-	db, err := sqlx.Open("mssql", "server=localhost;port=1433;database=SQL_EXECUTION_ROUTER;user id=sa;password=SqlServer2019!")
+	db, err := sqlx.Open("mssql", fmt.Sprintf("server=%s;port=%s;user id=%s;password=%s", targetHost, targetPort, dbUser, dbPwd))
 	if err != nil {
 		panic(err)
 	}
 	knownHandles, err := client.GetKnownPlanHandles(context.Background(), &collectorv1.GetKnownPlanHandlesRequest{Server: &dbmv1.ServerMetadata{
-		Host: "localhost",
+		Host: targetHost,
 		Type: "mssql",
 	}})
 	var knownHandlesSlice []string
@@ -64,7 +79,7 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	fmt.Println(knownHandles)
 
 	dataReader := adapters.NewSQLServerDataReader(db, common_domain.ServerMeta{
-		Host: "localhost",
+		Host: targetHost,
 		Type: "mssql",
 	}, knownHandlesSlice)
 	go collectSnapshots(dataReader, client)

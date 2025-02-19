@@ -2,7 +2,7 @@
   <configuration default="false" name="grpc" type="GoApplicationRunConfiguration" factoryName="Go Application">
     <module name="database_monitoring" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="grpc" />
+    <parameters value="grpc --elk-addr=https://localhost:9200 --grpc-addr=localhost:8082 --grpcui-addr=localhost:8083 --elk-user=elastic --elk-pwd=changeme" />
     <kind value="PACKAGE" />
     <package value="github.com/guilhermearpassos/database-monitoring/cmd" />
     <directory value="$PROJECT_DIR$" />

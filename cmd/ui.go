@@ -8,7 +8,9 @@ import (
 )
 
 var (
-	UiCmd = &cobra.Command{
+	grpcSrvr     string
+	frontendAddr string
+	UiCmd        = &cobra.Command{
 		Use:     "ui",
 		Short:   "run dbm ui",
 		Long:    "run dbm ui",
@@ -18,8 +20,13 @@ var (
 	}
 )
 
+func init() {
+	UiCmd.Flags().StringVar(&grpcSrvr, "grpc-addr", "", "")
+	UiCmd.Flags().StringVar(&frontendAddr, "frontend-addr", "", "")
+}
+
 func StartUI(cmd *cobra.Command, args []string) error {
-	cc, err := grpc.NewClient("localhost:8082", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(grpcSrvr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return err
 	}
@@ -28,7 +35,7 @@ func StartUI(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	err = server.StartServer("localhost:8080")
+	err = server.StartServer(frontendAddr)
 	if err != nil {
 		return err
 	}

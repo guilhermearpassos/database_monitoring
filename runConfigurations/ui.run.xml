@@ -2,7 +2,7 @@
   <configuration default="false" name="ui" type="GoApplicationRunConfiguration" factoryName="Go Application">
     <module name="database_monitoring" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="ui" />
+    <parameters value="ui --grpc-addr=localhost:8082 --frontend-addr=localhost:8080" />
     <kind value="PACKAGE" />
     <package value="github.com/guilhermearpassos/database-monitoring/cmd" />
     <directory value="$PROJECT_DIR$" />
