@@ -37,7 +37,7 @@ var (
 )
 
 func init() {
-	AgentCmd.Flags().StringVar(&collectorUrl, "collector-url", "", "")
+	AgentCmd.Flags().StringVar(&collectorUrl, "collector-addr", "", "")
 	AgentCmd.Flags().StringVar(&targetHost, "target-host", "", "")
 	AgentCmd.Flags().StringVar(&targetPort, "target-port", "1433", "")
 	AgentCmd.Flags().StringVar(&dbUser, "target-user", "", "")

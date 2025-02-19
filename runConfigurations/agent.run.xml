@@ -2,7 +2,7 @@
   <configuration default="false" name="agent" type="GoApplicationRunConfiguration" factoryName="Go Application">
     <module name="database_monitoring" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="agent --collector-url=localhost:7080 --target-port=1433 --target-user=sa --target-pwd=SqlServer2019!" />
+    <parameters value="agent --collector-addr=localhost:7080 --target-port=1433 --target-user=sa --target-pwd=SqlServer2019!" />
     <kind value="PACKAGE" />
     <package value="github.com/guilhermearpassos/database-monitoring/cmd" />
     <directory value="$PROJECT_DIR$" />
