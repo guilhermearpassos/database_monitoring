@@ -2,7 +2,7 @@ package ports
 
 import (
 	"context"
-	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/errors"
+	"errors"
 	"github.com/google/uuid"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"

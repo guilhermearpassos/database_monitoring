@@ -2,8 +2,8 @@ package query
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters/parsers"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"

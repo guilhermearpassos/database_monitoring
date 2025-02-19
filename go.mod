@@ -1,9 +1,8 @@
 module github.com/guilhermearpassos/database-monitoring
 
-go 1.23.0
+go 1.24.0
 
 require (
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.1
 	github.com/elastic/go-elasticsearch/v8 v8.4.0-alpha.1.0.20241127143524-a7d13656118f
 	github.com/fullstorydev/grpcui v1.5.0
 	github.com/google/uuid v1.6.0
@@ -37,7 +36,6 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jhump/protoreflect v1.16.0 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
