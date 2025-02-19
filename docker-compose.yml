@@ -145,3 +145,59 @@ services:
       interval: 10s
       timeout: 10s
       retries: 120
+
+  collector:
+    image: v0.0.4
+    command:
+      - "collector"
+      - "--elk-addr=https://es01:9200"
+      - "--collector-addr=0.0.0.0:7080"
+      - "--grpcui-addr=0.0.0.0:7081"
+      - "--elk-user=elastic"
+      - "--elk-pwd=changeme"
+    depends_on:
+      - es01
+      - kibana
+    ports:
+      - "7080:7080"
+      - "7081:7081"
+
+  agent:
+    image: v0.0.4
+    command:
+      - "agent"
+      - "--collector-addr=collector:7080"
+      - "--target-host=<host>"
+      - "--target-port=1433"
+      - "--target-user=sa"
+      - "--target-pwd=SqlServer2019!"
+    depends_on:
+      - collector
+
+
+  grpc:
+    image: v0.0.4
+    command:
+      - "grpc"
+      - "--elk-addr=https://es01:9200"
+      - "--grpc-addr=0.0.0.0:8082"
+      - "--grpcui-addr=0.0.0.0:8083"
+      - "--elk-user=elastic"
+      - "--elk-pwd=changeme"
+    depends_on:
+      - es01
+      - kibana
+    ports:
+      - "8082:8082"
+      - "8083:8083"
+
+  ui:
+    image: v0.0.4
+    command:
+      - "ui"
+      - "--grpc-addr=grpc:8082"
+      - "--frontend-addr=0.0.0.0:8080"
+    depends_on:
+      - grpc
+    ports:
+      - "8080:8080"

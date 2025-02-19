@@ -10,8 +10,8 @@ COPY . .
 RUN --mount=type=cache,target=/go-cache \
     go build -o /out/cmd ./cmd/
 
-FROM gcr.io/distroless/base:f369a5c1313c9919954ea37b847ccf6b40d3d509 AS release
+FROM base AS release
 COPY --from=build /out/cmd /
-COPY static /
-COPY templates /
+COPY static/ /go/static
+COPY templates/ /go/templates
 ENTRYPOINT ["/cmd"]
