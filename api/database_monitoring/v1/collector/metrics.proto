@@ -8,7 +8,7 @@ message DatabaseMetrics {
   message QueryMetricSample{
     repeated QueryMetric query_metrics = 1;
   }
-  string database_id = 1;
+  string server_id = 1;
   google.protobuf.Timestamp timestamp = 2;
   oneof metrics {
     QueryMetricSample query_metrics = 3;

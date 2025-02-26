@@ -240,8 +240,8 @@ FROM sys.dm_exec_sessions s
 			ID:        snapID,
 			Timestamp: snapTime,
 			Server: common_domain.ServerMeta{
-				Host: "localhost",
-				Type: "sqlserver",
+				Host: S.serverData.Host,
+				Type: S.serverData.Type,
 			},
 		},
 	})

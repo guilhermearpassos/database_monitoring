@@ -117,10 +117,10 @@ func (m *DatabaseMetrics) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.DatabaseId) > 0 {
-		i -= len(m.DatabaseId)
-		copy(dAtA[i:], m.DatabaseId)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.DatabaseId)))
+	if len(m.ServerId) > 0 {
+		i -= len(m.ServerId)
+		copy(dAtA[i:], m.ServerId)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ServerId)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -312,7 +312,7 @@ func (m *DatabaseMetrics) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.DatabaseId)
+	l = len(m.ServerId)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -518,7 +518,7 @@ func (m *DatabaseMetrics) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DatabaseId", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ServerId", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -546,7 +546,7 @@ func (m *DatabaseMetrics) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.DatabaseId = string(dAtA[iNdEx:postIndex])
+			m.ServerId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {

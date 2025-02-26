@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/service"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
@@ -16,48 +18,56 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"os"
 	"time"
 )
 
 var (
-	collectorUrl string
-	targetHost   string
-	targetPort   string
-	dbUser       string
-	dbPwd        string
-	targetAlias  string
-	AgentCmd     = &cobra.Command{
+	configFileName string
+	AgentCmd       = &cobra.Command{
 		Use:     "agent",
 		Short:   "run dbm agent",
 		Long:    "run dbm agent",
 		Aliases: []string{},
-		Example: "dbm agent",
+		Example: "dbm agent --config=local/agent.toml",
 		RunE:    StartAgent,
 	}
 )
 
 func init() {
-	AgentCmd.Flags().StringVar(&collectorUrl, "collector-addr", "", "")
-	AgentCmd.Flags().StringVar(&targetHost, "target-host", "", "")
-	AgentCmd.Flags().StringVar(&targetPort, "target-port", "1433", "")
-	AgentCmd.Flags().StringVar(&dbUser, "target-user", "", "")
-	AgentCmd.Flags().StringVar(&dbPwd, "target-pwd", "", "")
-	AgentCmd.Flags().StringVar(&targetAlias, "target-alias", "", "")
+	AgentCmd.Flags().StringVar(&configFileName, "config", "local/agent.toml", "--config=local/agent.toml")
 }
 
 func StartAgent(cmd *cobra.Command, args []string) error {
-	cc, err := grpc.NewClient(collectorUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var config service.AgentConfig
+	// Check if file exists
+	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
+		panic(fmt.Errorf("config file does not exist: %s", configFileName))
+	}
+	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
+		panic(fmt.Errorf("failed to parse config file: %s", err))
+	}
+	cc, err := grpc.NewClient(config.CollectorConfig.Url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
 	client := collectorv1.NewIngestionServiceClient(cc)
-	db, err := sqlx.Open("mssql", fmt.Sprintf("server=%s;port=%s;user id=%s;password=%s", targetHost, targetPort, dbUser, dbPwd))
+	for _, tgt := range config.TargetHosts {
+		startTarget(tgt, client)
+	}
+	for {
+		time.Sleep(5 * time.Second)
+	}
+	return nil
+}
+func startTarget(config service.TargetHostConfig, collectorClient collectorv1.IngestionServiceClient) {
+	db, err := sqlx.Open(config.Driver, config.ConnString)
 	if err != nil {
 		panic(err)
 	}
-	knownHandles, err := client.GetKnownPlanHandles(context.Background(), &collectorv1.GetKnownPlanHandlesRequest{Server: &dbmv1.ServerMetadata{
-		Host: targetHost,
-		Type: "mssql",
+	knownHandles, err := collectorClient.GetKnownPlanHandles(context.Background(), &collectorv1.GetKnownPlanHandlesRequest{Server: &dbmv1.ServerMetadata{
+		Host: config.Alias,
+		Type: config.Driver,
 	}})
 	var knownHandlesSlice []string
 	if err != nil {
@@ -76,21 +86,16 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 
 		knownHandlesSlice = knownHandles.Handles
 	}
-	fmt.Println(knownHandles)
 
 	dataReader := adapters.NewSQLServerDataReader(db, common_domain.ServerMeta{
-		Host: targetHost,
-		Type: "mssql",
+		Host: config.Alias,
+		Type: config.Driver,
 	}, knownHandlesSlice)
-	go collectSnapshots(dataReader, client)
-	go collectQueryMetrics(dataReader, client)
-	for {
-		time.Sleep(5 * time.Second)
-	}
-	return nil
+	go collectSnapshots(dataReader, collectorClient)
+	go collectQueryMetrics(dataReader, collectorClient, config.Alias)
 }
 
-func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient) {
+func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName string) {
 	for {
 		sampleTime := time.Now()
 		metrics, err := reader.CollectMetrics(context.Background())
@@ -106,9 +111,9 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 			}
 		}
 		_, err = client.IngestMetrics(context.Background(), &collectorv1.DatabaseMetrics{
-			DatabaseId: "localhost",
-			Timestamp:  timestamppb.New(sampleTime),
-			Metrics:    &collectorv1.DatabaseMetrics_QueryMetrics{QueryMetrics: &collectorv1.DatabaseMetrics_QueryMetricSample{QueryMetrics: protoMetrics}},
+			ServerId:  serverName,
+			Timestamp: timestamppb.New(sampleTime),
+			Metrics:   &collectorv1.DatabaseMetrics_QueryMetrics{QueryMetrics: &collectorv1.DatabaseMetrics_QueryMetricSample{QueryMetrics: protoMetrics}},
 		})
 		if err != nil {
 			panic(err)

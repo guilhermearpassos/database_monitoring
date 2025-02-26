@@ -1,0 +1,21 @@
+# Agent configuration file
+
+# Collector configuration section
+[collector]
+url = "localhost:7080"
+
+# Target hosts configurations
+[[target_hosts]]
+alias = "execution-router-dsv"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+# Target hosts configurations
+[[target_hosts]]
+alias = "execution-router-hml"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+# Target hosts configurations
+[[target_hosts]]
+alias = "execution-router-prd"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"

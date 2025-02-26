@@ -147,7 +147,7 @@ services:
       retries: 120
 
   collector:
-    image: v0.0.4
+    image: guilhermearpassos/sql-sight:v0.0.5
     command:
       - "collector"
       - "--elk-addr=https://es01:9200"
@@ -163,20 +163,18 @@ services:
       - "7081:7081"
 
   agent:
-    image: v0.0.4
+    image: guilhermearpassos/sql-sight:v0.0.5
     command:
       - "agent"
-      - "--collector-addr=collector:7080"
-      - "--target-host=<host>"
-      - "--target-port=1433"
-      - "--target-user=sa"
-      - "--target-pwd=SqlServer2019!"
+      - "--config=/agent.toml"
+    volumes:
+      - "./local/agent.toml:/agent.toml"
     depends_on:
       - collector
 
 
   grpc:
-    image: v0.0.4
+    image: guilhermearpassos/sql-sight:v0.0.5
     command:
       - "grpc"
       - "--elk-addr=https://es01:9200"
@@ -192,7 +190,7 @@ services:
       - "8083:8083"
 
   ui:
-    image: v0.0.4
+    image: guilhermearpassos/sql-sight:v0.0.5
     command:
       - "ui"
       - "--grpc-addr=grpc:8082"
