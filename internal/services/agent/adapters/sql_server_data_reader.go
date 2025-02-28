@@ -522,14 +522,17 @@ select handle, query_plan from #temp_plans
 	ret := make(map[string]*common_domain.ExecutionPlan)
 	for rows.Next() {
 		var handle []byte
-		var queryPlan string
+		var queryPlan *string
 		err = rows.Scan(&handle, &queryPlan)
 		if err != nil {
 			return nil, fmt.Errorf("fetch plans - scan: %w", err)
 		}
+		if queryPlan == nil {
+			continue
+		}
 		ret[string(handle)] = &common_domain.ExecutionPlan{
 			PlanHandle: handle,
-			XmlData:    queryPlan,
+			XmlData:    *queryPlan,
 			Server:     S.serverData,
 		}
 

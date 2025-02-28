@@ -147,7 +147,7 @@ services:
       retries: 120
 
   collector:
-    image: guilhermearpassos/sql-sight:v0.0.6
+    image: guilhermearpassos/sql-sight:v0.0.8
     command:
       - "collector"
       - "--elk-addr=https://es01:9200"
@@ -163,7 +163,7 @@ services:
       - "7081:7081"
 
   agent:
-    image: guilhermearpassos/sql-sight:v0.0.6
+    image: guilhermearpassos/sql-sight:v0.0.8
     command:
       - "agent"
       - "--config=/agent.toml"
@@ -174,7 +174,7 @@ services:
 
 
   grpc:
-    image: guilhermearpassos/sql-sight:v0.0.6
+    image: guilhermearpassos/sql-sight:v0.0.8
     command:
       - "grpc"
       - "--elk-addr=https://es01:9200"
@@ -190,7 +190,7 @@ services:
       - "8083:8083"
 
   ui:
-    image: guilhermearpassos/sql-sight:v0.0.6
+    image: guilhermearpassos/sql-sight:v0.0.8
     command:
       - "ui"
       - "--grpc-addr=grpc:8082"
