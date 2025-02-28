@@ -11,44 +11,50 @@ document.addEventListener('htmx:afterSettle', function () {
         const popover = document.createElement('div');
         popover.className = 'sql-popover';
         document.body.appendChild(popover);
-
+        let hoverTimer;
         // Show popover on hover
         let isHovered = false;
         item.addEventListener('mouseenter', () => {
             isHovered = true;
 
-            // Format the SQL query
-            const formattedSQL = formatSQL(fullText);
+            // Clear any existing timer
+            clearTimeout(hoverTimer);
+            // Set a new timer that will trigger after 1 second
+            hoverTimer = setTimeout(() => {
+                // Format the SQL query
+                const formattedSQL = formatSQL(fullText);
 
-            // Wrap the formatted SQL in a <pre><code> block for syntax highlighting
-            popover.innerHTML = `
+                // Wrap the formatted SQL in a <pre><code> block for syntax highlighting
+                popover.innerHTML = `
     <pre><code class="language-sql">${formattedSQL}</code></pre>
     <button class="sql-copy-button" title="Copy">
       <i class="fas fa-copy"></i>
     </button>
   `;
 
-            // Highlight the SQL syntax using Prism.js
-            Prism.highlightAllUnder(popover);
+                // Highlight the SQL syntax using Prism.js
+                Prism.highlightAllUnder(popover);
 
-            // Copy text on button click
-            const copyButton = popover.querySelector('.sql-copy-button');
-            copyButton.addEventListener('click', () => {
-                navigator.clipboard.writeText(formattedSQL).then(() => {
-                    alert('Text copied to clipboard!');
+                // Copy text on button click
+                const copyButton = popover.querySelector('.sql-copy-button');
+                copyButton.addEventListener('click', () => {
+                    navigator.clipboard.writeText(formattedSQL).then(() => {
+                        alert('Text copied to clipboard!');
+                    });
                 });
-            });
 
-            // Position the popover
-            const rect = textSpan.getBoundingClientRect();
-            popover.style.display = 'block';
-            popover.style.top = `${rect.bottom + window.scrollY}px`;
-            popover.style.left = `${rect.left + window.scrollX}px`;
+                // Position the popover
+                const rect = textSpan.getBoundingClientRect();
+                popover.style.display = 'block';
+                popover.style.top = `${rect.bottom + window.scrollY}px`;
+                popover.style.left = `${rect.left + window.scrollX}px`;
+            }, 1000);
         });
-
         // Hide popover when neither the cell nor the popover is hovered
         item.addEventListener('mouseleave', () => {
             isHovered = false;
+            // Clear any existing timer
+            clearTimeout(hoverTimer);
             setTimeout(() => {
                 if (!isHovered && !popover.matches(':hover')) {
                     popover.style.display = 'none';
