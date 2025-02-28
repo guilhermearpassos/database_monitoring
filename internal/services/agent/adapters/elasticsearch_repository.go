@@ -25,28 +25,36 @@ func NewELKRepository(client *elasticsearch.Client) *ELKRepository {
 
 func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end time.Time) ([]domain.ServerSummary, error) {
 
-	query := map[string]interface{}{
-		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
-				"must": map[string]interface{}{
-					"range": map[string]interface{}{
-						"timestamp": map[string]interface{}{
-							"gte": start,
-							"lte": end,
-						},
-					},
-				},
-			},
+	query := fmt.Sprintf(`{
+		"query":  {
+			"bool":  {
+				"must":  {
+					"range":  {
+						"timestamp":  {
+							"gte": "%s",
+							"lte": "%s"
+						}
+					}
+				}
+			}
 		},
-	}
+		"aggs":{
+			"unique_ids": {
+				"terms": {
+					"field": "server.Host.keyword"
+				}
+			}
+		}
+	}`, start.Format("2006-01-02T15:04:05"), end.Format("2006-01-02T15:04:05"))
+
+	jsonBody, err := json.Marshal(query)
+	fmt.Println(string(jsonBody))
 	resp, err := r.client.Search(
 		r.client.Search.WithContext(ctx),
 		r.client.Search.WithIndex("db_snapshots"),
 		r.client.Search.WithTrackTotalHits(true),
 		r.client.Search.WithContext(ctx),
-		r.client.Search.WithBody(esutil.NewJSONReader(query)),
-		r.client.Search.WithStats("| STATS last_snap = MAX(timestamp)  by server.Type, server.Host \n"),
-		r.client.Search.WithSort("timestamp"),
+		r.client.Search.WithBody(strings.NewReader(query)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("searching serverMeta: %w", err)
@@ -60,14 +68,27 @@ func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end tim
 	if resp.IsError() {
 		return nil, fmt.Errorf("getting serverMeta: (code %d), %s:  %s", resp.StatusCode, resp.Status(), resp.String())
 	}
+	//rawMessage := json.RawMessage{}
+	//json.NewDecoder(resp.Body).Decode(&rawMessage)
+	//fmt.Println(string(rawMessage))
 	var decodedResp SearchServersResponse
 	err = json.NewDecoder(resp.Body).Decode(&decodedResp)
 	if err != nil {
 		return nil, fmt.Errorf("decoding response body: %w", err)
 	}
 	//timestamps := make([]time.Time, len(decodedResp.Hits.Hits))
-	//return ret, nil
-	panic("unimplemented")
+	ret := make([]domain.ServerSummary, len(decodedResp.Aggregations.UniqueIds.Buckets))
+	for i, h := range decodedResp.Aggregations.UniqueIds.Buckets {
+		ret[i] = domain.ServerSummary{
+			Name:             h.Key,
+			Type:             "mssql",
+			Connections:      0,
+			RequestRate:      0,
+			ConnsByWaitGroup: nil,
+		}
+	}
+	return ret, nil
+	//panic("unimplemented")
 }
 
 func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int, serverID string) ([]common_domain.DataBaseSnapshot, int, error) {
@@ -251,15 +272,22 @@ type SearchServersResponse struct {
 		}
 		Hits []*SearchServerHit
 	}
+	Aggregations struct {
+		UniqueIds struct {
+			Buckets []struct {
+				Key string `json:"key"`
+			} `json:"buckets"`
+		} `json:"unique_ids"`
+	} `json:"aggregations"`
 }
 type SearchServerHit struct {
-	Index   string                          `json:"_index"`
-	ID      string                          `json:"_id"`
-	Score   float64                         `json:"_score"`
-	Ignored []string                        `json:"_ignored"`
-	Source  struct{ Server ServerLastSnap } `json:"_source"`
-	Type    string                          `json:"_type"`
-	Version int64                           `json:"_version,omitempty"`
+	Index   string         `json:"_index"`
+	ID      string         `json:"_id"`
+	Score   float64        `json:"_score"`
+	Ignored []string       `json:"_ignored"`
+	Source  ServerLastSnap `json:"_source"`
+	Type    string         `json:"_type"`
+	Version int64          `json:"_version,omitempty"`
 }
 type ServerLastSnap struct {
 	Server struct {

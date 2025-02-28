@@ -278,8 +278,8 @@ func (s *HtmxServer) HandleServerRefresh(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	resp, err := s.supportClient.ListDatabases(r.Context(),
-		&dbmv1.ListDatabasesRequest{
+	resp, err := s.client.ListServerSummary(r.Context(),
+		&dbmv1.ListServerSummaryRequest{
 			Start: timestamppb.New(startTime),
 			End:   timestamppb.New(endTime),
 		})
@@ -288,9 +288,19 @@ func (s *HtmxServer) HandleServerRefresh(w http.ResponseWriter, r *http.Request)
 		//return
 		fmt.Println(err)
 	}
-	_ = resp
+	ret := make([]domain.Server, len(resp.Servers))
+	for i, srv := range resp.Servers {
+		ret[i] = domain.Server{
+			Name:           srv.Name,
+			Connections:    0,
+			RequestRate:    "",
+			DatabaseType:   srv.Type,
+			BlockedPercent: 0,
+			WaitTypes:      nil,
+		}
+	}
 
-	err = s.templates.ExecuteTemplate(w, "server_list.html", domain.SampleServers)
+	err = s.templates.ExecuteTemplate(w, "server_list.html", ret)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

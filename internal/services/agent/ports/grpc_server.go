@@ -111,7 +111,21 @@ func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapsh
 }
 
 func (s GRPCServer) ListServerSummary(ctx context.Context, request *dbmv1.ListServerSummaryRequest) (*dbmv1.ListServerSummaryResponse, error) {
-	panic("implement me")
+	resp, err := s.app.Queries.ListServerSummary.Handle(ctx, request.Start.AsTime(), request.End.AsTime())
+	if err != nil {
+		return nil, err
+	}
+	protoServers := make([]*dbmv1.ServerSummary, len(resp))
+	for i, srv := range resp {
+		protoServers[i] = &dbmv1.ServerSummary{
+			Name:                   srv.Name,
+			Type:                   srv.Type,
+			Connections:            int32(srv.Connections),
+			RequestRate:            srv.RequestRate,
+			ConnectionsByWaitGroup: srv.ConnsByWaitGroup,
+		}
+	}
+	return &dbmv1.ListServerSummaryResponse{Servers: protoServers}, nil
 	//servers, err := s.app.Queries.ListServerSummary.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())
 	//if err != nil {
 	//	return nil, err
