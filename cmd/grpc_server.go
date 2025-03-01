@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/BurntSushi/toml"
 	grpcui "github.com/fullstorydev/grpcui/standalone"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	config2 "github.com/guilhermearpassos/database-monitoring/common/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/ports"
@@ -20,13 +20,13 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"runtime/debug"
+	"time"
 )
 
 var (
-	grpcServerAddr   string
-	grpcServeruiAddr string
-	GrpcCmd          = &cobra.Command{
+	GrpcCmd = &cobra.Command{
 		Use:     "grpc",
 		Short:   "run grpc server",
 		Long:    "run grpc server",
@@ -37,17 +37,21 @@ var (
 )
 
 func init() {
-	GrpcCmd.Flags().StringVar(&grpcServerAddr, "grpc-addr", "", "")
-	GrpcCmd.Flags().StringVar(&grpcServeruiAddr, "grpcui-addr", "", "")
-	GrpcCmd.Flags().StringVar(&elkAddr, "elk-addr", "", "")
-	GrpcCmd.Flags().StringVar(&elkUsername, "elk-user", "", "")
-	GrpcCmd.Flags().StringVar(&elkPassword, "elk-pwd", "", "")
+	GrpcCmd.Flags().StringVar(&configFileName, "config", "local/grpc.toml", "--config=local/grpc.toml")
 }
 
 func StartGrpc(cmd *cobra.Command, args []string) error {
-	lis, err := net.Listen("tcp", grpcServerAddr)
+	var config config2.CollectorConfig
+	// Check if file exists
+	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
+		panic(fmt.Errorf("config file does not exist: %s", configFileName))
+	}
+	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
+		panic(fmt.Errorf("failed to parse config file: %s", err))
+	}
+	lis, err := net.Listen("tcp", config.GRPCServerConfig.GrpcConfig.Url)
 	if err != nil {
-		log.Fatalf("failed to listen on %s: %s", grpcuiAddr, err)
+		log.Fatalf("failed to listen on %s: %s", config.GRPCServerConfig.GrpcConfig.Url, err)
 	}
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		grpc_prometheus.UnaryServerInterceptor,
@@ -62,13 +66,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
 	}
 	grpcServer := grpc.NewServer(opts...)
-	client, err := elasticsearch.NewClient(elasticsearch.Config{
-		Addresses:     []string{elkAddr},
-		Username:      elkUsername,
-		Password:      elkPassword,
-		EnableMetrics: false,
-		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-	})
+	client, err := config.ELKConfig.Get(context.Background())
 	if err != nil {
 		panic(err)
 	}
@@ -85,17 +83,22 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 		}
 	}()
 	ctx := context.Background()
-	cc, err := grpc.NewClient(grpcServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		panic(err)
+	if config.GRPCServerConfig.GrpcUiConfig.Enabled {
+		cc, err := grpc.NewClient(config.GRPCServerConfig.GrpcConfig.Url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			panic(err)
+		}
+		h, err := grpcui.HandlerViaReflection(ctx, cc, "database monitoring")
+		if err != nil {
+			panic(err)
+		}
+		err2 := http.ListenAndServe(config.GRPCServerConfig.GrpcUiConfig.Url, h)
+		if err2 != nil {
+			panic(err2)
+		}
 	}
-	h, err := grpcui.HandlerViaReflection(ctx, cc, "database monitoring")
-	if err != nil {
-		panic(err)
-	}
-	err2 := http.ListenAndServe(grpcServeruiAddr, h)
-	if err2 != nil {
-		panic(err2)
+	for {
+		time.Sleep(10 * time.Second)
 	}
 	return nil
 }

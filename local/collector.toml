@@ -1,0 +1,13 @@
+# Agent configuration file
+
+# Collector configuration section
+[grpc_server.grpc]
+url = "localhost:7080"
+grpc_message_max_size=100000
+[grpc_server.grpc_ui]
+enabled = true
+url = "localhost:7081"
+[elk]
+address = "https://localhost:9200"
+user = "elastic"
+password = "changeme"

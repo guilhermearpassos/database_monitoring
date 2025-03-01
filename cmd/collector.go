@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/BurntSushi/toml"
 	grpcui "github.com/fullstorydev/grpcui/standalone"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	config2 "github.com/guilhermearpassos/database-monitoring/common/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/ports"
@@ -20,16 +20,13 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"runtime/debug"
+	"time"
 )
 
 var (
-	collectorAddr string
-	elkAddr       string
-	grpcuiAddr    string
-	elkUsername   string
-	elkPassword   string
-	CollectorCmd  = &cobra.Command{
+	CollectorCmd = &cobra.Command{
 		Use:     "collector",
 		Short:   "run dbm collector",
 		Long:    "run dbm collector",
@@ -40,14 +37,20 @@ var (
 )
 
 func init() {
-	CollectorCmd.Flags().StringVar(&elkAddr, "elk-addr", "", "")
-	CollectorCmd.Flags().StringVar(&collectorAddr, "collector-addr", "", "")
-	CollectorCmd.Flags().StringVar(&grpcuiAddr, "grpcui-addr", "", "")
-	CollectorCmd.Flags().StringVar(&elkUsername, "elk-user", "", "")
-	CollectorCmd.Flags().StringVar(&elkPassword, "elk-pwd", "", "")
+	CollectorCmd.Flags().StringVar(&configFileName, "config", "local/collector.toml", "--config=local/collector.toml")
 }
 
 func StartCollector(cmd *cobra.Command, args []string) error {
+	var config config2.CollectorConfig
+	// Check if file exists
+	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
+		panic(fmt.Errorf("config file does not exist: %s", configFileName))
+	}
+	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
+		panic(fmt.Errorf("failed to parse config file: %s", err))
+	}
+	ctx := context.Background()
+	collectorAddr := config.GRPCServerConfig.GrpcConfig.Url
 	lis, err := net.Listen("tcp", collectorAddr)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", collectorAddr, err)
@@ -62,16 +65,12 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 		})),
 	}
 	opts := []grpc.ServerOption{
+		grpc.MaxRecvMsgSize(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize)),
+		grpc.MaxSendMsgSize(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize)),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
 	}
 	grpcServer := grpc.NewServer(opts...)
-	client, err := elasticsearch.NewClient(elasticsearch.Config{
-		Addresses:     []string{elkAddr},
-		Username:      elkUsername,
-		Password:      elkPassword,
-		EnableMetrics: false,
-		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-	})
+	client, err := config.ELKConfig.Get(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -86,18 +85,22 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 			panic(err)
 		}
 	}()
-	ctx := context.Background()
-	cc, err := grpc.NewClient(collectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		panic(err)
+	if config.GRPCServerConfig.GrpcUiConfig.Enabled {
+		cc, err3 := grpc.NewClient(collectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err3 != nil {
+			panic(err3)
+		}
+		h, err3 := grpcui.HandlerViaReflection(ctx, cc, "database monitoring collector")
+		if err3 != nil {
+			panic(err3)
+		}
+		err2 := http.ListenAndServe(config.GRPCServerConfig.GrpcUiConfig.Url, h)
+		if err2 != nil {
+			panic(err2)
+		}
 	}
-	h, err := grpcui.HandlerViaReflection(ctx, cc, "database monitoring collector")
-	if err != nil {
-		panic(err)
-	}
-	err2 := http.ListenAndServe(grpcuiAddr, h)
-	if err2 != nil {
-		panic(err2)
+	for {
+		time.Sleep(10 * time.Second)
 	}
 	return nil
 

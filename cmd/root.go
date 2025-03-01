@@ -5,6 +5,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var configFileName string
+
 func main() {
 	c := &cobra.Command{
 		Use: "dbm",

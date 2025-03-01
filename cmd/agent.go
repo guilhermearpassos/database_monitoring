@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/BurntSushi/toml"
+	config2 "github.com/guilhermearpassos/database-monitoring/common/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/service"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
@@ -23,8 +23,7 @@ import (
 )
 
 var (
-	configFileName string
-	AgentCmd       = &cobra.Command{
+	AgentCmd = &cobra.Command{
 		Use:     "agent",
 		Short:   "run dbm agent",
 		Long:    "run dbm agent",
@@ -39,7 +38,7 @@ func init() {
 }
 
 func StartAgent(cmd *cobra.Command, args []string) error {
-	var config service.AgentConfig
+	var config config2.AgentConfig
 	// Check if file exists
 	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
 		panic(fmt.Errorf("config file does not exist: %s", configFileName))
@@ -47,7 +46,13 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
 		panic(fmt.Errorf("failed to parse config file: %s", err))
 	}
-	cc, err := grpc.NewClient(config.CollectorConfig.Url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(config.CollectorConfig.Url, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(int(config.CollectorConfig.GrpcMessageMaxSize)),
+			grpc.MaxCallSendMsgSize(int(config.CollectorConfig.GrpcMessageMaxSize)),
+		),
+	)
+
 	if err != nil {
 		panic(err)
 	}
@@ -60,7 +65,7 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	}
 	return nil
 }
-func startTarget(config service.TargetHostConfig, collectorClient collectorv1.IngestionServiceClient) {
+func startTarget(config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient) {
 	db, err := sqlx.Open(config.Driver, config.ConnString)
 	if err != nil {
 		panic(err)

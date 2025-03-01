@@ -2,7 +2,7 @@
   <configuration default="false" name="collector" type="GoApplicationRunConfiguration" factoryName="Go Application">
     <module name="database_monitoring" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="collector --elk-addr=https://localhost:9200 --collector-addr=localhost:7080 --grpcui-addr=localhost:7081 --elk-user=elastic --elk-pwd=changeme" />
+    <parameters value="collector --config=local/collector.toml" />
     <kind value="PACKAGE" />
     <package value="github.com/guilhermearpassos/database-monitoring/cmd" />
     <directory value="$PROJECT_DIR$" />

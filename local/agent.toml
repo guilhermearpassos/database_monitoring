@@ -1,25 +1,12 @@
 # Agent configuration file
 
+max_samples_batch_size=10000
 # Collector configuration section
 [collector]
 url = "localhost:7080"
-
+grpc_message_max_size=100000
 # Target hosts configurations
 [[target_hosts]]
 alias = "localhost"
-driver = "mssql"
-conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
-[[target_hosts]]
-alias = "execution-router-dsv"
-driver = "mssql"
-conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
-# Target hosts configurations
-[[target_hosts]]
-alias = "execution-router-hml"
-driver = "mssql"
-conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
-# Target hosts configurations
-[[target_hosts]]
-alias = "execution-router-prd"
 driver = "mssql"
 conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
