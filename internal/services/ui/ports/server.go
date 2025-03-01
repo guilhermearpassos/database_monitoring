@@ -284,9 +284,9 @@ func (s *HtmxServer) HandleServerRefresh(w http.ResponseWriter, r *http.Request)
 			End:   timestamppb.New(endTime),
 		})
 	if err != nil {
-		//http.Error(w, err.Error(), http.StatusInternalServerError)
-		//return
-		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+		//fmt.Println(err)
 	}
 	ret := make([]domain.Server, len(resp.Servers))
 	for i, srv := range resp.Servers {
