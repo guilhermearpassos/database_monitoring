@@ -488,6 +488,41 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles [][]byt
 	if len(handles2) == 0 {
 		return make(map[string]*common_domain.ExecutionPlan), nil
 	}
+
+	ret, err3 := S._batch_fetch_plan_handles(ctx, handles2)
+	if err3 != nil {
+		ret = make(map[string]*common_domain.ExecutionPlan)
+		//fallback to 1 by 1 strategy, as there might be a problem with tempdb
+		query := "select query_plan from sys.dm_exec_query_plan(?)"
+		for _, handle := range handles {
+			row := S.db.QueryRowContext(ctx, query, handle)
+			err := row.Err()
+			if err != nil {
+				return nil, fmt.Errorf("fetch plan handle - %w", err)
+			}
+			var queryPlan *string
+			err = row.Scan(&queryPlan)
+			if err != nil {
+				return nil, fmt.Errorf("fetch plan handle scan - %w", err)
+			}
+			if queryPlan == nil {
+				continue
+			}
+			ret[string(handle)] = &common_domain.ExecutionPlan{
+				PlanHandle: handle,
+				XmlData:    *queryPlan,
+				Server:     S.serverData,
+			}
+		}
+	}
+	for k := range ret {
+		S.knowPlanHandles[k] = struct{}{}
+	}
+	return ret, nil
+}
+
+func (S SQLServerDataReader) _batch_fetch_plan_handles(ctx context.Context, handles2 []interface{}) (map[string]*common_domain.ExecutionPlan, error) {
+
 	tx, err := S.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -540,9 +575,6 @@ select handle, query_plan from #temp_plans
 	err = rows.Err()
 	if err != nil {
 		return nil, fmt.Errorf("fetch plans - err: %w", err)
-	}
-	for k := range ret {
-		S.knowPlanHandles[k] = struct{}{}
 	}
 	return ret, nil
 }
