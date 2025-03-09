@@ -336,23 +336,23 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	snaps := resp.GetSnapshots()
-	for int64(len(snaps)) < resp.TotalCount {
-		pageNumber++
-
-		resp2, err2 := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
-			Start:      timestamppb.New(startTime),
-			End:        timestamppb.New(endTime),
-			Host:       server,
-			Database:   "",
-			PageSize:   30,
-			PageNumber: pageNumber,
-		})
-		if err2 != nil {
-			http.Error(w, err2.Error(), http.StatusInternalServerError)
-			return
-		}
-		snaps = append(snaps, resp2.GetSnapshots()...)
-	}
+	//for int64(len(snaps)) < resp.TotalCount {
+	//	pageNumber++
+	//
+	//	resp2, err2 := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
+	//		Start:      timestamppb.New(startTime),
+	//		End:        timestamppb.New(endTime),
+	//		Host:       server,
+	//		Database:   "",
+	//		PageSize:   30,
+	//		PageNumber: pageNumber,
+	//	})
+	//	if err2 != nil {
+	//		http.Error(w, err2.Error(), http.StatusInternalServerError)
+	//		return
+	//	}
+	//	snaps = append(snaps, resp2.GetSnapshots()...)
+	//}
 	colorMap := make(map[string]string)
 	filteredData := make([]domain.TimeSeriesData, 0)
 	for _, snap := range snaps {
