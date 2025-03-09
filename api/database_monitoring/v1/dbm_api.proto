@@ -13,6 +13,7 @@ service DBMApi {
   rpc ListServers(ListServersRequest) returns (ListServersResponse);
   rpc ListQueryMetrics(ListQueryMetricsRequest) returns (ListQueryMetricsResponse);
   rpc GetSampleDetails(GetSampleDetailsRequest) returns (GetSampleDetailsResponse);
+  rpc GetNormalizedQuery(GetNormalizedQueryRequest) returns (GetNormalizedQueryResponse);
 }
 message ListQueryMetricsRequest{
   google.protobuf.Timestamp start = 1;
@@ -107,4 +108,26 @@ message GetNormalizedQueryDetailsResponse {
   // avg duration chart
   // block info chart
   //execution plan history
+}
+
+
+message GetNormalizedQueryRequest{
+  string query_hash = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+
+}
+message GetNormalizedQueryResponse{
+  message ConnectionsDataPoint {
+    map<string, int64> connections_by_wait_type = 1;
+    google.protobuf.Timestamp timestamp = 2;
+  }
+  message ExecutionPlanUsage {
+    ExecutionPlan exec_plan = 1;
+    int64  number_of_samples = 2;
+  }
+  repeated ConnectionsDataPoint      connections_over_time = 1;
+  repeated ExecutionPlanUsage execution_plans = 2;
+  repeated QueryMetric query_metrics = 3;
+  repeated BlockChain blocking_activity = 4;
 }

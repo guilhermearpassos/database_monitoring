@@ -1,10 +1,9 @@
 package main
 
 import (
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/ports"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 var (
@@ -26,7 +25,8 @@ func init() {
 }
 
 func StartUI(cmd *cobra.Command, args []string) error {
-	cc, err := grpc.NewClient(grpcSrvr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	cc, err := telemetry.OpenInstrumentedClientConn(grpcSrvr, int(100000))
 	if err != nil {
 		return err
 	}

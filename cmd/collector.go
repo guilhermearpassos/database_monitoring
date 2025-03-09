@@ -5,23 +5,18 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	grpcui "github.com/fullstorydev/grpcui/standalone"
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	config2 "github.com/guilhermearpassos/database-monitoring/common/config"
+	config2 "github.com/guilhermearpassos/database-monitoring/internal/common/config"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/ports"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"time"
 )
 
@@ -49,27 +44,17 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
 		panic(fmt.Errorf("failed to parse config file: %s", err))
 	}
+	err := telemetry.InitTelemetryFromConfig(config.Telemetry)
+	if err != nil {
+		panic(fmt.Errorf("failed to init telemetry: %v", err))
+	}
 	ctx := context.Background()
 	collectorAddr := config.GRPCServerConfig.GrpcConfig.Url
 	lis, err := net.Listen("tcp", collectorAddr)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", collectorAddr, err)
 	}
-	unaryInterceptors := []grpc.UnaryServerInterceptor{
-		grpc_prometheus.UnaryServerInterceptor,
-		grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(func(ctx context.Context, r interface{}) error {
-			panicMessage := fmt.Sprintf("%v", r)
-			//span := trace.
-			fmt.Printf("%s\n", debug.Stack())
-			return fmt.Errorf(panicMessage)
-		})),
-	}
-	opts := []grpc.ServerOption{
-		grpc.MaxRecvMsgSize(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize)),
-		grpc.MaxSendMsgSize(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize)),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
-	}
-	grpcServer := grpc.NewServer(opts...)
+	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
 	client, err := config.ELKConfig.Get(ctx)
 	if err != nil {
 		panic(err)
@@ -86,7 +71,8 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 		}
 	}()
 	if config.GRPCServerConfig.GrpcUiConfig.Enabled {
-		cc, err3 := grpc.NewClient(collectorAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+		cc, err3 := telemetry.OpenInstrumentedClientConn(collectorAddr, int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
 		if err3 != nil {
 			panic(err3)
 		}

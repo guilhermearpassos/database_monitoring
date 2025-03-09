@@ -11,3 +11,6 @@ url = "localhost:7081"
 address = "https://localhost:9200"
 user = "elastic"
 password = "changeme"
+[telemetry]
+enabled = true
+otlp.endpoint = 'localhost:4317'

@@ -4,13 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"net/http"
 )
 
 type AgentConfig struct {
-	CollectorConfig     GrpcConfig               `toml:"collector"`
-	TargetHosts         []DBDataCollectionConfig `toml:"target_hosts"`
-	MaxSamplesBatchSize int                      `toml:"max_samples_batch_size"`
+	CollectorConfig     GrpcConfig                `toml:"collector"`
+	TargetHosts         []DBDataCollectionConfig  `toml:"target_hosts"`
+	MaxSamplesBatchSize int                       `toml:"max_samples_batch_size"`
+	Telemetry           telemetry.TelemetryConfig `toml:"telemetry"`
 }
 
 type GrpcConfig struct {
@@ -49,8 +51,9 @@ func (c ELKConfig) Get(ctx context.Context) (*elasticsearch.Client, error) {
 }
 
 type CollectorConfig struct {
-	GRPCServerConfig GRPCServerConfig `toml:"grpc_server"`
-	ELKConfig        ELKConfig        `toml:"elk"`
+	GRPCServerConfig GRPCServerConfig          `toml:"grpc_server"`
+	ELKConfig        ELKConfig                 `toml:"elk"`
+	Telemetry        telemetry.TelemetryConfig `toml:"telemetry"`
 }
 
 type GrpcAPIConfig struct {

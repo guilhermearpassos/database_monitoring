@@ -4,18 +4,16 @@ import (
 	"context"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	config2 "github.com/guilhermearpassos/database-monitoring/common/config"
+	config2 "github.com/guilhermearpassos/database-monitoring/internal/common/config"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
-	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
@@ -46,12 +44,11 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
 		panic(fmt.Errorf("failed to parse config file: %s", err))
 	}
-	cc, err := grpc.NewClient(config.CollectorConfig.Url, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(int(config.CollectorConfig.GrpcMessageMaxSize)),
-			grpc.MaxCallSendMsgSize(int(config.CollectorConfig.GrpcMessageMaxSize)),
-		),
-	)
+	err := telemetry.InitTelemetryFromConfig(config.Telemetry)
+	if err != nil {
+		panic(fmt.Errorf("failed to init telemetry: %v", err))
+	}
+	cc, err := telemetry.OpenInstrumentedClientConn(config.CollectorConfig.Url, int(config.CollectorConfig.GrpcMessageMaxSize))
 
 	if err != nil {
 		panic(err)
@@ -66,7 +63,7 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	return nil
 }
 func startTarget(config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient) {
-	db, err := sqlx.Open(config.Driver, config.ConnString)
+	db, err := telemetry.OpenInstrumentedDB(config.Driver, config.ConnString)
 	if err != nil {
 		panic(err)
 	}
