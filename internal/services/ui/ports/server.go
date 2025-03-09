@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"html/template"
@@ -194,6 +197,7 @@ type HtmxServer struct {
 	client        dbmv1.DBMApiClient
 	supportClient dbmv1.DBMSupportApiClient
 	templates     *template.Template
+	tracer        trace.Tracer
 }
 
 func NewServer(cc grpc.ClientConnInterface) (*HtmxServer, error) {
@@ -233,6 +237,7 @@ func NewServer(cc grpc.ClientConnInterface) (*HtmxServer, error) {
 		client:        dbmv1.NewDBMApiClient(cc),
 		supportClient: dbmv1.NewDBMSupportApiClient(cc),
 		templates:     tmpl,
+		tracer:        otel.Tracer("sqlsights-ui"),
 	}, nil
 }
 
@@ -248,10 +253,13 @@ func (s *HtmxServer) StartServer(addr string) error {
 	// Serve static files
 	staticFS := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", staticFS))
-
+	handler := http.Handler(http.DefaultServeMux) // or use your router
+	handler = otelhttp.NewHandler(handler, "", otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+		return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
+	}))
 	// Start server
 	log.Printf("Server starting on %s\n", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 		return err
 	}

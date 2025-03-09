@@ -9,6 +9,7 @@ import (
 var (
 	grpcSrvr     string
 	frontendAddr string
+	otlpAddr     string
 	UiCmd        = &cobra.Command{
 		Use:     "ui",
 		Short:   "run dbm ui",
@@ -22,10 +23,24 @@ var (
 func init() {
 	UiCmd.Flags().StringVar(&grpcSrvr, "grpc-addr", "", "")
 	UiCmd.Flags().StringVar(&frontendAddr, "frontend-addr", "", "")
+	UiCmd.Flags().StringVar(&otlpAddr, "otlp-addr", "", "")
 }
 
 func StartUI(cmd *cobra.Command, args []string) error {
-
+	enabled := true
+	if otlpAddr == "" {
+		enabled = false
+	}
+	telemetryConfig := telemetry.TelemetryConfig{
+		Enabled: enabled,
+		OTLP: telemetry.OTLPConfig{
+			Endpoint: otlpAddr,
+		},
+	}
+	err := telemetry.InitTelemetryFromConfig(telemetryConfig)
+	if err != nil {
+		return err
+	}
 	cc, err := telemetry.OpenInstrumentedClientConn(grpcSrvr, int(100000))
 	if err != nil {
 		return err
