@@ -13,6 +13,8 @@ import (
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -36,6 +38,7 @@ func init() {
 }
 
 func StartAgent(cmd *cobra.Command, args []string) error {
+	tracer := otel.Tracer("agent")
 	var config config2.AgentConfig
 	// Check if file exists
 	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
@@ -55,14 +58,14 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	}
 	client := collectorv1.NewIngestionServiceClient(cc)
 	for _, tgt := range config.TargetHosts {
-		startTarget(tgt, client)
+		startTarget(tgt, client, tracer)
 	}
 	for {
 		time.Sleep(5 * time.Second)
 	}
 	return nil
 }
-func startTarget(config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient) {
+func startTarget(config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer) {
 	db, err := telemetry.OpenInstrumentedDB(config.Driver, config.ConnString)
 	if err != nil {
 		panic(err)
@@ -93,15 +96,18 @@ func startTarget(config config2.DBDataCollectionConfig, collectorClient collecto
 		Host: config.Alias,
 		Type: config.Driver,
 	}, knownHandlesSlice)
-	go collectSnapshots(dataReader, collectorClient)
-	go collectQueryMetrics(dataReader, collectorClient, config.Alias)
+	go collectSnapshots(dataReader, collectorClient, tracer)
+	go collectQueryMetrics(dataReader, collectorClient, config.Alias, tracer)
 }
 
-func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName string) {
+func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName string, tracer trace.Tracer) {
 	for {
+		ctx, span := tracer.Start(context.Background(), "QueryMetrics")
+
 		sampleTime := time.Now()
-		metrics, err := reader.CollectMetrics(context.Background())
+		metrics, err := reader.CollectMetrics(ctx)
 		if err != nil {
+			span.End()
 			panic(err)
 		}
 		protoMetrics := make([]*dbmv1.QueryMetric, len(metrics))
@@ -109,17 +115,20 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 		for i, m := range metrics {
 			protoMetrics[i], err = converters.QueryMetricToProto(m)
 			if err != nil {
+				span.End()
 				panic(err)
 			}
 		}
-		_, err = client.IngestMetrics(context.Background(), &collectorv1.DatabaseMetrics{
+		_, err = client.IngestMetrics(ctx, &collectorv1.DatabaseMetrics{
 			ServerId:  serverName,
 			Timestamp: timestamppb.New(sampleTime),
 			Metrics:   &collectorv1.DatabaseMetrics_QueryMetrics{QueryMetrics: &collectorv1.DatabaseMetrics_QueryMetricSample{QueryMetrics: protoMetrics}},
 		})
 		if err != nil {
+			span.End()
 			panic(err)
 		}
+		span.End()
 
 		select {
 		case <-time.After(time.Until(sampleTime.Add(1 * time.Minute))):
@@ -129,23 +138,26 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 	}
 }
 
-func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.IngestionServiceClient) {
+func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.IngestionServiceClient, tracer trace.Tracer) {
 	for {
+		ctx, span := tracer.Start(context.Background(), "CollectSnapshots")
 		var snapshots []*common_domain.DataBaseSnapshot
-		snapshots, err := dataReader.TakeSnapshot(context.Background())
+		snapshots, err := dataReader.TakeSnapshot(ctx)
 		if err != nil {
 			panic(err)
+			span.End()
 		}
 		planHandleStrings := make(map[string]struct{})
 		for _, snapshot := range snapshots {
 			if snapshot == nil {
 				continue
 			}
-			_, err = client.IngestSnapshot(context.Background(), &collectorv1.IngestSnapshotRequest{
+			_, err = client.IngestSnapshot(ctx, &collectorv1.IngestSnapshotRequest{
 				Snapshot: converters.DatabaseSnapshotToProto(snapshot),
 			})
 			if err != nil {
 				panic(err)
+				span.End()
 			}
 			for _, qs := range snapshot.Samples {
 				if qs.PlanHandle == nil {
@@ -159,25 +171,29 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 		for k := range planHandleStrings {
 			planHandles = append(planHandles, []byte(k))
 		}
-		executionPlans, err := dataReader.GetPlanHandles(context.Background(), planHandles, true)
+		executionPlans, err := dataReader.GetPlanHandles(ctx, planHandles, true)
 		if err != nil {
 			panic(err)
+			span.End()
 		}
 		protoPlans := make([]*dbmv1.ExecutionPlan, 0, len(executionPlans))
 		for _, p := range executionPlans {
 			protoPlan, err2 := converters.ExecutionPlanToProto(p)
 			if err2 != nil {
 				panic(err2)
+				span.End()
 			}
 			protoPlans = append(protoPlans, protoPlan)
 		}
 		if len(protoPlans) != 0 {
 
-			_, err = client.IngestExecutionPlans(context.Background(), &collectorv1.IngestExecutionPlansRequest{Plans: protoPlans})
+			_, err = client.IngestExecutionPlans(ctx, &collectorv1.IngestExecutionPlansRequest{Plans: protoPlans})
 			if err != nil {
 				panic(err)
+				span.End()
 			}
 		}
+		span.End()
 		time.Sleep(10 * time.Second)
 	}
 }

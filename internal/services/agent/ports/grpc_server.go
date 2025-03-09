@@ -6,17 +6,24 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app/query"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"time"
 )
 
 type GRPCServer struct {
 	dbmv1.UnimplementedDBMApiServer
 	dbmv1.UnimplementedDBMSupportApiServer
-	app app.Application
+	app    app.Application
+	tracer trace.Tracer
 }
 
 func NewGRPCServer(app app.Application) GRPCServer {
-	return GRPCServer{app: app}
+	return GRPCServer{app: app,
+		tracer: otel.Tracer("grpc-server"),
+	}
 }
 
 func (s GRPCServer) ListDatabases(ctx context.Context, request *dbmv1.ListDatabasesRequest) (*dbmv1.ListDatabasesResponse, error) {
@@ -46,6 +53,14 @@ func (s GRPCServer) ListDatabases(ctx context.Context, request *dbmv1.ListDataba
 }
 
 func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapshotsRequest) (*dbmv1.ListSnapshotsResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.start", request.Start.AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", request.End.AsTime().Format(time.RFC3339)),
+		attribute.String("request.host", request.Host),
+		attribute.Int64("request.page_number", request.PageNumber),
+		attribute.Int64("request.page_size", int64(request.PageSize)),
+	)
 	pageNumber := request.PageNumber
 	if pageNumber == 0 {
 		pageNumber = 1
@@ -103,6 +118,10 @@ func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapsh
 		}
 		protoSnaps[i] = converters.DatabaseSnapshotToProto(&snap)
 	}
+	span.SetAttributes(
+		attribute.Int64("response.size", int64(len(snaps))),
+		attribute.Int64("response.total_items", int64(total)),
+	)
 	return &dbmv1.ListSnapshotsResponse{
 		Snapshots:  protoSnaps,
 		PageNumber: pageNumber,

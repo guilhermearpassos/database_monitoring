@@ -10,6 +10,8 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"strings"
 	"time"
@@ -17,10 +19,11 @@ import (
 
 type ELKRepository struct {
 	client *elasticsearch.Client
+	tracer trace.Tracer
 }
 
 func NewELKRepository(client *elasticsearch.Client) *ELKRepository {
-	return &ELKRepository{client: client}
+	return &ELKRepository{client: client, tracer: otel.Tracer("ELKRepository")}
 }
 
 func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end time.Time) ([]domain.ServerSummary, error) {
@@ -92,7 +95,8 @@ func (r ELKRepository) ListServers(ctx context.Context, start time.Time, end tim
 }
 
 func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int, serverID string) ([]common_domain.DataBaseSnapshot, int, error) {
-
+	ctx, span := r.tracer.Start(ctx, "ListSnapshots")
+	defer span.End()
 	//ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	//defer cancel()
 
@@ -122,6 +126,8 @@ func (r ELKRepository) ListSnapshots(ctx context.Context, databaseID string, sta
 }
 
 func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumber int, start time.Time, end time.Time, serverID string) (map[string]common_domain.SnapInfo, []string, int, error) {
+	ctx, span := r.tracer.Start(ctx, "getSnapInfos")
+	defer span.End()
 	from := (pageNumber - 1) * pageSize
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -179,7 +185,8 @@ func (r ELKRepository) getSnapInfos(ctx context.Context, pageSize int, pageNumbe
 }
 
 func (r ELKRepository) getSnapSamples(ctx context.Context, ids []string) (map[string][]*common_domain.QuerySample, error) {
-
+	ctx, span := r.tracer.Start(ctx, "getSnapSamples")
+	defer span.End()
 	queryString := "Snapshot.ID in (" + strings.Join(ids, ",") + ")"
 
 	query := map[string]interface{}{
@@ -206,6 +213,8 @@ func (r ELKRepository) getSnapSamples(ctx context.Context, ids []string) (map[st
 		return nil, fmt.Errorf("getting samples: (code %d), %s: %s", resp2.StatusCode, resp2.Status(), resp2.String())
 	}
 	var decodedResp2 SearchSamplesResponse
+	ctx, span2 := r.tracer.Start(ctx, "getSnapSamples-decode")
+	defer span2.End()
 	err = json.NewDecoder(resp2.Body).Decode(&decodedResp2)
 	if err != nil {
 		print(resp2.String())
