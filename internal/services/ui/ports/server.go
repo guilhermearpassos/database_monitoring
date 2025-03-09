@@ -328,7 +328,7 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		End:        timestamppb.New(endTime),
 		Host:       server,
 		Database:   "",
-		PageSize:   30,
+		PageSize:   5,
 		PageNumber: pageNumber,
 	})
 	if err != nil {

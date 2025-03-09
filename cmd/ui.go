@@ -41,7 +41,7 @@ func StartUI(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cc, err := telemetry.OpenInstrumentedClientConn(grpcSrvr, int(100000))
+	cc, err := telemetry.OpenInstrumentedClientConn(grpcSrvr, int(1000000))
 	if err != nil {
 		return err
 	}
