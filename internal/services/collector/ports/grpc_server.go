@@ -2,8 +2,8 @@ package ports
 
 import (
 	"context"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app/query"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/query"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"go.opentelemetry.io/otel"
@@ -16,11 +16,11 @@ import (
 type GRPCServer struct {
 	dbmv1.UnimplementedDBMApiServer
 	dbmv1.UnimplementedDBMSupportApiServer
-	app    app.Application
+	app    *app.Application
 	tracer trace.Tracer
 }
 
-func NewGRPCServer(app app.Application) GRPCServer {
+func NewGRPCServer(app *app.Application) GRPCServer {
 	return GRPCServer{app: app,
 		tracer: otel.Tracer("grpc-server"),
 	}

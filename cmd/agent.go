@@ -88,19 +88,22 @@ func startTarget(config config2.DBDataCollectionConfig, collectorClient collecto
 			panic(err)
 		}
 	} else {
-
-		knownHandlesSlice = knownHandles.Handles
+		knownHandlesSlice = make([]string, len(knownHandles.Handles))
+		for idx, data := range knownHandles.Handles {
+			knownHandlesSlice[idx] = string(data)
+		}
 	}
 
-	dataReader := adapters.NewSQLServerDataReader(db, common_domain.ServerMeta{
+	serverMeta := common_domain.ServerMeta{
 		Host: config.Alias,
 		Type: config.Driver,
-	}, knownHandlesSlice)
+	}
+	dataReader := adapters.NewSQLServerDataReader(db, serverMeta, knownHandlesSlice)
 	go collectSnapshots(dataReader, collectorClient, tracer)
-	go collectQueryMetrics(dataReader, collectorClient, config.Alias, tracer)
+	go collectQueryMetrics(dataReader, collectorClient, serverMeta, tracer)
 }
 
-func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName string, tracer trace.Tracer) {
+func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName common_domain.ServerMeta, tracer trace.Tracer) {
 	for {
 		ctx, span := tracer.Start(context.Background(), "QueryMetrics")
 
@@ -120,7 +123,7 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 			}
 		}
 		_, err = client.IngestMetrics(ctx, &collectorv1.DatabaseMetrics{
-			ServerId:  serverName,
+			Server:    &dbmv1.ServerMetadata{Host: serverName.Host, Type: serverName.Type},
 			Timestamp: timestamppb.New(sampleTime),
 			Metrics:   &collectorv1.DatabaseMetrics_QueryMetrics{QueryMetrics: &collectorv1.DatabaseMetrics_QueryMetricSample{QueryMetrics: protoMetrics}},
 		})

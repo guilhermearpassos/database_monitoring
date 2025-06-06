@@ -18,6 +18,7 @@ func main() {
 	c.AddCommand(AgentCmd)
 	c.AddCommand(GrpcCmd)
 	c.AddCommand(UiCmd)
+	c.AddCommand(MigrateCmd)
 	err := c.Execute()
 	if err != nil {
 		panic(err)

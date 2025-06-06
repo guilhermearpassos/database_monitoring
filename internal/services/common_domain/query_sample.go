@@ -3,7 +3,7 @@ package common_domain
 import "time"
 
 type QuerySample struct {
-	Id            []byte
+	Id            string
 	Status        string
 	Cmd           string
 	SqlHandle     []byte

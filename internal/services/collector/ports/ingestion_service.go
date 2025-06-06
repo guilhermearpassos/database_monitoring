@@ -47,7 +47,10 @@ func (s IngestionSvc) IngestMetrics(ctx context.Context, metrics *collectorv1.Da
 		}
 		domainMetrics[i] = domainMetric
 	}
-	err := s.app.Commands.StoreQueryMetrics.Handle(ctx, domainMetrics, timestamp)
+	err := s.app.Commands.StoreQueryMetrics.Handle(ctx, domainMetrics, common_domain.ServerMeta{
+		Host: metrics.Server.Host,
+		Type: metrics.Server.Type,
+	}, timestamp)
 	if err != nil {
 		return nil, err
 	}

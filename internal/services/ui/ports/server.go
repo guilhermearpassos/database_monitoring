@@ -608,7 +608,7 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		Host:       server,
 		Database:   "",
 		PageSize:   int32(pageSize),
-		PageNumber: int64(currPage - 1),
+		PageNumber: int64(currPage),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

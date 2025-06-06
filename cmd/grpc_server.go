@@ -7,10 +7,11 @@ import (
 	grpcui "github.com/fullstorydev/grpcui/standalone"
 	config2 "github.com/guilhermearpassos/database-monitoring/internal/common/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/ports"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/adapters"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/ports"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/reflection"
 	"log"
@@ -53,11 +54,11 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 		log.Fatalf("failed to listen on %s: %s", config.GRPCServerConfig.GrpcConfig.Url, err)
 	}
 	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
-	client, err := config.ELKConfig.Get(context.Background())
+	db, err := sqlx.Connect("postgres", "postgres://postgres:example@localhost:5432/sqlsights?sslmode=disable")
 	if err != nil {
 		panic(err)
 	}
-	elk := adapters.NewELKRepository(client)
+	elk := adapters.NewPostgresRepo(db)
 	application := app.NewApplication(elk, elk)
 	server := ports.NewGRPCServer(application)
 	dbmv1.RegisterDBMApiServer(grpcServer, server)

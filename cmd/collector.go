@@ -11,6 +11,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/ports"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
+	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/reflection"
 	"log"
@@ -55,11 +56,11 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 		log.Fatalf("failed to listen on %s: %s", collectorAddr, err)
 	}
 	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
-	client, err := config.ELKConfig.Get(ctx)
+	db, err := sqlx.Connect("postgres", "postgres://postgres:example@localhost:5432/sqlsights?sslmode=disable")
 	if err != nil {
 		panic(err)
 	}
-	elk := adapters.NewELKRepository(client)
+	elk := adapters.NewPostgresRepo(db)
 	application := app.NewApplication(elk, elk)
 	svc := ports.NewIngestionSvc(*application)
 	collectorv1.RegisterIngestionServiceServer(grpcServer, svc)

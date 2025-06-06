@@ -13,6 +13,11 @@ type Application struct {
 
 type Queries struct {
 	GetKnownPlanHandlesHandler query.GetKnownPlanHandlesHandler
+	GetQuerySampleDetails      query.GetQuerySampleDetailsHandler
+	GetSnapshot                query.GetSnapshotHandler
+	ListQueryMetrics           query.ListQueryMetricsHandler
+	ListServerSummary          query.ListServerSummaryHandler
+	ListSnapshots              query.ListSnapshotsHandler
 }
 
 type Commands struct {
@@ -29,6 +34,11 @@ func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryM
 		},
 		Queries: Queries{
 			GetKnownPlanHandlesHandler: query.NewGetKnownPlanHandlesHandler(repo),
+			GetQuerySampleDetails:      query.NewGetQuerySampleDetailsHandler(repo),
+			GetSnapshot:                query.NewGetSnapshotHandler(repo),
+			ListQueryMetrics:           query.NewListQueryMetricsHandler(queryMetricsRepo),
+			ListServerSummary:          query.NewListServerSummaryHandler(repo),
+			ListSnapshots:              query.NewListSnapshotsHandler(repo),
 		},
 	}
 }
