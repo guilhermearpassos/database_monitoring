@@ -21,7 +21,7 @@ var (
 
 func init() {
 
-	UiCmd.Flags().StringVar(&pgAddr, "pg-addr", "", "")
+	MigrateCmd.Flags().StringVar(&pgAddr, "pg-addr", "", "")
 }
 func erMigrate(cmd *cobra.Command, args []string) error {
 
