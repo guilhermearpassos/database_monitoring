@@ -46,7 +46,8 @@ type PostgresConfig struct {
 }
 
 func (c PostgresConfig) Get(ctx context.Context) (*sqlx.DB, error) {
-	return sqlx.Open("postgres", c.Connstring)
+
+	return telemetry.OpenInstrumentedDB("postgres", c.Connstring)
 }
 
 func (c ELKConfig) Get(ctx context.Context) (*elasticsearch.Client, error) {
