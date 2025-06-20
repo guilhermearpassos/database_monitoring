@@ -1,3 +1,4 @@
+ARG release_image_tag
 FROM golang:1.24.0 as base
 LABEL authors="guilherme passos"
 COPY ./go.mod ./go.sum ./
@@ -10,7 +11,7 @@ COPY . .
 RUN --mount=type=cache,target=/go-cache \
     go build -o /out/cmd ./cmd/
 
-FROM base AS release
+FROM gcr.io/distroless/base:${release_image_tag:-debug} AS release
 COPY --from=build /out/cmd /
 COPY static/ /go/static
 COPY templates/ /go/templates
