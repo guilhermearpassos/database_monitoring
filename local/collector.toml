@@ -7,7 +7,7 @@ grpc_message_max_size=1000000
 [grpc_server.grpc_ui]
 enabled = true
 url = "localhost:7081"
-[pg]
+[postgres]
 connstring = "postgres://postgres:example@localhost:5432/sqlsights?sslmode=disable"
 [telemetry]
 enabled = true
