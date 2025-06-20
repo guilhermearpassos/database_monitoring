@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
+	"github.com/jmoiron/sqlx"
 	"net/http"
 )
 
@@ -40,6 +41,15 @@ type ELKConfig struct {
 	Password string `toml:"password"`
 }
 
+type PostgresConfig struct {
+	Connstring string `toml:"connstring"`
+}
+
+func (c PostgresConfig) Get(ctx context.Context) (*sqlx.DB, error) 
+func (c PostgresConfig) Get(ctx context.Context) (*sqlx.DB, error) {
+	return sqlx.Open("postgres", c.Connstring)
+}
+
 func (c ELKConfig) Get(ctx context.Context) (*elasticsearch.Client, error) {
 	return elasticsearch.NewClient(elasticsearch.Config{
 		Addresses:     []string{c.Addr},
@@ -51,8 +61,8 @@ func (c ELKConfig) Get(ctx context.Context) (*elasticsearch.Client, error) {
 }
 
 type CollectorConfig struct {
-	GRPCServerConfig GRPCServerConfig          `toml:"grpc_server"`
-	ELKConfig        ELKConfig                 `toml:"elk"`
+	PostgresConfig   PostgresConfig            `toml:"postgres"`
+	PostgresConfig PostgresConfig          `toml:"postgres"`
 	Telemetry        telemetry.TelemetryConfig `toml:"telemetry"`
 }
 

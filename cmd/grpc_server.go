@@ -11,7 +11,6 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/ports"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
-	"github.com/jmoiron/sqlx"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc/reflection"
 	"log"
@@ -54,7 +53,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 		log.Fatalf("failed to listen on %s: %s", config.GRPCServerConfig.GrpcConfig.Url, err)
 	}
 	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
-	db, err := sqlx.Connect("postgres", "postgres://postgres:example@localhost:5432/sqlsights?sslmode=disable")
+	db, err := config.PostgresConfig.Get(context.Background())
 	if err != nil {
 		panic(err)
 	}

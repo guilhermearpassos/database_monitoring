@@ -16,10 +16,16 @@ var (
 		Example: "dbm migrate",
 		RunE:    erMigrate,
 	}
+	pgAddr string
 )
 
+func init() {
+
+	UiCmd.Flags().StringVar(&pgAddr, "pg-addr", "", "")
+}
 func erMigrate(cmd *cobra.Command, args []string) error {
-	m, err := migrate.New("file://./sql/migrations", "postgres://postgres:example@localhost:5432/sqlsights?sslmode=disable")
+
+	m, err := migrate.New("file://./sql/migrations", pgAddr)
 	if err != nil {
 		panic(err)
 	}
