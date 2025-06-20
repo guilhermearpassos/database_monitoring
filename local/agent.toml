@@ -4,7 +4,7 @@ max_samples_batch_size=10000
 # Collector configuration section
 [collector]
 url = "localhost:7080"
-grpc_message_max_size=100000
+grpc_message_max_size=1000000
 # Target hosts configurations
 [[target_hosts]]
 alias = "localhost"

@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
@@ -174,7 +175,7 @@ FROM sys.dm_exec_sessions s
 		}
 		sampleId := []byte(fmt.Sprintf("%s_%d_%d_%d", connectionId, sessionID, transactionId, requestId))
 		qs := common_domain.QuerySample{
-			Id:         sampleId,
+			Id:         base64.StdEncoding.EncodeToString(sampleId),
 			Status:     pStatus,
 			Cmd:        "",
 			SqlHandle:  sqlHandle,

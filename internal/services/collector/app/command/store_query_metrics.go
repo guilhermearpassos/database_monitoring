@@ -15,7 +15,7 @@ func NewStoreQueryMetricsHandler(repo domain.QueryMetricsRepository) StoreQueryM
 	return StoreQueryMetricsHandler{repo: repo}
 }
 
-func (h *StoreQueryMetricsHandler) Handle(ctx context.Context, metrics []*common_domain.QueryMetric, timestamp time.Time) error {
-	return h.repo.StoreQueryMetrics(ctx, metrics, timestamp)
+func (h *StoreQueryMetricsHandler) Handle(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error {
+	return h.repo.StoreQueryMetrics(ctx, metrics, serverMeta, timestamp)
 
 }
