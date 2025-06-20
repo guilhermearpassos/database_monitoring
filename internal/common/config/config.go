@@ -45,7 +45,6 @@ type PostgresConfig struct {
 	Connstring string `toml:"connstring"`
 }
 
-func (c PostgresConfig) Get(ctx context.Context) (*sqlx.DB, error) 
 func (c PostgresConfig) Get(ctx context.Context) (*sqlx.DB, error) {
 	return sqlx.Open("postgres", c.Connstring)
 }
@@ -61,8 +60,8 @@ func (c ELKConfig) Get(ctx context.Context) (*elasticsearch.Client, error) {
 }
 
 type CollectorConfig struct {
+	GRPCServerConfig GRPCServerConfig          `toml:"grpc_server"`
 	PostgresConfig   PostgresConfig            `toml:"postgres"`
-	PostgresConfig PostgresConfig          `toml:"postgres"`
 	Telemetry        telemetry.TelemetryConfig `toml:"telemetry"`
 }
 
