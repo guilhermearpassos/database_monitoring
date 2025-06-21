@@ -62,3 +62,25 @@
 .sql-copy-button:hover {
     color: #0056b3; /* Darker blue on hover */
 }
+/* Keep ALL existing sample table styles and add these */
+
+.query-preview-enhanced {
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.query-preview-enhanced:hover {
+    border-left-color: #3b82f6;
+    background-color: #f1f5f9;
+}
+
+/* Enhanced syntax highlighting container */
+.syntax-highlight-container {
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced modal appearance */
+.sample-modal-enhanced {
+    backdrop-filter: blur(4px);
+}
