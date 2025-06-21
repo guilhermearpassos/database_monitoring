@@ -1,3 +1,61 @@
+#chart-container {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb;
+    transition: all 0.3s ease;
+}
+
+#chart-container:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.no-data-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: #6b7280;
+    font-size: 16px;
+    font-weight: 500;
+    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    border-radius: 8px;
+    border: 2px dashed #d1d5db;
+}
+
+/* ApexCharts specific styles */
+.apexcharts-legend {
+    padding: 0 !important;
+}
+
+.apexcharts-legend-series {
+    margin: 0 8px 4px 0 !important;
+}
+
+.apexcharts-tooltip {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    border: 1px solid #e5e7eb !important;
+}
+
+.apexcharts-xaxistooltip {
+    background: white !important;
+    border: 1px solid #e5e7eb !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+}
+
+.apexcharts-toolbar {
+    border-radius: 8px !important;
+}
+
+/* Enhanced responsiveness */
+@media (max-width: 768px) {
+    #chart-container {
+        padding: 12px;
+    }
+}
+
 .chart-wrapper {
     height: 400px;
     position: relative;
