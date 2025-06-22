@@ -1,4 +1,4 @@
-/* modal.css */
+/* Modal Container - Improved backdrop and transitions */
 .samples_modal_container {
     position: fixed;
     top: 0;
@@ -8,27 +8,216 @@
     display: none;
     justify-content: center;
     align-items: flex-start;
-    padding-top: 140px;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 50;
+    padding-top: 5vh;
+    background-color: rgba(17, 24, 39, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
 .samples_modal_container.open {
     display: flex;
+    opacity: 1;
 }
 
-.modal_content {
+/* Modal content with smooth entrance animation */
+#samples_modal .bg-white {
     background: white;
-    border-radius: 0.5rem;
-    width: 83.333333%; /* w-10/12 */
-    max-width: 64rem; /* max-w-5xl */
-    max-height: calc(100vh - 160px); /* Subtract top padding + some space */
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 83.333333%;
+    max-width: 80rem;
+    max-height: 90vh;
     overflow-y: auto;
     padding: 1.5rem;
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
 }
 
-/* Remove individual section scrollbars */
-.modal_section {
-    max-height: none !important;
-    overflow-y: visible !important;
+.samples_modal_container.open #samples_modal .bg-white {
+    transform: translateY(0);
+}
+
+/* Scrollable sections with better styling */
+#samples_modal div[style*="max-height: 40vh"] {
+    max-height: 40vh !important;
+    overflow-y: auto !important;
+    border: 1px solid #f3f4f6;
+    border-radius: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db #f9fafb;
+}
+
+/* Webkit scrollbar styling */
+#samples_modal div[style*="max-height: 40vh"]::-webkit-scrollbar {
+    width: 6px;
+}
+
+#samples_modal div[style*="max-height: 40vh"]::-webkit-scrollbar-track {
+    background: #f9fafb;
+    border-radius: 3px;
+}
+
+#samples_modal div[style*="max-height: 40vh"]::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+}
+
+#samples_modal div[style*="max-height: 40vh"]::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* Header styling to match design system */
+#samples_modal h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+#samples_modal h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+#samples_modal h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+/* Section cards styling */
+#samples_modal .border.rounded.p-4 {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+    margin-bottom: 16px;
+    transition: box-shadow 0.2s ease;
+}
+
+#samples_modal .border.rounded.p-4:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Close button styling with better hover effect */
+#samples_modal button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 4px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+#samples_modal button:hover {
+    color: #374151;
+    background-color: #f3f4f6;
+}
+
+/* Toggle button improvements */
+#samples_modal .text-blue-600 {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: inline-block;
+}
+
+#samples_modal .text-blue-600:hover {
+    color: #1d4ed8;
+    background-color: #eff6ff;
+}
+
+/* SQL text styling improvements */
+#samples_modal pre {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 8px 0;
+    transition: border-color 0.2s ease;
+}
+
+#samples_modal pre:hover {
+    border-color: #d1d5db;
+}
+
+/* Plan tree styling */
+#samples_modal .bg-gray-50 {
+    background-color: #f9fafb;
+    border: 1px solid #f3f4f6;
+    border-radius: 8px;
+}
+
+#samples_modal .bg-white.rounded-lg.border.p-3 {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+#samples_modal .bg-white.rounded-lg.border.p-3:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    border-color: #d1d5db;
+}
+
+/* Grid improvements */
+#samples_modal .grid.grid-cols-2.gap-4 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* Text styling */
+#samples_modal .text-sm.text-gray-600 {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    margin-bottom: 4px;
+}
+
+#samples_modal .font-medium {
+    font-weight: 500;
+    color: #1f2937;
+    font-size: 14px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .samples_modal_container {
+        padding-top: 2vh;
+    }
+    
+    #samples_modal .bg-white {
+        width: 95%;
+        max-height: 95vh;
+        padding: 1rem;
+    }
+    
+    #samples_modal .grid.grid-cols-2.gap-4 {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
 }

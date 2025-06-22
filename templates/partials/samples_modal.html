@@ -53,6 +53,7 @@
     </div>
 </div>
 {{end}}
+
 {{define "blockingNode"}}
 <div class="ml-{{.Level}} border-l-2 border-gray-300 pl-4 py-2">
     <div class="flex items-center">
@@ -73,11 +74,9 @@
 </div>
 {{end}}
 
-
-<div id="samples_modal_container" class="samples_modal_container {{.State}}"
-     onclick="handleOutsideClickSamplesModal(event)">
+<div id="samples_modal_container" class="samples_modal_container {{.State}}" onclick="handleOutsideClickSamplesModal(event)">
     <div id="samples_modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-6 w-10/12 max-w-5xl " style="overflow-y: scroll; max-height: 85vh">
+        <div class="bg-white rounded-lg p-6 w-10/12 max-w-5xl" style="overflow-y: scroll; max-height: 85vh">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold">Query Sample Details</h2>
                 <button
@@ -187,5 +186,4 @@
             </div>
         </div>
     </div>
-</div>
 </div>
