@@ -3,37 +3,27 @@
     <tr>
         <th hx-get='/snapshots/sort?column=timestamp&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
+            hx-include="#selected-timerange,#selected-server"
+            hx-push-url="true"
             hx-trigger="click"
             aria-sort='{{if ne .SortColumn "timestamp"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
             Timestamp
         </th>
         <th hx-get='/snapshots/sort?column=connections&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
+            hx-include="#selected-timerange,#selected-server"
+            hx-push-url="true"
             hx-trigger="click"
             aria-sort='{{if ne .SortColumn "connections"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
             Connections
         </th>
-        <th >
-            Wait Event Groups
-        </th>
-        <th >
-            Users
-        </th>
-        <th >
-            # Waiters
-        </th>
-        <th >
-            # Blockers
-        </th>
-        <th >
-            Wait Duration
-        </th>
-        <th >
-            Average Duration
-        </th>
-        <th >
-            Max Duration
-        </th>
+        <th>Wait Event Groups</th>
+        <th>Users</th>
+        <th># Waiters</th>
+        <th># Blockers</th>
+        <th>Wait Duration</th>
+        <th>Average Duration</th>
+        <th>Max Duration</th>
         <th>Actions</th>
     </tr>
     </thead>
@@ -68,11 +58,12 @@
     </tr>
     {{end}}
     </tbody>
-
 </table>
+
 <div class="pagination">
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
+            hx-include="#selected-timerange,#selected-server"
             hx-get="/snapshots?page=1" hx-push-url="true"
             {{if eq .CurrentPage 1}}disabled{{end}}>
         First
@@ -80,6 +71,7 @@
 
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
+            hx-include="#selected-timerange,#selected-server"
             hx-get="/snapshots?page={{.PreviousPage}}" hx-push-url="true"
             {{if eq .CurrentPage 1}}disabled{{end}}>
         Previous
@@ -93,6 +85,7 @@
     {{else}}
     <a
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
+            hx-include="#selected-timerange,#selected-server"
             hx-get="/snapshots?page={{$page}}" hx-push-url="true"
             class="btn btn-sm btn-info{{if eq $page $currentPage}}-current{{end}}">
         {{$page}}
@@ -102,6 +95,7 @@
 
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
+            hx-include="#selected-timerange,#selected-server"
             hx-get="/snapshots?page={{.NextPage}}" hx-push-url="true"
             {{if eq .CurrentPage .TotalPages}}disabled{{end}}>
         Next
@@ -109,6 +103,7 @@
 
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
+            hx-include="#selected-timerange,#selected-server"
             hx-get="/snapshots?page={{.TotalPages}}" hx-push-url="true"
             {{if eq .CurrentPage .TotalPages}}disabled{{end}}>
         Last
