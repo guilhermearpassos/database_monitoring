@@ -19,9 +19,10 @@
                 </div>
                 <div class="card-section">
                     <div id="snapshots-table-container"
-                         hx-get="/snapshots/" hx-swap="innerHTML" hx-include="#selected-timerange,#selected-server"
-                         hx-trigger="load"
-                    ></div>
+                    >
+
+                        {{ template "active_conn_table.html" .Snapshots }}
+                    </div>
 
                 </div>
             </div>

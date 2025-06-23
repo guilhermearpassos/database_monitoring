@@ -134,6 +134,16 @@
                 <!-- Execution Plan -->
                 <div class="border rounded p-4" style="max-height: 55vh; overflow-y: scroll;">
                     <h3 class="font-bold mb-4">Execution Plan</h3>
+                    <!-- Raw XML Plan (Collapsible) -->
+                    <div class="mt-4">
+                        <button
+                                class="text-blue-600 hover:text-blue-800"
+                                onclick="document.getElementById('rawPlan').classList.toggle('hidden')"
+                        >
+                            Toggle Raw XML Plan
+                        </button>
+                        <pre id="rawPlan" class="hidden mt-2 bg-gray-50 p-4 rounded text-sm overflow-x-auto">{{.ExecutionPlan.Plan.XmlPlan}}</pre>
+                    </div>
 
                     <!-- Plan Warnings -->
                     {{if .ExecutionPlan.Warnings}}
@@ -172,16 +182,6 @@
                         </div>
                     </div>
 
-                    <!-- Raw XML Plan (Collapsible) -->
-                    <div class="mt-4">
-                        <button
-                                class="text-blue-600 hover:text-blue-800"
-                                onclick="document.getElementById('rawPlan').classList.toggle('hidden')"
-                        >
-                            Toggle Raw XML Plan
-                        </button>
-                        <pre id="rawPlan" class="hidden mt-2 bg-gray-50 p-4 rounded text-sm overflow-x-auto">{{.ExecutionPlan.Plan.XmlPlan}}</pre>
-                    </div>
                 </div>
             </div>
         </div>

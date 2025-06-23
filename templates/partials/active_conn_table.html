@@ -1,7 +1,7 @@
 <table class="table table-bordered table-hover" id="snapshots-table">
     <thead>
     <tr>
-        <th hx-get='/snapshots/sort?column=timestamp&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
+        <th hx-get='/server-drilldown/snapshots/sort?column=timestamp&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-include="#selected-timerange,#selected-server"
             hx-push-url="true"
@@ -9,7 +9,7 @@
             aria-sort='{{if ne .SortColumn "timestamp"}}none{{else}}{{if eq .SortDirection "asc"}}ascending{{else}}descending{{end}}{{end}}'>
             Timestamp
         </th>
-        <th hx-get='/snapshots/sort?column=connections&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
+        <th hx-get='/server-drilldown/snapshots/sort?column=connections&direction={{if eq .SortDirection "asc"}}desc{{else}}asc{{end}}'
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-include="#selected-timerange,#selected-server"
             hx-push-url="true"
@@ -64,7 +64,7 @@
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-include="#selected-timerange,#selected-server"
-            hx-get="/snapshots?page=1" hx-push-url="true"
+            hx-get="/server-drilldown/snapshots?page=1" hx-push-url="true"
             {{if eq .CurrentPage 1}}disabled{{end}}>
         First
     </button>
@@ -72,7 +72,7 @@
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-include="#selected-timerange,#selected-server"
-            hx-get="/snapshots?page={{.PreviousPage}}" hx-push-url="true"
+            hx-get="/server-drilldown/snapshots?page={{.PreviousPage}}" hx-push-url="true"
             {{if eq .CurrentPage 1}}disabled{{end}}>
         Previous
     </button>
@@ -86,7 +86,7 @@
     <a
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-include="#selected-timerange,#selected-server"
-            hx-get="/snapshots?page={{$page}}" hx-push-url="true"
+            hx-get="/server-drilldown/snapshots?page={{$page}}" hx-push-url="true"
             class="btn btn-sm btn-info{{if eq $page $currentPage}}-current{{end}}">
         {{$page}}
     </a>
@@ -96,7 +96,7 @@
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-include="#selected-timerange,#selected-server"
-            hx-get="/snapshots?page={{.NextPage}}" hx-push-url="true"
+            hx-get="/server-drilldown/snapshots?page={{.NextPage}}" hx-push-url="true"
             {{if eq .CurrentPage .TotalPages}}disabled{{end}}>
         Next
     </button>
@@ -104,7 +104,7 @@
     <button class="btn btn-info"
             hx-target="#snapshots-table-container" hx-swap="innerHTML"
             hx-include="#selected-timerange,#selected-server"
-            hx-get="/snapshots?page={{.TotalPages}}" hx-push-url="true"
+            hx-get="/server-drilldown/snapshots?page={{.TotalPages}}" hx-push-url="true"
             {{if eq .CurrentPage .TotalPages}}disabled{{end}}>
         Last
     </button>
