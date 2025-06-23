@@ -8,7 +8,7 @@ grpc_message_max_size=1000000
 enabled = true
 url = "localhost:7081"
 [postgres]
-connstring = "postgres://postgres:example@localhost:5432/sqlsights?sslmode=disable"
+connstring = "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"
 [telemetry]
 enabled = true
 otlp.endpoint = 'localhost:4317'

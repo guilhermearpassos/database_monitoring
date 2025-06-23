@@ -13,14 +13,16 @@
                          data-time-range='{{.TimeRange}}'
                          data-color-mapping='{{.ColorMap}}'
                          style="height: 400px">
-                        <canvas id="chart"></canvas>
+                        <!-- Replace canvas with div for ApexCharts -->
+                        <div id="chart"></div>
                     </div>
                 </div>
                 <div class="card-section">
                     <div id="snapshots-table-container"
-                         hx-get="/snapshots/" hx-swap="innerHTML" hx-include="#selected-timerange,#selected-server"
-                         hx-trigger="load"
-                    ></div>
+                    >
+
+                        {{ template "active_conn_table.html" .Snapshots }}
+                    </div>
 
                 </div>
             </div>

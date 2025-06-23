@@ -6,59 +6,113 @@
     font-family: 'Courier New', Courier, monospace; /* Monospace font for SQL */
     font-size: 14px;
 }
-/* Popover styling */
+
+/* Popover styling - INCREASED z-index to appear above modal */
 .sql-popover {
     display: none;
     position: absolute;
     background: white;
-    border: 1px solid #e0e0e0; /* Softer border color */
-    border-radius: 8px; /* Rounded corners */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Subtle shadow */
-    z-index: 1000;
-    max-width: 100%; /* Adjust as needed */
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 3000; /* Higher than modal (2000) */
+    max-width: 100%;
     word-wrap: break-word;
-    font-family: Arial, sans-serif; /* Consistent font */
+    font-family: Arial, sans-serif;
     font-size: 14px;
-    color: #333; /* Darker text for better readability */
-    transition: opacity 0.2s ease, transform 0.2s ease; /* Smooth transition */
-    padding: 12px 36px 12px 12px; /* Add extra padding on the right for the button */
+    color: #333;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    padding: 12px 36px 12px 12px;
 }
+
 /* Popover arrow (optional) */
 .sql-popover::before {
     content: '';
     position: absolute;
-    top: -25px; /* Adjust based on your design */
+    top: -25px;
     left: 50%;
     transform: translateX(-50%);
     border-width: 15px;
     border-style: solid;
-    border-color: transparent transparent white transparent; /* Arrow color */
+    border-color: transparent transparent white transparent;
 }
 
 .sql-popover::after {
     content: '';
     position: absolute;
-    top: -8px; /* Adjust based on your design */
+    top: -8px;
     left: 50%;
     transform: translateX(-50%);
     border-width: 5px;
     border-style: solid;
-    border-color: transparent transparent white transparent; /* Arrow color */
+    border-color: transparent transparent white transparent;
 }
 
 /* Copy button styling */
 .sql-copy-button {
-    position: absolute; /* Position absolutely within the popover */
-    top: 8px; /* Adjust distance from the top */
-    right: 8px; /* Adjust distance from the right */
+    position: absolute;
+    top: 8px;
+    right: 8px;
     cursor: pointer;
     background: none;
     border: none;
     color: #007bff;
     font-size: 14px;
-    transition: color 0.2s ease; /* Smooth color transition */
+    transition: color 0.2s ease;
 }
 
 .sql-copy-button:hover {
-    color: #0056b3; /* Darker blue on hover */
+    color: #0056b3;
+}
+/* Keep ALL existing sample table styles and add these */
+
+.query-preview-enhanced {
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.query-preview-enhanced:hover {
+    border-left-color: #3b82f6;
+    background-color: #f1f5f9;
+}
+
+/* Enhanced syntax highlighting container */
+.syntax-highlight-container {
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced modal appearance */
+.sample-modal-enhanced {
+    backdrop-filter: blur(4px);
+}
+
+/* Table container with fixed height and scrolling */
+#snapshots-table-container {
+    overflow-y: auto;
+    max-height: calc(100vh - 490px); /* Adjust based on your chart height */
+    scrollbar-width: thin;
+}
+
+/* Improved table styles */
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 0;
+}
+
+table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: white;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Responsive tables */
+@media (max-width: 768px) {
+    #snapshots-table-container {
+        max-height: calc(100vh - 400px); /* Smaller on mobile */
+    }
 }

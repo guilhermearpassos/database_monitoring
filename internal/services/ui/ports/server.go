@@ -1,6 +1,7 @@
 package ports
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
@@ -246,7 +247,7 @@ func (s *HtmxServer) StartServer(addr string) error {
 	// Route handlers
 	http.HandleFunc("/", s.HandleBaseLayout)
 	http.HandleFunc("/servers", s.HandleServerRefresh)
-	http.HandleFunc("/snapshots/", s.HandleSnapshots)
+	http.HandleFunc("/server-drilldown/snapshots/", s.HandleSnapshots)
 	http.HandleFunc("/server-drilldown", s.HandleServerDrillDown)
 	http.HandleFunc("/query-details", s.HandleQuerySampleDetails)
 	http.HandleFunc("/samples/", s.HandleSamples)
@@ -318,9 +319,52 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 	startTime, endTime, err := getTimeRange(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
 	}
 	server := r.URL.Query().Get("server")
+	baseDrillDownData, err, code := s.getBaseSlideoverData(startTime, endTime, server, r)
+	if err != nil {
+		http.Error(w, err.Error(), code)
+	}
+	currPage, err := getCurrentPage(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	snapData, err, code := s.getSnapshotsVM(r.Context(), startTime, endTime, server, 5, currPage)
+	if err != nil {
+		http.Error(w, err.Error(), code)
+		return
+	}
+	baseDrillDownData.Snapshots = snapData
+
+	w.Header().Set("Content-Type", "text/html")
+	if r.Header.Get("Hx-request") == "true" {
+		//partial render
+		err = s.templates.ExecuteTemplate(w, "slideover.html", baseDrillDownData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	err = s.templates.ExecuteTemplate(w, "base.html", map[string]interface{}{
+		"ServerList": domain.SampleServers,
+		"Slideover":  baseDrillDownData,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+}
+
+func (s *HtmxServer) getBaseSlideoverData(startTime time.Time, endTime time.Time, server string, r *http.Request) (*struct {
+	State        string
+	ServerName   string
+	DatabaseType string
+	ChartData    string
+	TimeRange    string
+	ColorMap     string
+	Snapshots    SnapshotsVM
+}, error, int) {
 
 	pageNumber := int64(1)
 	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
@@ -332,27 +376,25 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 		PageNumber: pageNumber,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err, http.StatusInternalServerError
 	}
 	snaps := resp.GetSnapshots()
-	//for int64(len(snaps)) < resp.TotalCount {
-	//	pageNumber++
-	//
-	//	resp2, err2 := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
-	//		Start:      timestamppb.New(startTime),
-	//		End:        timestamppb.New(endTime),
-	//		Host:       server,
-	//		Database:   "",
-	//		PageSize:   30,
-	//		PageNumber: pageNumber,
-	//	})
-	//	if err2 != nil {
-	//		http.Error(w, err2.Error(), http.StatusInternalServerError)
-	//		return
-	//	}
-	//	snaps = append(snaps, resp2.GetSnapshots()...)
-	//}
+	for int64(len(snaps)) < resp.TotalCount {
+		pageNumber++
+
+		resp2, err2 := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
+			Start:      timestamppb.New(startTime),
+			End:        timestamppb.New(endTime),
+			Host:       server,
+			Database:   "",
+			PageSize:   5,
+			PageNumber: pageNumber,
+		})
+		if err2 != nil {
+			return nil, err, http.StatusInternalServerError
+		}
+		snaps = append(snaps, resp2.GetSnapshots()...)
+	}
 	colorMap := make(map[string]string)
 	filteredData := make([]domain.TimeSeriesData, 0)
 	for _, snap := range snaps {
@@ -379,13 +421,11 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 
 	chartData, err := json.Marshal(filteredData)
 	if err != nil {
-		http.Error(w, "Unable to marshal data", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("unable to marshal data"), http.StatusInternalServerError
 	}
 	colorMapJson, err := json.Marshal(colorMap)
 	if err != nil {
-		http.Error(w, "Unable to marshal color data", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("unable to marshal color data"), http.StatusInternalServerError
 	}
 	timeRange := map[string]string{
 		"start": startTime.Add(-1 * time.Minute).Format("2006-01-02T15:04:05"),
@@ -393,59 +433,29 @@ func (s *HtmxServer) HandleServerDrillDown(w http.ResponseWriter, r *http.Reques
 	}
 	timeRangeJSON, err := json.Marshal(timeRange)
 	if err != nil {
-		http.Error(w, "Unable to marshal time range", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("unable to marshal time range"), http.StatusInternalServerError
 	}
-
-	w.Header().Set("Content-Type", "text/html")
 
 	//timeRange := r.URL.Query().Get("time-range")
 	//_ = timeRange // TODO: Implement filtering
 	//server-drilldown
-	if r.Header.Get("Hx-request") == "true" {
-		//partial render
-		err = s.templates.ExecuteTemplate(w, "slideover.html", struct {
-			State        string
-			ServerName   string
-			DatabaseType string
-			ChartData    string
-			TimeRange    string
-			ColorMap     string
-		}{
-			State:        "open",
-			ServerName:   server,
-			ChartData:    string(chartData),
-			TimeRange:    string(timeRangeJSON),
-			DatabaseType: "mssql",
-			ColorMap:     string(colorMapJson),
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
+	baseDrillDownData := struct {
+		State        string
+		ServerName   string
+		DatabaseType string
+		ChartData    string
+		TimeRange    string
+		ColorMap     string
+		Snapshots    SnapshotsVM
+	}{
+		State:        "open",
+		ServerName:   server,
+		ChartData:    string(chartData),
+		TimeRange:    string(timeRangeJSON),
+		DatabaseType: "mssql",
+		ColorMap:     string(colorMapJson),
 	}
-	err = s.templates.ExecuteTemplate(w, "base.html", map[string]interface{}{
-		"ServerList": domain.SampleServers,
-		"Slideover": struct {
-			State        string
-			ServerName   string
-			DatabaseType string
-			ChartData    string
-			TimeRange    string
-			ColorMap     string
-		}{
-			State:        "open",
-			ServerName:   server,
-			ChartData:    string(chartData),
-			TimeRange:    string(timeRangeJSON),
-			DatabaseType: "mssql",
-			ColorMap:     string(colorMapJson),
-		},
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
+	return &baseDrillDownData, nil, http.StatusOK
 }
 
 func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Request) {
@@ -585,6 +595,17 @@ func getTimeRange(r *http.Request) (time.Time, time.Time, error) {
 	return startTime, endTime, nil
 }
 
+type SnapshotsVM struct {
+	Snapshots     []domain.Snapshot
+	SortDirection string
+	SortColumn    string
+	CurrentPage   int
+	TotalPages    int
+	PageRange     []string
+	NextPage      int
+	PreviousPage  int
+}
+
 func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 	startTime, endTime, err := getTimeRange(r)
 	if err != nil {
@@ -592,17 +613,55 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server := r.URL.Query().Get("selected-server")
+	currPage, err := getCurrentPage(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	pageSize := 5
+	data, err, code := s.getSnapshotsVM(r.Context(), startTime, endTime, server, pageSize, currPage)
+	if err != nil {
+		http.Error(w, err.Error(), code)
+		return
+	}
+	if r.Header.Get("Hx-request") == "true" {
+
+		err = s.templates.ExecuteTemplate(w, "active_conn_table.html", data)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	baseDrillDownData, err, code := s.getBaseSlideoverData(startTime, endTime, server, r)
+	if err != nil {
+		http.Error(w, err.Error(), code)
+	}
+	baseDrillDownData.Snapshots = data
+	err = s.templates.ExecuteTemplate(w, "base.html", map[string]interface{}{
+		"ServerList": []domain.Server{},
+		"Slideover":  baseDrillDownData,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+}
+
+func getCurrentPage(r *http.Request) (int, error) {
+	var err error
 	currPageStr := r.URL.Query().Get("page")
 	currPage := 1
 	if currPageStr != "" {
 		currPage, err = strconv.Atoi(currPageStr)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+			return 0, err
 		}
 	}
-	pageSize := 5
-	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
+	return currPage, nil
+}
+
+func (s *HtmxServer) getSnapshotsVM(ctx context.Context, startTime time.Time, endTime time.Time, server string, pageSize int, currPage int) (SnapshotsVM, error, int) {
+	resp, err := s.client.ListSnapshots(ctx, &dbmv1.ListSnapshotsRequest{
 		Start:      timestamppb.New(startTime),
 		End:        timestamppb.New(endTime),
 		Host:       server,
@@ -611,8 +670,7 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		PageNumber: int64(currPage),
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return SnapshotsVM{}, err, http.StatusInternalServerError
 	}
 	qsdata := make([]domain.Snapshot, 0)
 	for _, snapshot := range resp.Snapshots {
@@ -681,16 +739,7 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 
 	// Create the template data
 	totalPages := int(resp.TotalCount) / pageSize
-	data := struct {
-		Snapshots     []domain.Snapshot
-		SortDirection string
-		SortColumn    string
-		CurrentPage   int
-		TotalPages    int
-		PageRange     []string
-		NextPage      int
-		PreviousPage  int
-	}{
+	data := SnapshotsVM{
 		Snapshots:     qsdata,
 		SortDirection: "desc",
 		SortColumn:    "",
@@ -700,12 +749,7 @@ func (s *HtmxServer) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		NextPage:      currPage + 1,
 		PreviousPage:  currPage - 1,
 	}
-
-	err = s.templates.ExecuteTemplate(w, "active_conn_table.html", data)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
+	return data, nil, http.StatusOK
 }
 
 func calculatePageRange(currentPage, totalPages int) []string {
