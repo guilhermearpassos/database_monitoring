@@ -11,7 +11,7 @@ COPY . .
 RUN --mount=type=cache,target=/go-cache \
     go build -o /out/cmd ./cmd/
 
-FROM gcr.io/distroless/base:${release_image_tag:-debug} AS release
+FROM base AS release
 COPY --from=build /out/cmd /
 COPY static/ /go/static
 COPY templates/ /go/templates
