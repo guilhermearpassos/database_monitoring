@@ -88,3 +88,13 @@ func ExecutionPlanToProto(plan *common_domain.ExecutionPlan) (*dbmv1.ExecutionPl
 		XmlPlan: plan.XmlData,
 	}, nil
 }
+
+func SnapSummaryToProto(summary *common_domain.SnapshotSummary) *dbmv1.SnapshotSummary {
+	return &dbmv1.SnapshotSummary{
+		Id:                     summary.ID,
+		Timestamp:              timestamppb.New(summary.Timestamp),
+		Server:                 &dbmv1.ServerMetadata{Host: summary.Server.Host, Type: summary.Server.Type},
+		ConnectionsByWaitEvent: summary.ConnsByWaitType,
+		TimeMsByWaitEvent:      summary.TimeMsByWaitType,
+	}
+}

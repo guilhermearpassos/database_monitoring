@@ -17,3 +17,11 @@ type SnapInfo struct {
 	Timestamp time.Time  `json:"timestamp"`
 	Server    ServerMeta `json:"server"`
 }
+
+type SnapshotSummary struct {
+	ID               string
+	Timestamp        time.Time
+	Server           ServerMeta
+	ConnsByWaitType  map[string]int64
+	TimeMsByWaitType map[string]int64
+}

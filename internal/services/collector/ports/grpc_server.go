@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/query"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
@@ -26,6 +27,22 @@ func NewGRPCServer(app *app.Application) GRPCServer {
 	}
 }
 
+func (s GRPCServer) ListSnapshotSummaries(ctx context.Context, in *dbmv1.ListSnapshotSummariesRequest) (*dbmv1.ListSnapshotSummariesResponse, error) {
+	resp, err := s.app.Queries.ListSnapshotSummaries.Handle(ctx, query.SnapshotSummariesQuery{
+		Start:      in.Start.AsTime(),
+		End:        in.End.AsTime(),
+		DatabaseID: "",
+		ServerID:   in.Server,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing snapshot summaries: %w", err)
+	}
+	protoSnaps := make([]*dbmv1.SnapshotSummary, len(resp))
+	for i, snap := range resp {
+		protoSnaps[i] = converters.SnapSummaryToProto(&snap)
+	}
+	return &dbmv1.ListSnapshotSummariesResponse{SnapSummaries: protoSnaps}, nil
+}
 func (s GRPCServer) ListDatabases(ctx context.Context, request *dbmv1.ListDatabasesRequest) (*dbmv1.ListDatabasesResponse, error) {
 	panic("implement me")
 	//servers, err := s.app.Queries.ListServerSummary.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())

@@ -366,49 +366,20 @@ func (s *HtmxServer) getBaseSlideoverData(startTime time.Time, endTime time.Time
 	Snapshots    SnapshotsVM
 }, error, int) {
 
-	pageNumber := int64(1)
-	resp, err := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
-		Start:      timestamppb.New(startTime),
-		End:        timestamppb.New(endTime),
-		Host:       server,
-		Database:   "",
-		PageSize:   5,
-		PageNumber: pageNumber,
+	res, err := s.client.ListSnapshotSummaries(r.Context(), &dbmv1.ListSnapshotSummariesRequest{
+		Start:  timestamppb.New(startTime),
+		End:    timestamppb.New(endTime),
+		Server: server,
 	})
-	if err != nil {
-		return nil, err, http.StatusInternalServerError
-	}
-	snaps := resp.GetSnapshots()
-	for int64(len(snaps)) < resp.TotalCount {
-		pageNumber++
-
-		resp2, err2 := s.client.ListSnapshots(r.Context(), &dbmv1.ListSnapshotsRequest{
-			Start:      timestamppb.New(startTime),
-			End:        timestamppb.New(endTime),
-			Host:       server,
-			Database:   "",
-			PageSize:   5,
-			PageNumber: pageNumber,
-		})
-		if err2 != nil {
-			return nil, err, http.StatusInternalServerError
-		}
-		snaps = append(snaps, resp2.GetSnapshots()...)
-	}
 	colorMap := make(map[string]string)
 	filteredData := make([]domain.TimeSeriesData, 0)
-	for _, snap := range snaps {
+	for _, snap := range res.SnapSummaries {
 		waitGroups := make(map[string]int)
-		for _, sample := range snap.Samples {
-			waitType := sample.WaitInfo.WaitType
+		for waitType, count := range snap.ConnectionsByWaitEvent {
 			if waitType == "" {
 				waitType = "none"
 			}
-			if _, ok := waitGroups[waitType]; ok {
-				waitGroups[waitType]++
-			} else {
-				waitGroups[waitType] = 1
-			}
+			waitGroups[waitType] = int(count)
 			if _, ok := colorMap[waitType]; !ok {
 				colorMap[waitType] = fmt.Sprintf("rgba(%s)", getWaitEventColor(waitType))
 			}

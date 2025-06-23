@@ -219,3 +219,71 @@ func (p *PostgresRepo) GetQuerySample(ctx context.Context, snapID string, sample
 	domainSample := converters.SampleToDomain(&protoSample)
 	return domainSample, nil
 }
+
+func (p *PostgresRepo) ListSnapshotSummaries(ctx context.Context, serverID string, start time.Time, end time.Time) ([]common_domain.SnapshotSummary, error) {
+	q := `select s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event, count(qs.id), sum(qs.wait_time) from snapshot s
+inner join public.query_samples qs on s.id = qs.snap_id
+         inner join target t on s.target_id = t.id
+where t.host = $1 and snap_time between $2 and $3
+group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
+	rows, err := p.db.QueryContext(ctx, q, serverID, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("listing snapshot summaries: %w", err)
+	}
+	defer rows.Close()
+	ret := make([]common_domain.SnapshotSummary, 0)
+	detailsMapByID := make(map[string]struct {
+		id        string
+		timestamp time.Time
+		server    common_domain.ServerMeta
+	})
+	connsMapByID := make(map[string]map[string]int64)
+	timeMsMapByID := make(map[string]map[string]int64)
+	for rows.Next() {
+		var snapTime time.Time
+		var snapID string
+		var host string
+		var typeID int
+		var waitEvent string
+		var count int64
+		var waitTime int64
+		err = rows.Scan(&snapTime, &snapID, &host, &typeID, &waitEvent, &count, &waitTime)
+		if err != nil {
+			return nil, fmt.Errorf("listing snapshot summaries scan: %w", err)
+		}
+		if _, ok := detailsMapByID[snapID]; !ok {
+			detailsMapByID[snapID] = struct {
+				id        string
+				timestamp time.Time
+				server    common_domain.ServerMeta
+			}{
+				id:        snapID,
+				timestamp: snapTime,
+				server: common_domain.ServerMeta{
+					Host: host,
+					Type: "mssql",
+				},
+			}
+		}
+		if _, ok := connsMapByID[snapID]; !ok {
+			connsMapByID[snapID] = make(map[string]int64)
+		}
+		if _, ok := timeMsMapByID[snapID]; !ok {
+			timeMsMapByID[snapID] = make(map[string]int64)
+		}
+		connsMapByID[snapID][waitEvent] = count
+		timeMsMapByID[snapID][waitEvent] = waitTime
+	}
+	for k, v := range detailsMapByID {
+		connMap := connsMapByID[k]
+		TimeMap := timeMsMapByID[k]
+		ret = append(ret, common_domain.SnapshotSummary{
+			ID:               v.id,
+			Timestamp:        v.timestamp,
+			Server:           v.server,
+			ConnsByWaitType:  connMap,
+			TimeMsByWaitType: TimeMap,
+		})
+	}
+	return ret, nil
+}

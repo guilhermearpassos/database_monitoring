@@ -84,7 +84,7 @@ func (p *PostgresRepo) insertSnapshot(ctx context.Context, tx *sqlx.Tx, snapshot
 func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, samples []*common_domain.QuerySample, snapId int) error {
 	// Prepare the COPY statement
 	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("query_samples", "f_id", "snap_id", "sql_handle",
-		"blocked", "blocker", "plan_handle", "data"))
+		"blocked", "blocker", "plan_handle", "data", "wait_event", "wait_time"))
 	if err != nil {
 		return fmt.Errorf("failed to prepare COPY statement: %w", err)
 	}
@@ -99,8 +99,12 @@ func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, sampl
 		if err != nil {
 			return fmt.Errorf("error serializing sample: %v", sample)
 		}
+		var waitType string
+		if sample.Wait.WaitType != nil {
+			waitType = *sample.Wait.WaitType
+		}
 		_, err = stmt.ExecContext(ctx, sample.Id, snapId, base64.StdEncoding.EncodeToString(sample.SqlHandle),
-			sample.IsBlocked, sample.IsBlocker, base64.StdEncoding.EncodeToString(sample.PlanHandle), protoBytes)
+			sample.IsBlocked, sample.IsBlocker, base64.StdEncoding.EncodeToString(sample.PlanHandle), protoBytes, waitType, sample.Wait.WaitTime)
 		if err != nil {
 			return fmt.Errorf("failed to execute COPY for sample: %w", err)
 		}

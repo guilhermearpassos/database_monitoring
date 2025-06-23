@@ -8,12 +8,30 @@ import "database_monitoring/v1/execution_plan.proto";
 
 service DBMApi {
   rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+  rpc ListSnapshotSummaries(ListSnapshotSummariesRequest) returns (ListSnapshotSummariesResponse);
   rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
   rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
   rpc ListServers(ListServersRequest) returns (ListServersResponse);
   rpc ListQueryMetrics(ListQueryMetricsRequest) returns (ListQueryMetricsResponse);
   rpc GetSampleDetails(GetSampleDetailsRequest) returns (GetSampleDetailsResponse);
   rpc GetNormalizedQuery(GetNormalizedQueryRequest) returns (GetNormalizedQueryResponse);
+}
+message ListSnapshotSummariesRequest {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string server = 3;
+}
+message SnapshotSummary {
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  ServerMetadata server = 3;
+  map<string, int64> connections_by_wait_event = 4;
+  map<string, int64> time_ms_by_wait_event = 5;
+}
+
+message ListSnapshotSummariesResponse {
+  repeated SnapshotSummary snap_summaries = 1;
+
 }
 message ListQueryMetricsRequest{
   google.protobuf.Timestamp start = 1;

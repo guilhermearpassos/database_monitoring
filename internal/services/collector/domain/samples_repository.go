@@ -15,6 +15,7 @@ type SampleRepository interface {
 	GetSnapshot(ctx context.Context, id string) (common_domain.DataBaseSnapshot, error)
 	GetExecutionPlan(ctx context.Context, planHandle []byte, server *common_domain.ServerMeta) (*common_domain.ExecutionPlan, error)
 	GetQuerySample(ctx context.Context, snapID string, sampleID string) (*common_domain.QuerySample, error)
+	ListSnapshotSummaries(ctx context.Context, serverID string, start time.Time, end time.Time) ([]common_domain.SnapshotSummary, error)
 }
 
 type QueryMetricsRepository interface {

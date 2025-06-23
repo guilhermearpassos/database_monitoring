@@ -18,6 +18,7 @@ type Queries struct {
 	ListQueryMetrics           query.ListQueryMetricsHandler
 	ListServerSummary          query.ListServerSummaryHandler
 	ListSnapshots              query.ListSnapshotsHandler
+	ListSnapshotSummaries      query.ListSnapshotSummariesHandler
 }
 
 type Commands struct {
@@ -39,6 +40,7 @@ func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryM
 			ListQueryMetrics:           query.NewListQueryMetricsHandler(queryMetricsRepo),
 			ListServerSummary:          query.NewListServerSummaryHandler(repo),
 			ListSnapshots:              query.NewListSnapshotsHandler(repo),
+			ListSnapshotSummaries:      query.NewListSnapshotSummariesHandler(repo),
 		},
 	}
 }
