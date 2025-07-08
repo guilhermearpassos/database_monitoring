@@ -92,6 +92,7 @@ SELECT s.session_id,
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
+	 where text is not null
 `
 	rows, err := S.db.QueryxContext(ctx, query)
 	if err != nil {
