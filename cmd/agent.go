@@ -68,7 +68,7 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 func startTarget(config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer) {
 	db, err := telemetry.OpenInstrumentedDB(config.Driver, config.ConnString)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("error connecting to %s: %w", config.Alias, err))
 	}
 	knownHandles, err := collectorClient.GetKnownPlanHandles(context.Background(), &collectorv1.GetKnownPlanHandlesRequest{Server: &dbmv1.ServerMetadata{
 		Host: config.Alias,
@@ -80,12 +80,12 @@ func startTarget(config config2.DBDataCollectionConfig, collectorClient collecto
 			if grpcErr.Code() == codes.NotFound {
 				knownHandlesSlice = []string{}
 			} else {
-				panic(err)
+				panic(fmt.Errorf("error getting known plan handles for %s: %w", config.Alias, err))
 			}
 
 		} else {
 
-			panic(err)
+			panic(fmt.Errorf("error getting known plan handles for %s: %w", config.Alias, err))
 		}
 	} else {
 		knownHandlesSlice = make([]string, len(knownHandles.Handles))

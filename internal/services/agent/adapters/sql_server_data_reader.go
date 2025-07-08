@@ -349,6 +349,7 @@ select plan_handle,
        text
 from qstats_aggr_split qas
          cross apply sys.dm_exec_sql_text(plan_handle)
+ where text is not null
 `
 	rows, err := S.db.QueryContext(ctx, query)
 	if err != nil {
