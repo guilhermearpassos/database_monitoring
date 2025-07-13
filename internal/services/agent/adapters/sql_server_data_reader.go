@@ -88,7 +88,7 @@ SELECT s.session_id,
        p.status,
        sql_handle,
   plan_handle,
-       text, p.request_id, p.transaction_id, p.connection_id
+       text, p.request_id, p.transaction_id, p.connection_id, p.percent_complete, p.estimated_completion_time, s.transaction_isolation_level
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
@@ -132,6 +132,9 @@ FROM sys.dm_exec_sessions s
 		var requestId int
 		var transactionId int
 		var connectionId mssql.UniqueIdentifier
+		var percentComplete float64
+		var estimatedCompletionTime int
+		var transactionIsolationLevel int
 		err = rows.Scan(&sessionID,
 			&loginTime,
 			&hostName,
@@ -160,6 +163,9 @@ FROM sys.dm_exec_sessions s
 			&requestId,
 			&transactionId,
 			&connectionId,
+			&percentComplete,
+			&estimatedCompletionTime,
+			&transactionIsolationLevel,
 		)
 		if err != nil {
 			return nil, err
@@ -193,6 +199,7 @@ FROM sys.dm_exec_sessions s
 				Status:               status,
 				LastRequestStartTime: lastRequestStartTime,
 				LastRequestEndTime:   lastRequestEndTime,
+				ConnectionId:         connectionId.String(),
 			},
 			Database: common_domain.DataBaseMetadata{
 				DatabaseID:   strconv.Itoa(databaseId),
@@ -213,6 +220,12 @@ FROM sys.dm_exec_sessions s
 				Timestamp: snapTime,
 			},
 			TimeElapsedMs: int64(totalElapsedTime),
+			CommandMetadata: common_domain.CommandMetadata{
+				TransactionId:           strconv.Itoa(transactionId),
+				RequestId:               strconv.Itoa(requestId),
+				EstimatedCompletionTime: int64(estimatedCompletionTime),
+				PercentComplete:         percentComplete,
+			},
 		}
 		if _, ok := querySamplesByDB[strconv.Itoa(databaseId)]; !ok {
 			querySamplesByDB[strconv.Itoa(databaseId)] = make([]*common_domain.QuerySample, 0)

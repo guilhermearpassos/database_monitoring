@@ -42,6 +42,7 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 			Status:           sample.Session.Status,
 			LastRequestStart: timestamppb.New(sample.Session.LastRequestStartTime),
 			LastRequestEnd:   timestamppb.New(sample.Session.LastRequestEndTime),
+			ConnectionId:     sample.Session.ConnectionId,
 		},
 		Db: &dbmv1.DBMetadata{
 			DatabaseId:   sample.Database.DatabaseID,
@@ -63,6 +64,7 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 		},
 		PlanHandle: sample.PlanHandle,
 		Id:         sample.Id,
+		Command:    CommandMetaToProto(&sample.CommandMetadata),
 	}
 }
 
@@ -96,5 +98,14 @@ func SnapSummaryToProto(summary *common_domain.SnapshotSummary) *dbmv1.SnapshotS
 		Server:                 &dbmv1.ServerMetadata{Host: summary.Server.Host, Type: summary.Server.Type},
 		ConnectionsByWaitEvent: summary.ConnsByWaitType,
 		TimeMsByWaitEvent:      summary.TimeMsByWaitType,
+	}
+}
+
+func CommandMetaToProto(cm *common_domain.CommandMetadata) *dbmv1.CommandMetadata {
+	return &dbmv1.CommandMetadata{
+		TransactionId:           cm.TransactionId,
+		RequestId:               cm.RequestId,
+		EstimatedCompletionTime: cm.EstimatedCompletionTime,
+		PercentComplete:         cm.PercentComplete,
 	}
 }

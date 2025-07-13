@@ -18,6 +18,15 @@ message QuerySample {
   SnapMetadata snap_info = 11;
   bytes plan_handle = 12;
   string id = 13;
+  CommandMetadata command = 14;
+}
+
+message CommandMetadata {
+  string transaction_id = 1;
+  string request_id = 2;
+  int64 estimated_completion_time = 3;
+  double percent_complete = 4;
+
 }
 
 message SnapMetadata {
@@ -34,7 +43,7 @@ message SessionMetadata {
   string status = 6;
   google.protobuf.Timestamp last_request_start = 7;
   google.protobuf.Timestamp last_request_end = 8;
-
+  string connection_id = 9;
 }
 
 message DBMetadata {

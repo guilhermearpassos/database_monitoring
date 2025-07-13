@@ -84,7 +84,9 @@ func (p *PostgresRepo) insertSnapshot(ctx context.Context, tx *sqlx.Tx, snapshot
 func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, samples []*common_domain.QuerySample, snapId int) error {
 	// Prepare the COPY statement
 	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("query_samples", "f_id", "snap_id", "sql_handle",
-		"blocked", "blocker", "plan_handle", "data", "wait_event", "wait_time"))
+		"blocked", "blocker", "plan_handle", "data", "wait_event", "wait_time",
+		"sid", "connection_id", "transaction_id", "block_ms", "block_count",
+	))
 	if err != nil {
 		return fmt.Errorf("failed to prepare COPY statement: %w", err)
 	}
@@ -104,7 +106,8 @@ func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, sampl
 			waitType = *sample.Wait.WaitType
 		}
 		_, err = stmt.ExecContext(ctx, sample.Id, snapId, base64.StdEncoding.EncodeToString(sample.SqlHandle),
-			sample.IsBlocked, sample.IsBlocker, base64.StdEncoding.EncodeToString(sample.PlanHandle), protoBytes, waitType, sample.Wait.WaitTime)
+			sample.IsBlocked, sample.IsBlocker, base64.StdEncoding.EncodeToString(sample.PlanHandle), protoBytes, waitType,
+			sample.Wait.WaitTime, sample.Session.SessionID, sample.Session.ConnectionId, sample.CommandMetadata.TransactionId, -1, len(sample.Block.BlockedSessions))
 		if err != nil {
 			return fmt.Errorf("failed to execute COPY for sample: %w", err)
 		}

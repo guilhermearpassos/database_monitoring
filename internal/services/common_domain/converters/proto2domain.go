@@ -41,6 +41,7 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 			Status:               sample.Session.Status,
 			LastRequestStartTime: sample.Session.LastRequestStart.AsTime(),
 			LastRequestEndTime:   sample.Session.LastRequestEnd.AsTime(),
+			ConnectionId:         sample.Session.ConnectionId,
 		},
 		Database: common_domain.DataBaseMetadata{
 			DatabaseID:   sample.Db.DatabaseId,
@@ -60,9 +61,10 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 			ID:        sample.SnapInfo.Id,
 			Timestamp: sample.SnapInfo.Timestamp.AsTime(),
 		},
-		Cmd:        "",
-		PlanHandle: sample.PlanHandle,
-		Id:         sample.Id,
+		Cmd:             "",
+		PlanHandle:      sample.PlanHandle,
+		Id:              sample.Id,
+		CommandMetadata: CommandMetaToDomain(sample.Command),
 	}
 }
 
@@ -87,4 +89,12 @@ func ExecutionPlanToDomain(plan *dbmv1.ExecutionPlan) (*common_domain.ExecutionP
 		},
 		XmlData: plan.XmlPlan,
 	}, nil
+}
+func CommandMetaToDomain(cm *dbmv1.CommandMetadata) common_domain.CommandMetadata {
+	return common_domain.CommandMetadata{
+		TransactionId:           cm.TransactionId,
+		RequestId:               cm.RequestId,
+		EstimatedCompletionTime: cm.EstimatedCompletionTime,
+		PercentComplete:         cm.PercentComplete,
+	}
 }

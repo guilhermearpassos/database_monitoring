@@ -3,20 +3,21 @@ package common_domain
 import "time"
 
 type QuerySample struct {
-	Id            string
-	Status        string
-	Cmd           string
-	SqlHandle     []byte
-	PlanHandle    []byte `json:"PlanHandle"`
-	Text          string
-	IsBlocked     bool
-	IsBlocker     bool
-	Session       SessionMetadata
-	Database      DataBaseMetadata
-	Block         BlockMetadata
-	Wait          WaitMetadata
-	Snapshot      SnapshotMetadata
-	TimeElapsedMs int64
+	Id              string
+	Status          string
+	Cmd             string
+	SqlHandle       []byte
+	PlanHandle      []byte `json:"PlanHandle"`
+	Text            string
+	IsBlocked       bool
+	IsBlocker       bool
+	Session         SessionMetadata
+	Database        DataBaseMetadata
+	Block           BlockMetadata
+	Wait            WaitMetadata
+	Snapshot        SnapshotMetadata
+	TimeElapsedMs   int64
+	CommandMetadata CommandMetadata
 }
 
 func (q *QuerySample) SetBlockedIds(sessionIds []string) {
@@ -49,6 +50,7 @@ type SessionMetadata struct {
 	Status               string
 	LastRequestStartTime time.Time
 	LastRequestEndTime   time.Time
+	ConnectionId         string
 }
 
 type DataBaseMetadata struct {
@@ -59,4 +61,10 @@ type DataBaseMetadata struct {
 type SnapshotMetadata struct {
 	ID        string
 	Timestamp time.Time
+}
+type CommandMetadata struct {
+	TransactionId           string
+	RequestId               string
+	EstimatedCompletionTime int64
+	PercentComplete         float64
 }
