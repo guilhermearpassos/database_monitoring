@@ -13,6 +13,7 @@ service DBMApi {
   rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
   rpc ListServers(ListServersRequest) returns (ListServersResponse);
   rpc ListQueryMetrics(ListQueryMetricsRequest) returns (ListQueryMetricsResponse);
+  rpc GetQueryMetrics(GetQueryMetricsRequest) returns (GetQueryMetricsResponse);
   rpc GetSampleDetails(GetSampleDetailsRequest) returns (GetSampleDetailsResponse);
   rpc GetNormalizedQuery(GetNormalizedQueryRequest) returns (GetNormalizedQueryResponse);
 }
@@ -44,6 +45,16 @@ message ListQueryMetricsRequest{
 }
 message ListQueryMetricsResponse{
   repeated QueryMetric metrics = 1;
+}
+message GetQueryMetricsRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  bytes sql_handle = 4;
+
+}
+message GetQueryMetricsResponse{
+  QueryMetric metrics = 1;
 }
 
 message GetSnapshotRequest{

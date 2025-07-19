@@ -25,6 +25,7 @@ const (
 	DBMApi_ListServerSummary_FullMethodName     = "/database_monitoring.v1.DBMApi/ListServerSummary"
 	DBMApi_ListServers_FullMethodName           = "/database_monitoring.v1.DBMApi/ListServers"
 	DBMApi_ListQueryMetrics_FullMethodName      = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
+	DBMApi_GetQueryMetrics_FullMethodName       = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
 	DBMApi_GetSampleDetails_FullMethodName      = "/database_monitoring.v1.DBMApi/GetSampleDetails"
 	DBMApi_GetNormalizedQuery_FullMethodName    = "/database_monitoring.v1.DBMApi/GetNormalizedQuery"
 )
@@ -39,6 +40,7 @@ type DBMApiClient interface {
 	ListServerSummary(ctx context.Context, in *ListServerSummaryRequest, opts ...grpc.CallOption) (*ListServerSummaryResponse, error)
 	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
 	ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error)
+	GetQueryMetrics(ctx context.Context, in *GetQueryMetricsRequest, opts ...grpc.CallOption) (*GetQueryMetricsResponse, error)
 	GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error)
 	GetNormalizedQuery(ctx context.Context, in *GetNormalizedQueryRequest, opts ...grpc.CallOption) (*GetNormalizedQueryResponse, error)
 }
@@ -111,6 +113,16 @@ func (c *dBMApiClient) ListQueryMetrics(ctx context.Context, in *ListQueryMetric
 	return out, nil
 }
 
+func (c *dBMApiClient) GetQueryMetrics(ctx context.Context, in *GetQueryMetricsRequest, opts ...grpc.CallOption) (*GetQueryMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetQueryMetricsResponse)
+	err := c.cc.Invoke(ctx, DBMApi_GetQueryMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dBMApiClient) GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSampleDetailsResponse)
@@ -141,6 +153,7 @@ type DBMApiServer interface {
 	ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error)
 	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
 	ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error)
+	GetQueryMetrics(context.Context, *GetQueryMetricsRequest) (*GetQueryMetricsResponse, error)
 	GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error)
 	GetNormalizedQuery(context.Context, *GetNormalizedQueryRequest) (*GetNormalizedQueryResponse, error)
 	mustEmbedUnimplementedDBMApiServer()
@@ -169,6 +182,9 @@ func (UnimplementedDBMApiServer) ListServers(context.Context, *ListServersReques
 	return nil, status.Errorf(codes.Unimplemented, "method ListServers not implemented")
 }
 func (UnimplementedDBMApiServer) ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListQueryMetrics not implemented")
+}
+func (UnimplementedDBMApiServer) GetQueryMetrics(context.Context, *GetQueryMetricsRequest) (*GetQueryMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListQueryMetrics not implemented")
 }
 func (UnimplementedDBMApiServer) GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error) {
@@ -306,6 +322,24 @@ func _DBMApi_ListQueryMetrics_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DBMApi_GetQueryMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetQueryMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DBMApiServer).GetQueryMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DBMApi_GetQueryMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DBMApiServer).GetQueryMetrics(ctx, req.(*GetQueryMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DBMApi_GetSampleDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSampleDetailsRequest)
 	if err := dec(in); err != nil {
@@ -372,6 +406,10 @@ var DBMApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListQueryMetrics",
 			Handler:    _DBMApi_ListQueryMetrics_Handler,
+		},
+		{
+			MethodName: "ListQueryMetrics",
+			Handler:    _DBMApi_GetQueryMetrics_Handler,
 		},
 		{
 			MethodName: "GetSampleDetails",

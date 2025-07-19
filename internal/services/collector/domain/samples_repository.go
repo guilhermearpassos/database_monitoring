@@ -20,5 +20,6 @@ type SampleRepository interface {
 
 type QueryMetricsRepository interface {
 	StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error
-	GetQueryMetrics(ctx context.Context, start time.Time, end time.Time) ([]*common_domain.QueryMetric, error)
+	ListQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string) ([]*common_domain.QueryMetric, error)
+	GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID []byte) (*common_domain.QueryMetric, error)
 }

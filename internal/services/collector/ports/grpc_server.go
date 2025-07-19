@@ -188,7 +188,7 @@ func (s GRPCServer) GetSnapshot(ctx context.Context, request *dbmv1.GetSnapshotR
 }
 
 func (s GRPCServer) ListQueryMetrics(ctx context.Context, in *dbmv1.ListQueryMetricsRequest) (*dbmv1.ListQueryMetricsResponse, error) {
-	resp, err := s.app.Queries.ListQueryMetrics.Handle(ctx, in.Start.AsTime(), in.End.AsTime())
+	resp, err := s.app.Queries.ListQueryMetrics.Handle(ctx, in.Start.AsTime(), in.End.AsTime(), in.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +202,19 @@ func (s GRPCServer) ListQueryMetrics(ctx context.Context, in *dbmv1.ListQueryMet
 	}
 
 	return &dbmv1.ListQueryMetricsResponse{Metrics: ret}, nil
+}
+func (s GRPCServer) GetQueryMetrics(ctx context.Context, in *dbmv1.GetQueryMetricsRequest) (*dbmv1.GetQueryMetricsResponse, error) {
+	metric, err := s.app.Queries.GetQueryMetrics.Handle(ctx, in.Start.AsTime(), in.End.AsTime(), in.Host, in.SqlHandle)
+	if err != nil {
+		return nil, err
+	}
+
+	protoMetric, err2 := converters.QueryMetricToProto(metric)
+	if err2 != nil {
+		return nil, err2
+	}
+
+	return &dbmv1.GetQueryMetricsResponse{Metrics: protoMetric}, nil
 }
 
 func (s GRPCServer) GetSampleDetails(ctx context.Context, in *dbmv1.GetSampleDetailsRequest) (*dbmv1.GetSampleDetailsResponse, error) {

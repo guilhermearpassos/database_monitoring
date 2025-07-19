@@ -15,6 +15,6 @@ func NewListQueryMetricsHandler(repo domain.QueryMetricsRepository) ListQueryMet
 	return ListQueryMetricsHandler{repo: repo}
 }
 
-func (h ListQueryMetricsHandler) Handle(ctx context.Context, start time.Time, end time.Time) ([]*common_domain.QueryMetric, error) {
-	return h.repo.GetQueryMetrics(ctx, start, end)
+func (h ListQueryMetricsHandler) Handle(ctx context.Context, start time.Time, end time.Time, serverID string) ([]*common_domain.QueryMetric, error) {
+	return h.repo.ListQueryMetrics(ctx, start, end, serverID)
 }
