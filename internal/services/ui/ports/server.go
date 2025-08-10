@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
@@ -440,7 +441,19 @@ func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
+	startTime, endTime, err := getTimeRange(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	server := r.URL.Query().Get("selected-server")
+	decodeString, err := base64.StdEncoding.DecodeString(sampleID)
+	resp2, err := s.client.GetQueryMetrics(r.Context(), &dbmv1.GetQueryMetricsRequest{
+		Start:     timestamppb.New(startTime),
+		End:       timestamppb.New(endTime),
+		Host:      server,
+		SqlHandle: decodeString,
+	})
+	_ = resp2
 	_ = resp.QuerySample
 	w.Header().Set("Content-Type", "text/html")
 	dSample, err := protoSampleToDomain(resp.QuerySample)
@@ -856,7 +869,7 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) 
 		Database:      sample.Db.DatabaseName,
 		SampleID:      string(sample.Id),
 		SnapID:        sample.SnapInfo.Id,
-		SQLHandle:     string(sample.SqlHandle),
+		SQLHandle:     base64.StdEncoding.EncodeToString(sample.SqlHandle),
 		PlanHandle:    string(sample.PlanHandle),
 		Status:        sample.Status,
 	}

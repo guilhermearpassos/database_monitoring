@@ -13,3 +13,6 @@ conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
 [telemetry]
 enabled = true
 otlp.endpoint = 'localhost:4317'
+[telemetry.metrics]
+enabled = true
+host = 'localhost:9009'

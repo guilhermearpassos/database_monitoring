@@ -15,9 +15,14 @@ import (
 )
 
 type TelemetryConfig struct {
-	Enabled     bool       `toml:"enabled"`
-	ServiceName string     `toml:"service_name"`
-	OTLP        OTLPConfig `toml:"otlp"`
+	Enabled     bool          `toml:"enabled"`
+	ServiceName string        `toml:"service_name"`
+	OTLP        OTLPConfig    `toml:"otlp"`
+	Metrics     MetricsConfig `toml:"metrics"`
+}
+type MetricsConfig struct {
+	Enabled bool   `toml:"enabled"`
+	Host    string `toml:"host"`
 }
 
 type OTLPConfig struct {

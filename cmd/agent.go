@@ -7,17 +7,20 @@ import (
 	config2 "github.com/guilhermearpassos/database-monitoring/internal/common/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters"
+	_ "github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters/metrics"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"net/http"
 	"os"
 	"time"
 )
@@ -38,6 +41,7 @@ func init() {
 }
 
 func StartAgent(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
 	tracer := otel.Tracer("agent")
 	var config config2.AgentConfig
 	// Check if file exists
@@ -56,16 +60,28 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(err)
 	}
+	if config.Telemetry.Metrics.Enabled {
+		go func() {
+			promHost := config.Telemetry.Metrics.Host
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", promhttp.Handler())
+			fmt.Sprintf("serving metrics on %s", promHost)
+			err2 := http.ListenAndServe(promHost, mux)
+			if err2 != nil {
+				panic(err2)
+			}
+		}()
+	}
 	client := collectorv1.NewIngestionServiceClient(cc)
 	for _, tgt := range config.TargetHosts {
-		startTarget(tgt, client, tracer)
+		startTarget(ctx, tgt, client, tracer)
 	}
 	for {
 		time.Sleep(5 * time.Second)
 	}
 	return nil
 }
-func startTarget(config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer) {
+func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer) {
 	db, err := telemetry.OpenInstrumentedDB(config.Driver, config.ConnString)
 	if err != nil {
 		panic(fmt.Errorf("error connecting to %s: %w", config.Alias, err))
@@ -99,8 +115,10 @@ func startTarget(config config2.DBDataCollectionConfig, collectorClient collecto
 		Type: config.Driver,
 	}
 	dataReader := adapters.NewSQLServerDataReader(db, serverMeta, knownHandlesSlice)
-	go collectSnapshots(dataReader, collectorClient, tracer)
+	metricsSnapshotProcessor := adapters.NewSnapshotMetricsProcessor(600)
+	go collectSnapshots(dataReader, collectorClient, metricsSnapshotProcessor, tracer)
 	go collectQueryMetrics(dataReader, collectorClient, serverMeta, tracer)
+	go metricsSnapshotProcessor.Run(ctx)
 }
 
 func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName common_domain.ServerMeta, tracer trace.Tracer) {
@@ -141,7 +159,8 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 	}
 }
 
-func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.IngestionServiceClient, tracer trace.Tracer) {
+func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.IngestionServiceClient, metricsSnapshotProcessor domain.MetricsProcessor, tracer trace.Tracer) {
+
 	for {
 		ctx, span := tracer.Start(context.Background(), "CollectSnapshots")
 		var snapshots []*common_domain.DataBaseSnapshot
@@ -152,6 +171,7 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 		}
 		planHandleStrings := make(map[string]struct{})
 		for _, snapshot := range snapshots {
+			metricsSnapshotProcessor.QueueSnapshot(snapshot)
 			if snapshot == nil {
 				continue
 			}
