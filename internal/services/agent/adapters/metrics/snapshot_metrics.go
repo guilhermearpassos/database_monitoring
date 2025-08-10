@@ -10,8 +10,9 @@ var (
 	// DatabaseLockDuration tracks the duration of database locks in seconds by server, database, and lock type
 	DatabaseLockDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "sqlsights_database_lock_duration_seconds",
-			Help: "Duration of database locks in seconds",
+			Name:    "sqlsights_database_lock_duration_seconds",
+			Help:    "Duration of database locks in seconds",
+			Buckets: []float64{1, 5, 10, 30, 60, 180, 300, 600},
 		},
 		[]string{"server", "database", "wait_type", "table"},
 	)
