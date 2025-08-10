@@ -1,5 +1,5 @@
 <td colspan="10">
-    <table class="table table-sm table-bordered">
+    <table class="table table-sm table-bordered samples-table">
         <thead>
         <tr>
             <th>SID</th>
@@ -11,9 +11,9 @@
             <th>User</th>
         </tr>
         </thead>
-        <tbody>
+        <tbody class="virtualized-tbody">
         {{range $sample := .QuerySamples}}
-        <tr>
+        <tr data-row-id="{{$sample.SampleID}}">
             <td {{if eq $sample.IsBlocker true}}style=" color:#ff2f2f" {{end}}
                 hx-trigger="click" hx-include="#selected-timerange,#selected-server" hx-target="#samples_modal_container" hx-swap="outerHTML"
                 hx-get="/query-details?snapID={{$sample.SnapID}}&sampleID={{$sample.SampleID}}">
@@ -24,7 +24,7 @@
                 {{end}}
                 <span>{{$sample.SID}}</span>
             </td>
-            <td class="truncated-sql-text" style="max-width: 500px;">
+            <td class="truncated-sql-text query-cell" style="max-width: 500px;" data-full-text="{{$sample.Query}}">
                 <span class="sql-text" style="max-width: 500px;">{{$sample.Query}}</span>
             </td>
             <td>{{$sample.ExecutionTime}}</td>
@@ -37,3 +37,5 @@
         </tbody>
     </table>
 </td>
+<script src="/static/js/samples_performance.js"></script>
+<script src="/static/js/table_virtualization.js"></script>

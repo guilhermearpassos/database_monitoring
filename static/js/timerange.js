@@ -1,21 +1,37 @@
-
 function toggleDropdown() {
     const dropdown = document.getElementById('timerange-dropdown');
     dropdown.classList.toggle('active');
 }
 
-document.querySelectorAll('.dropdown-option').forEach(option => {
-    option.addEventListener('click', () => {
-        const value = option.dataset.value;
-        document.getElementById('selected-timerange-label').innerText = option.innerText;
-        document.getElementById("selected-timerange").value = option.innerText;
-        document.getElementById('timerange-dropdown').classList.remove('active');
+// Improved event listener with proper delegation
+function setupTimerangeListeners() {
+    // Get all dropdown options and attach click handlers
+    document.querySelectorAll('.dropdown-option').forEach(option => {
+        option.addEventListener('click', function() {
+            const value = this.dataset.value;
+            document.getElementById('selected-timerange-label').innerText = this.innerText;
+            document.getElementById("selected-timerange").value = this.innerText;
+            document.getElementById('timerange-dropdown').classList.remove('active');
 
-        // Update active state
-        document.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('active'));
-        option.classList.add('active');
-        document.getElementById('selected-timerange').dispatchEvent(new Event('change'));
+            // Update active state
+            document.querySelectorAll('.dropdown-option').forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Trigger change event
+            const changeEvent = new Event('change');
+            document.getElementById('selected-timerange').dispatchEvent(changeEvent);
+        });
     });
+}
+
+// Ensure listeners are set up when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    setupTimerangeListeners();
+});
+
+// Add listener for dynamically loaded content
+document.addEventListener('htmx:afterSettle', function() {
+    setupTimerangeListeners();
 });
 
 function applyCustomRange() {
@@ -30,12 +46,10 @@ function applyCustomRange() {
         document.getElementById('selected-timerange-label').innerText = rangeText;
         document.getElementById("selected-timerange").value = rangeText;
         document.getElementById('timerange-dropdown').classList.remove('active');
-        document.getElementById('selected-timerange').dispatchEvent(new Event('change'));
-
-        // You can add HTMX trigger here if needed
-        // document.getElementById('timerange-display').setAttribute('hx-vals',
-        //     JSON.stringify({start: startTime, end: endTime}));
-        // document.getElementById('timerange-display').click();
+        
+        // Trigger change event
+        const changeEvent = new Event('change');
+        document.getElementById('selected-timerange').dispatchEvent(changeEvent);
     } else {
         alert('Please select both start and end times.');
     }
@@ -44,7 +58,10 @@ function applyCustomRange() {
 // Close dropdown when clicking outside
 document.addEventListener('click', (e) => {
     const picker = document.getElementById('timerange-picker');
-    if (!picker.contains(e.target)) {
-        document.getElementById('timerange-dropdown').classList.remove('active');
+    if (picker && !picker.contains(e.target)) {
+        const dropdown = document.getElementById('timerange-dropdown');
+        if (dropdown) {
+            dropdown.classList.remove('active');
+        }
     }
-})
+});

@@ -5,6 +5,8 @@
     text-overflow: ellipsis;
     font-family: 'Courier New', Courier, monospace; /* Monospace font for SQL */
     font-size: 14px;
+    max-width: 400px;
+    contain: content; /* CSS containment for better performance */
 }
 
 /* Popover styling - INCREASED z-index to appear above modal */
@@ -115,4 +117,36 @@ table thead {
     #snapshots-table-container {
         max-height: calc(100vh - 400px); /* Smaller on mobile */
     }
+}
+
+/* Style for the tooltip */
+.sql-tooltip {
+    position: absolute;
+    background-color: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    z-index: 1000;
+    max-width: 500px;
+    max-height: 300px;
+    overflow: auto;
+    display: none;
+    white-space: pre-wrap;
+    font-family: monospace;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Apply containment to table for better rendering performance */
+.table {
+    contain: content;
+}
+
+/* Add a class to apply during scrolling */
+.is-scrolling .sql-text {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 150px; /* Even more compact during scroll */
 }
