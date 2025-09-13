@@ -25,7 +25,7 @@ const (
 	DBMApi_ListServerSummary_FullMethodName     = "/database_monitoring.v1.DBMApi/ListServerSummary"
 	DBMApi_ListServers_FullMethodName           = "/database_monitoring.v1.DBMApi/ListServers"
 	DBMApi_ListQueryMetrics_FullMethodName      = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
-	DBMApi_GetQueryMetrics_FullMethodName       = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
+	DBMApi_GetQueryMetrics_FullMethodName       = "/database_monitoring.v1.DBMApi/GetQueryMetrics"
 	DBMApi_GetSampleDetails_FullMethodName      = "/database_monitoring.v1.DBMApi/GetSampleDetails"
 	DBMApi_GetNormalizedQuery_FullMethodName    = "/database_monitoring.v1.DBMApi/GetNormalizedQuery"
 )
@@ -185,7 +185,7 @@ func (UnimplementedDBMApiServer) ListQueryMetrics(context.Context, *ListQueryMet
 	return nil, status.Errorf(codes.Unimplemented, "method ListQueryMetrics not implemented")
 }
 func (UnimplementedDBMApiServer) GetQueryMetrics(context.Context, *GetQueryMetricsRequest) (*GetQueryMetricsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListQueryMetrics not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method GetQueryMetrics not implemented")
 }
 func (UnimplementedDBMApiServer) GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSampleDetails not implemented")
@@ -408,7 +408,7 @@ var DBMApi_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _DBMApi_ListQueryMetrics_Handler,
 		},
 		{
-			MethodName: "ListQueryMetrics",
+			MethodName: "GetQueryMetrics",
 			Handler:    _DBMApi_GetQueryMetrics_Handler,
 		},
 		{

@@ -73,43 +73,27 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 		}()
 	}
 	client := collectorv1.NewIngestionServiceClient(cc)
+	GetPlanPageSize := int32(config.GetKnownPlanPageSize)
+	if GetPlanPageSize == 0 {
+		GetPlanPageSize = 100
+	}
 	for _, tgt := range config.TargetHosts {
-		startTarget(ctx, tgt, client, tracer)
+		startTarget(ctx, tgt, client, tracer, GetPlanPageSize)
 	}
 	for {
 		time.Sleep(5 * time.Second)
 	}
 	return nil
 }
-func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer) {
+func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer, pageSize int32) {
 	db, err := telemetry.OpenInstrumentedDB(config.Driver, config.ConnString)
 	if err != nil {
 		panic(fmt.Errorf("error connecting to %s: %w", config.Alias, err))
 	}
-	knownHandles, err := collectorClient.GetKnownPlanHandles(context.Background(), &collectorv1.GetKnownPlanHandlesRequest{Server: &dbmv1.ServerMetadata{
-		Host: config.Alias,
-		Type: config.Driver,
-	}})
-	var knownHandlesSlice []string
+	knownHandlesSlice, err := getKnownPlanHandles(err, collectorClient, config, pageSize)
 	if err != nil {
-		if grpcErr, ok := status.FromError(err); ok {
-			if grpcErr.Code() == codes.NotFound {
-				knownHandlesSlice = []string{}
-			} else {
-				panic(fmt.Errorf("error getting known plan handles for %s: %w", config.Alias, err))
-			}
-
-		} else {
-
-			panic(fmt.Errorf("error getting known plan handles for %s: %w", config.Alias, err))
-		}
-	} else {
-		knownHandlesSlice = make([]string, len(knownHandles.Handles))
-		for idx, data := range knownHandles.Handles {
-			knownHandlesSlice[idx] = string(data)
-		}
+		panic(fmt.Errorf("error getting known handles: %w", err))
 	}
-
 	serverMeta := common_domain.ServerMeta{
 		Host: config.Alias,
 		Type: config.Driver,
@@ -119,6 +103,52 @@ func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, col
 	go collectSnapshots(dataReader, collectorClient, metricsSnapshotProcessor, tracer)
 	go collectQueryMetrics(dataReader, collectorClient, serverMeta, tracer)
 	go metricsSnapshotProcessor.Run(ctx)
+}
+
+func getKnownPlanHandles(err error, collectorClient collectorv1.IngestionServiceClient, config config2.DBDataCollectionConfig, pageSize int32) ([]string, error) {
+	currPage := int32(1)
+	serverMetadata := &dbmv1.ServerMetadata{
+		Host: config.Alias,
+		Type: config.Driver,
+	}
+	knownHandles, err := collectorClient.GetKnownPlanHandles(context.Background(),
+		&collectorv1.GetKnownPlanHandlesRequest{
+			Server:     serverMetadata,
+			PageSize:   pageSize,
+			PageNumber: currPage,
+		})
+	if err != nil {
+		if grpcErr, ok := status.FromError(err); ok {
+			if grpcErr.Code() == codes.NotFound {
+				return []string{}, nil
+			}
+			return nil, fmt.Errorf("error getting known plan handles for %s: %w", config.Alias, err)
+
+		}
+		return nil, fmt.Errorf("error getting known plan handles for %s: %w", config.Alias, err)
+	}
+	knownHandlesSlice := make([]string, len(knownHandles.Handles))
+	for idx, data := range knownHandles.Handles {
+		knownHandlesSlice[idx] = string(data)
+	}
+	currPage++
+	for currPage <= knownHandles.TotalPages {
+		knownHandles, err = collectorClient.GetKnownPlanHandles(context.Background(),
+			&collectorv1.GetKnownPlanHandlesRequest{
+				Server:     serverMetadata,
+				PageSize:   pageSize,
+				PageNumber: currPage,
+			})
+		if err != nil {
+			return nil, fmt.Errorf("error getting known plan handles for %s page %d: %w", config.Alias, currPage, err)
+		}
+		for _, data := range knownHandles.Handles {
+			knownHandlesSlice = append(knownHandlesSlice, string(data))
+		}
+		currPage++
+	}
+
+	return knownHandlesSlice, nil
 }
 
 func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName common_domain.ServerMeta, tracer trace.Tracer) {

@@ -1,7 +1,6 @@
 syntax = "proto3";
 package database_monitoring.v1;
 option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector;collectorv1";
-import "google/protobuf/timestamp.proto";
 import "database_monitoring/v1/collector/metrics.proto";
 import "database_monitoring/v1/snapshot.proto";
 import "database_monitoring/v1/execution_plan.proto";
@@ -16,10 +15,15 @@ service IngestionService{
 
 message GetKnownPlanHandlesRequest {
   ServerMetadata server = 1;
+  int32 page_size = 2;
+  int32 page_number = 3;
 }
 
 message GetKnownPlanHandlesResponse {
   repeated bytes handles = 1;
+  int32 page_number = 2;
+  int32 page_size = 3;
+  int32 total_pages = 4;
 }
 
 message IngestExecutionPlansRequest{

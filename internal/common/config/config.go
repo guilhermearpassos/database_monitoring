@@ -10,10 +10,11 @@ import (
 )
 
 type AgentConfig struct {
-	CollectorConfig     GrpcConfig                `toml:"collector"`
-	TargetHosts         []DBDataCollectionConfig  `toml:"target_hosts"`
-	MaxSamplesBatchSize int                       `toml:"max_samples_batch_size"`
-	Telemetry           telemetry.TelemetryConfig `toml:"telemetry"`
+	CollectorConfig      GrpcConfig                `toml:"collector"`
+	TargetHosts          []DBDataCollectionConfig  `toml:"target_hosts"`
+	MaxSamplesBatchSize  int                       `toml:"max_samples_batch_size"`
+	GetKnownPlanPageSize int                       `toml:"get_known_plan_page_size"`
+	Telemetry            telemetry.TelemetryConfig `toml:"telemetry"`
 }
 
 type GrpcConfig struct {

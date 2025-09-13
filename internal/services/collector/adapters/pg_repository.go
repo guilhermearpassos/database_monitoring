@@ -13,6 +13,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
+	"math"
 	"slices"
 	"time"
 )
@@ -175,45 +176,49 @@ func (p *PostgresRepo) StoreExecutionPlans(ctx context.Context, snapshot []*comm
 	return nil
 }
 
-func (p *PostgresRepo) GetKnownPlanHandles(ctx context.Context, server *common_domain.ServerMeta) ([][]byte, error) {
+func (p *PostgresRepo) GetKnownPlanHandles(ctx context.Context, server *common_domain.ServerMeta, pageNumber int, pageSize int) ([][]byte, int, error) {
 	//language=SQL
 	query := `
-
-select plan_handle from query_plans where target_id = $1;
+select plan_handle, COUNT(*) OVER () AS total_count from query_plans where target_id = $1
+                          order by id
+offset $2 rows
+limit $3
 
 `
 	tId, err := p.getTargetID(ctx, p.db, *server)
 	if err != nil {
 		if errors.As(err, &custom_errors.NotFoundErr{}) {
-			return [][]byte{}, nil
+			return [][]byte{}, 0, nil
 		}
-		return nil, fmt.Errorf("get target id: %w", err)
+		return nil, 0, fmt.Errorf("get target id: %w", err)
 	}
 
-	rows, err := p.db.QueryContext(ctx, query, tId)
+	rows, err := p.db.QueryContext(ctx, query, tId, (pageNumber-1)*pageSize, pageSize)
 	if err != nil {
-		return nil, fmt.Errorf("GetKnownPlanHandles: %w", err)
+		return nil, 0, fmt.Errorf("GetKnownPlanHandles: %w", err)
 	}
 	ret := make([][]byte, 0)
+	var totalCount int
 	for rows.Next() {
 		var planHandle string
-		err = rows.Scan(&planHandle)
+		err = rows.Scan(&planHandle, &totalCount)
 		if err != nil {
-			return nil, fmt.Errorf("GetKnownPlanHandles scan: %w", err)
+			return nil, 0, fmt.Errorf("GetKnownPlanHandles scan: %w", err)
 		}
 		var bytePlanHandle []byte
 		bytePlanHandle, err = base64.StdEncoding.DecodeString(planHandle)
 		if err != nil {
-			return nil, fmt.Errorf("GetKnownPlanHandles base64 decode: %w", err)
+			return nil, 0, fmt.Errorf("GetKnownPlanHandles base64 decode: %w", err)
 		}
 
 		ret = append(ret, bytePlanHandle)
 	}
 	err = rows.Err()
 	if err != nil {
-		return nil, fmt.Errorf("GetKnownPlanHandles rowserr: %w", err)
+		return nil, 0, fmt.Errorf("GetKnownPlanHandles rowserr: %w", err)
 	}
-	return ret, nil
+	totalPages := int(math.Ceil(float64(totalCount) / float64(pageSize)))
+	return ret, totalPages, nil
 }
 
 func (p *PostgresRepo) getOrCreateTargetID(ctx context.Context, tx *sqlx.Tx, server common_domain.ServerMeta) (int, error) {

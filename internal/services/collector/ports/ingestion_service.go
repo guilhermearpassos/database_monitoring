@@ -89,15 +89,20 @@ func (s IngestionSvc) IngestExecutionPlans(ctx context.Context, in *collectorv1.
 }
 
 func (s IngestionSvc) GetKnownPlanHandles(ctx context.Context, in *collectorv1.GetKnownPlanHandlesRequest) (*collectorv1.GetKnownPlanHandlesResponse, error) {
-	ret, err := s.app.Queries.GetKnownPlanHandlesHandler.Handle(ctx, &common_domain.ServerMeta{
+	ret, totalPages, err := s.app.Queries.GetKnownPlanHandlesHandler.Handle(ctx, &common_domain.ServerMeta{
 		Host: in.GetServer().Host,
 		Type: in.GetServer().Type,
-	})
+	}, int(in.PageNumber), int(in.PageSize))
 	if err != nil {
 		if errors.As(err, &custom_errors.NotFoundErr{}) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, err
 	}
-	return &collectorv1.GetKnownPlanHandlesResponse{Handles: ret}, nil
+	return &collectorv1.GetKnownPlanHandlesResponse{
+		Handles:    ret,
+		PageNumber: in.PageNumber,
+		PageSize:   in.PageSize,
+		TotalPages: int32(totalPages),
+	}, nil
 }

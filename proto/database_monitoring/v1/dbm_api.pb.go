@@ -2028,7 +2028,7 @@ var file_database_monitoring_v1_dbm_api_proto_depIdxs = []int32{
 	11, // 44: database_monitoring.v1.DBMApi.ListServerSummary:input_type -> database_monitoring.v1.ListServerSummaryRequest
 	13, // 45: database_monitoring.v1.DBMApi.ListServers:input_type -> database_monitoring.v1.ListServersRequest
 	3,  // 46: database_monitoring.v1.DBMApi.ListQueryMetrics:input_type -> database_monitoring.v1.ListQueryMetricsRequest
-	5,  // 47: database_monitoring.v1.DBMApi.ListQueryMetrics:input_type -> database_monitoring.v1.GetQueryMetricsRequest
+	5,  // 47: database_monitoring.v1.DBMApi.GetQueryMetrics:input_type -> database_monitoring.v1.GetQueryMetricsRequest
 	16, // 48: database_monitoring.v1.DBMApi.GetSampleDetails:input_type -> database_monitoring.v1.GetSampleDetailsRequest
 	21, // 49: database_monitoring.v1.DBMApi.GetNormalizedQuery:input_type -> database_monitoring.v1.GetNormalizedQueryRequest
 	10, // 50: database_monitoring.v1.DBMApi.ListSnapshots:output_type -> database_monitoring.v1.ListSnapshotsResponse
@@ -2037,7 +2037,7 @@ var file_database_monitoring_v1_dbm_api_proto_depIdxs = []int32{
 	12, // 53: database_monitoring.v1.DBMApi.ListServerSummary:output_type -> database_monitoring.v1.ListServerSummaryResponse
 	14, // 54: database_monitoring.v1.DBMApi.ListServers:output_type -> database_monitoring.v1.ListServersResponse
 	4,  // 55: database_monitoring.v1.DBMApi.ListQueryMetrics:output_type -> database_monitoring.v1.ListQueryMetricsResponse
-	6,  // 56: database_monitoring.v1.DBMApi.ListQueryMetrics:output_type -> database_monitoring.v1.GetQueryMetricsResponse
+	6,  // 56: database_monitoring.v1.DBMApi.GetQueryMetrics:output_type -> database_monitoring.v1.GetQueryMetricsResponse
 	18, // 57: database_monitoring.v1.DBMApi.GetSampleDetails:output_type -> database_monitoring.v1.GetSampleDetailsResponse
 	22, // 58: database_monitoring.v1.DBMApi.GetNormalizedQuery:output_type -> database_monitoring.v1.GetNormalizedQueryResponse
 	50, // [50:59] is the sub-list for method output_type
