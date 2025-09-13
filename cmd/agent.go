@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
+	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -158,6 +159,8 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 		sampleTime := time.Now()
 		metrics, err := reader.CollectMetrics(ctx)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(otelcodes.Error, err.Error())
 			span.End()
 			panic(err)
 		}
@@ -166,6 +169,8 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 		for i, m := range metrics {
 			protoMetrics[i], err = converters.QueryMetricToProto(m)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(otelcodes.Error, err.Error())
 				span.End()
 				panic(err)
 			}
@@ -176,6 +181,8 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 			Metrics:   &collectorv1.DatabaseMetrics_QueryMetrics{QueryMetrics: &collectorv1.DatabaseMetrics_QueryMetricSample{QueryMetrics: protoMetrics}},
 		})
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(otelcodes.Error, err.Error())
 			span.End()
 			panic(err)
 		}
@@ -196,8 +203,11 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 		var snapshots []*common_domain.DataBaseSnapshot
 		snapshots, err := dataReader.TakeSnapshot(ctx)
 		if err != nil {
-			panic(err)
+
+			span.RecordError(err)
+			span.SetStatus(otelcodes.Error, err.Error())
 			span.End()
+			panic(err)
 		}
 		planHandleStrings := make(map[string]struct{})
 		for _, snapshot := range snapshots {
@@ -209,32 +219,40 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 				Snapshot: converters.DatabaseSnapshotToProto(snapshot),
 			})
 			if err != nil {
-				panic(err)
+				span.RecordError(err)
+				span.SetStatus(otelcodes.Error, err.Error())
 				span.End()
+				panic(err)
 			}
 			for _, qs := range snapshot.Samples {
-				if qs.PlanHandle == nil {
+				if qs.PlanHandle == "" {
 					continue
 				}
 				planHandleStrings[string(qs.PlanHandle)] = struct{}{}
 			}
 
 		}
-		planHandles := make([][]byte, 0)
+		planHandles := make([]string, 0)
 		for k := range planHandleStrings {
-			planHandles = append(planHandles, []byte(k))
+			planHandles = append(planHandles, k)
 		}
 		executionPlans, err := dataReader.GetPlanHandles(ctx, planHandles, true)
 		if err != nil {
-			panic(err)
+
+			span.RecordError(err)
+			span.SetStatus(otelcodes.Error, err.Error())
 			span.End()
+			panic(err)
 		}
 		protoPlans := make([]*dbmv1.ExecutionPlan, 0, len(executionPlans))
 		for _, p := range executionPlans {
 			protoPlan, err2 := converters.ExecutionPlanToProto(p)
 			if err2 != nil {
-				panic(err2)
+
+				span.RecordError(err)
+				span.SetStatus(otelcodes.Error, err.Error())
 				span.End()
+				panic(err2)
 			}
 			protoPlans = append(protoPlans, protoPlan)
 		}
@@ -242,8 +260,11 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 
 			_, err = client.IngestExecutionPlans(ctx, &collectorv1.IngestExecutionPlansRequest{Plans: protoPlans})
 			if err != nil {
-				panic(err)
+
+				span.RecordError(err)
+				span.SetStatus(otelcodes.Error, err.Error())
 				span.End()
+				panic(err)
 			}
 		}
 		span.End()

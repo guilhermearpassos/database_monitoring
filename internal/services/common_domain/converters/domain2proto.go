@@ -32,6 +32,7 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 		Text:              sample.Text,
 		Blocked:           sample.IsBlocked,
 		Blocker:           sample.IsBlocker,
+		QueryHash:         sample.QueryHash,
 		TimeElapsedMillis: sample.TimeElapsedMs,
 		Session: &dbmv1.SessionMetadata{
 			SessionId:        sample.Session.SessionID,

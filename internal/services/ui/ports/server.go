@@ -2,7 +2,6 @@ package ports
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
@@ -434,7 +433,7 @@ func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Req
 	snapID := r.URL.Query().Get("snapID")
 	sampleID := r.URL.Query().Get("sampleID")
 	resp, err := s.client.GetSampleDetails(r.Context(), &dbmv1.GetSampleDetailsRequest{
-		SampleId: []byte(sampleID),
+		SampleId: sampleID,
 		SnapId:   snapID,
 	})
 	if err != nil {
@@ -446,12 +445,11 @@ func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	server := r.URL.Query().Get("selected-server")
-	decodeString, err := base64.StdEncoding.DecodeString(sampleID)
 	resp2, err := s.client.GetQueryMetrics(r.Context(), &dbmv1.GetQueryMetricsRequest{
 		Start:     timestamppb.New(startTime),
 		End:       timestamppb.New(endTime),
 		Host:      server,
-		SqlHandle: decodeString,
+		SqlHandle: sampleID,
 	})
 	_ = resp2
 	_ = resp.QuerySample
@@ -867,11 +865,12 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) 
 		BlockDetails:  blockDetails,
 		WaitEvent:     sample.WaitInfo.WaitType,
 		Database:      sample.Db.DatabaseName,
-		SampleID:      string(sample.Id),
+		SampleID:      sample.Id,
 		SnapID:        sample.SnapInfo.Id,
-		SQLHandle:     base64.StdEncoding.EncodeToString(sample.SqlHandle),
-		PlanHandle:    string(sample.PlanHandle),
+		SQLHandle:     sample.SqlHandle,
+		PlanHandle:    sample.PlanHandle,
 		Status:        sample.Status,
+		QueryHash:     sample.QueryHash,
 	}
 	return dSample, nil
 }

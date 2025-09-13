@@ -6,8 +6,9 @@ type QuerySample struct {
 	Id              string
 	Status          string
 	Cmd             string
-	SqlHandle       []byte
-	PlanHandle      []byte `json:"PlanHandle"`
+	SqlHandle       string
+	PlanHandle      string `json:"PlanHandle"`
+	QueryHash       string `json:"QueryHash"`
 	Text            string
 	IsBlocked       bool
 	IsBlocker       bool

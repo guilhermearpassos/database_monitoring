@@ -473,8 +473,8 @@ func (m *GetKnownPlanHandlesResponse) SizeVT() (n int) {
 	var l int
 	_ = l
 	if len(m.Handles) > 0 {
-		for _, b := range m.Handles {
-			l = len(b)
+		for _, s := range m.Handles {
+			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -761,7 +761,7 @@ func (m *GetKnownPlanHandlesResponse) UnmarshalVT(dAtA []byte) error {
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Handles", wireType)
 			}
-			var byteLen int
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -771,23 +771,23 @@ func (m *GetKnownPlanHandlesResponse) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= int(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if byteLen < 0 {
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
 				return protohelpers.ErrInvalidLength
 			}
-			postIndex := iNdEx + byteLen
+			postIndex := iNdEx + intStringLen
 			if postIndex < 0 {
 				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Handles = append(m.Handles, make([]byte, postIndex-iNdEx))
-			copy(m.Handles[len(m.Handles)-1], dAtA[iNdEx:postIndex])
+			m.Handles = append(m.Handles, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {

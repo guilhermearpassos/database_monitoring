@@ -4,7 +4,7 @@ option go_package = "github.com/guilhermearpassos/database-monitoring/proto/data
 import "database_monitoring/v1/snapshot.proto";
 
 message ExecutionPlan {
-  bytes plan_handle = 1;
+  string plan_handle = 1;
   ServerMetadata server = 2;
   string xml_plan = 3;
 }

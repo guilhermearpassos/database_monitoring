@@ -14,7 +14,7 @@ func NewGetKnownPlanHandlesHandler(repo domain.SampleRepository) GetKnownPlanHan
 	return GetKnownPlanHandlesHandler{repo: repo}
 }
 
-func (h *GetKnownPlanHandlesHandler) Handle(ctx context.Context, snapshot *common_domain.ServerMeta, pageNumber, pageSize int) ([][]byte, int, error) {
+func (h *GetKnownPlanHandlesHandler) Handle(ctx context.Context, snapshot *common_domain.ServerMeta, pageNumber, pageSize int) ([]string, int, error) {
 	return h.repo.GetKnownPlanHandles(ctx, snapshot, pageNumber, pageSize)
 
 }

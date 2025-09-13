@@ -244,7 +244,7 @@ func ParseExecutionPlan(data string) (*ParsedExecutionPlan, error) {
 	return &plan, nil
 }
 
-func PlanToProto(handle []byte, server common_domain.ServerMeta, plan *ParsedExecutionPlan) (*dbmv1.ParsedExecutionPlan, error) {
+func PlanToProto(handle string, server common_domain.ServerMeta, plan *ParsedExecutionPlan) (*dbmv1.ParsedExecutionPlan, error) {
 	stats := make([]*dbmv1.StatisticsInfo, 0)
 	warnings := make([]*dbmv1.PlanWarning, 0)
 	nodes := make([]*dbmv1.PlanNode, 0)

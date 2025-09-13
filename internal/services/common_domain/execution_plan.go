@@ -1,7 +1,7 @@
 package common_domain
 
 type ExecutionPlan struct {
-	PlanHandle []byte
+	PlanHandle string
 	Server     ServerMeta
 	XmlData    string
 }

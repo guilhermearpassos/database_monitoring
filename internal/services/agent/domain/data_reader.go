@@ -7,7 +7,7 @@ import (
 
 type SamplesReader interface {
 	TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error)
-	GetPlanHandles(ctx context.Context, handles [][]byte, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error)
+	GetPlanHandles(ctx context.Context, handles []string, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error)
 }
 type QueryMetricsReader interface {
 	CollectMetrics(ctx context.Context) ([]*common_domain.QueryMetric, error)

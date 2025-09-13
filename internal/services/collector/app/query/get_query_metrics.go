@@ -15,6 +15,6 @@ func NewGetQueryMetricsHandler(repo domain.QueryMetricsRepository) GetQueryMetri
 	return GetQueryMetricsHandler{repo: repo}
 }
 
-func (h GetQueryMetricsHandler) Handle(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID []byte) (*common_domain.QueryMetric, error) {
+func (h GetQueryMetricsHandler) Handle(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) (*common_domain.QueryMetric, error) {
 	return h.repo.GetQueryMetrics(ctx, start, end, serverID, sampleID)
 }

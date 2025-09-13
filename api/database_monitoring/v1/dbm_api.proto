@@ -50,7 +50,7 @@ message GetQueryMetricsRequest{
   google.protobuf.Timestamp start = 1;
   google.protobuf.Timestamp end = 2;
   string host = 3;
-  bytes sql_handle = 4;
+  string sql_handle = 4;
 
 }
 message GetQueryMetricsResponse{
@@ -108,7 +108,7 @@ message ServerSummary {
 }
 
 message GetSampleDetailsRequest {
-  bytes sample_id = 1;
+  string sample_id = 1;
   string snap_id = 2;
 }
 

@@ -3,7 +3,7 @@ package common_domain
 import "time"
 
 type QueryMetric struct {
-	QueryHash         []byte
+	QueryHash         string
 	Text              string
 	Database          DataBaseMetadata
 	LastExecutionTime time.Time

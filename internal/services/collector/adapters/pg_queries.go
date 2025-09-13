@@ -3,7 +3,6 @@ package adapters
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
@@ -161,13 +160,13 @@ where s.f_id = $1`
 	return snapshots[0], nil
 }
 
-func (p *PostgresRepo) GetExecutionPlan(ctx context.Context, planHandle []byte, server *common_domain.ServerMeta) (*common_domain.ExecutionPlan, error) {
+func (p *PostgresRepo) GetExecutionPlan(ctx context.Context, planHandle string, server *common_domain.ServerMeta) (*common_domain.ExecutionPlan, error) {
 	targetId, err := p.getTargetID(ctx, p.db, *server)
 	if err != nil {
 		return nil, fmt.Errorf("getting target id: %w", err)
 	}
 	q := "select plan_xml from query_plans where plan_handle = $1 and target_id = $2"
-	result := p.db.QueryRowContext(ctx, q, base64.StdEncoding.EncodeToString(planHandle), targetId)
+	result := p.db.QueryRowContext(ctx, q, planHandle, targetId)
 	err = result.Err()
 	if err != nil {
 		return nil, fmt.Errorf("getting query plan: %w", err)
@@ -339,7 +338,7 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 	}
 	return ret, nil
 }
-func (p *PostgresRepo) GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID []byte) (*common_domain.QueryMetric, error) {
+func (p *PostgresRepo) GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) (*common_domain.QueryMetric, error) {
 	q := `select data from query_stat_sample qss
 inner join public.query_stat_snapshot q on q.id = qss.snap_id
          inner join target t on q.target_id = t.id
@@ -347,7 +346,7 @@ where q.collected_at between $1 and $2 and t.host = $3
 and qss.sql_handle = $4
 order by q.collected_at desc
 `
-	queryHash := base64.StdEncoding.EncodeToString(sampleID)
+	queryHash := sampleID
 	row := p.db.QueryRowContext(ctx, q, start, end, serverID, queryHash)
 	err := row.Err()
 	if err != nil {

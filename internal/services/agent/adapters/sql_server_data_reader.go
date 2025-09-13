@@ -11,6 +11,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/microsoft/go-mssqldb"
 	mssql "github.com/microsoft/go-mssqldb"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +24,7 @@ type SQLServerDataReader struct {
 	lastQueryCounters map[string]map[string]int64
 	knowPlanHandles   map[string]struct{}
 	serverData        common_domain.ServerMeta
+	tracer            trace.Tracer
 }
 
 var _ domain.SamplesReader = (*SQLServerDataReader)(nil)
@@ -32,7 +35,8 @@ func NewSQLServerDataReader(db *sqlx.DB, serverData common_domain.ServerMeta, kn
 	for _, knowPlanHandle := range knowPlanHandles {
 		knowPlanHandlesMap[knowPlanHandle] = struct{}{}
 	}
-	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64), knowPlanHandles: knowPlanHandlesMap, serverData: serverData}
+	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64), knowPlanHandles: knowPlanHandlesMap, serverData: serverData,
+		tracer: otel.Tracer("SQLServerDataReader")}
 }
 
 func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error) {
@@ -88,7 +92,8 @@ SELECT s.session_id,
        p.status,
        sql_handle,
   plan_handle,
-       text, p.request_id, p.transaction_id, p.connection_id, p.percent_complete, p.estimated_completion_time, s.transaction_isolation_level
+       text, p.request_id, p.transaction_id, p.connection_id, p.percent_complete, p.estimated_completion_time, s.transaction_isolation_level,
+       query_hash
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
@@ -135,6 +140,7 @@ FROM sys.dm_exec_sessions s
 		var percentComplete float64
 		var estimatedCompletionTime int
 		var transactionIsolationLevel int
+		var queryHash []byte
 		err = rows.Scan(&sessionID,
 			&loginTime,
 			&hostName,
@@ -166,6 +172,7 @@ FROM sys.dm_exec_sessions s
 			&percentComplete,
 			&estimatedCompletionTime,
 			&transactionIsolationLevel,
+			&queryHash,
 		)
 		if err != nil {
 			return nil, err
@@ -185,8 +192,9 @@ FROM sys.dm_exec_sessions s
 			Id:         base64.StdEncoding.EncodeToString(sampleId),
 			Status:     pStatus,
 			Cmd:        "",
-			SqlHandle:  sqlHandle,
-			PlanHandle: planHandle,
+			SqlHandle:  base64.StdEncoding.EncodeToString(sqlHandle),
+			PlanHandle: base64.StdEncoding.EncodeToString(planHandle),
+			QueryHash:  base64.StdEncoding.EncodeToString(queryHash),
 			Text:       text,
 			IsBlocked:  blockingSessionId != 0,
 			IsBlocker:  false,
@@ -476,7 +484,7 @@ from qstats_aggr_split qas
 			}
 		}
 		ret = append(ret, &common_domain.QueryMetric{
-			QueryHash:         queryHash,
+			QueryHash:         base64.StdEncoding.EncodeToString(queryHash),
 			Text:              text,
 			Database:          common_domain.DataBaseMetadata{},
 			LastExecutionTime: lastExecutionTime,
@@ -492,11 +500,12 @@ from qstats_aggr_split qas
 	return ret, nil
 }
 
-func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles [][]byte, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error) {
-
+func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []string, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error) {
+	ctx, span := S.tracer.Start(ctx, "GetPlanHandles")
+	defer span.End()
 	handles2 := make([]interface{}, 0, len(handles))
 	for _, handle := range handles {
-		if _, ok := S.knowPlanHandles[string(handle)]; ok && ignoreKnown {
+		if _, ok := S.knowPlanHandles[handle]; ok && ignoreKnown {
 			continue
 		}
 		handles2 = append(handles2, handle)
@@ -511,7 +520,12 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles [][]byt
 		//fallback to 1 by 1 strategy, as there might be a problem with tempdb
 		query := "select query_plan from sys.dm_exec_query_plan(?)"
 		for _, handle := range handles {
-			row := S.db.QueryRowContext(ctx, query, handle)
+			decodeString, err3 := base64.StdEncoding.DecodeString(handle)
+			if err3 != nil {
+				span.RecordError(err3)
+				continue
+			}
+			row := S.db.QueryRowContext(ctx, query, decodeString)
 			err := row.Err()
 			if err != nil {
 				return nil, fmt.Errorf("fetch plan handle - %w", err)
@@ -582,7 +596,7 @@ select handle, query_plan from #temp_plans
 			continue
 		}
 		ret[string(handle)] = &common_domain.ExecutionPlan{
-			PlanHandle: handle,
+			PlanHandle: base64.StdEncoding.EncodeToString(handle),
 			XmlData:    *queryPlan,
 			Server:     S.serverData,
 		}

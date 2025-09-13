@@ -91,7 +91,7 @@
                 <!-- Query Details -->
                 <div class="border rounded p-4">
                     <h3 class="font-bold mb-2">Query Information</h3>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                         <div>
                             <p class="text-sm text-gray-600">Status</p>
                             <p class="font-medium">{{.QuerySample.Status}}</p>
@@ -99,6 +99,10 @@
                         <div>
                             <p class="text-sm text-gray-600">Time Elapsed</p>
                             <p class="font-medium">{{.QuerySample.ExecutionTime}}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Query Hash</p>
+                            <p class="font-medium">{{.QuerySample.QueryHash}}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">SQL Handle</p>

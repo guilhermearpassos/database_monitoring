@@ -28,6 +28,7 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 	return &common_domain.QuerySample{
 		Status:        sample.Status,
 		SqlHandle:     sample.SqlHandle,
+		QueryHash:     sample.QueryHash,
 		Text:          sample.Text,
 		IsBlocked:     sample.Blocked,
 		IsBlocker:     sample.Blocker,

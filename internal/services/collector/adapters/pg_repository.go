@@ -3,7 +3,6 @@ package adapters
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -86,7 +85,7 @@ func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, sampl
 	// Prepare the COPY statement
 	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("query_samples", "f_id", "snap_id", "sql_handle",
 		"blocked", "blocker", "plan_handle", "data", "wait_event", "wait_time",
-		"sid", "connection_id", "transaction_id", "block_ms", "block_count",
+		"sid", "connection_id", "transaction_id", "block_ms", "block_count", "query_hash",
 	))
 	if err != nil {
 		return fmt.Errorf("failed to prepare COPY statement: %w", err)
@@ -106,9 +105,11 @@ func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, sampl
 		if sample.Wait.WaitType != nil {
 			waitType = *sample.Wait.WaitType
 		}
-		_, err = stmt.ExecContext(ctx, sample.Id, snapId, base64.StdEncoding.EncodeToString(sample.SqlHandle),
-			sample.IsBlocked, sample.IsBlocker, base64.StdEncoding.EncodeToString(sample.PlanHandle), protoBytes, waitType,
-			sample.Wait.WaitTime, sample.Session.SessionID, sample.Session.ConnectionId, sample.CommandMetadata.TransactionId, -1, len(sample.Block.BlockedSessions))
+		_, err = stmt.ExecContext(ctx, sample.Id, snapId, sample.SqlHandle,
+			sample.IsBlocked, sample.IsBlocker, sample.PlanHandle, protoBytes, waitType,
+			sample.Wait.WaitTime, sample.Session.SessionID, sample.Session.ConnectionId,
+			sample.CommandMetadata.TransactionId, -1, len(sample.Block.BlockedSessions),
+			sample.QueryHash)
 		if err != nil {
 			return fmt.Errorf("failed to execute COPY for sample: %w", err)
 		}
@@ -160,7 +161,7 @@ func (p *PostgresRepo) StoreExecutionPlans(ctx context.Context, snapshot []*comm
 		for _, data := range chunk {
 			currentQuery = currentQuery + fmt.Sprintf(" ($%d, $%d, $%d),", n, n+1, n+2)
 
-			encodedHandle := base64.StdEncoding.EncodeToString(data.PlanHandle)
+			encodedHandle := data.PlanHandle
 			args = append(args, encodedHandle, data.XmlData, targetID)
 			n += 3
 		}
@@ -176,7 +177,7 @@ func (p *PostgresRepo) StoreExecutionPlans(ctx context.Context, snapshot []*comm
 	return nil
 }
 
-func (p *PostgresRepo) GetKnownPlanHandles(ctx context.Context, server *common_domain.ServerMeta, pageNumber int, pageSize int) ([][]byte, int, error) {
+func (p *PostgresRepo) GetKnownPlanHandles(ctx context.Context, server *common_domain.ServerMeta, pageNumber int, pageSize int) ([]string, int, error) {
 	//language=SQL
 	query := `
 select plan_handle, COUNT(*) OVER () AS total_count from query_plans where target_id = $1
@@ -188,7 +189,7 @@ limit $3
 	tId, err := p.getTargetID(ctx, p.db, *server)
 	if err != nil {
 		if errors.As(err, &custom_errors.NotFoundErr{}) {
-			return [][]byte{}, 0, nil
+			return []string{}, 0, nil
 		}
 		return nil, 0, fmt.Errorf("get target id: %w", err)
 	}
@@ -197,7 +198,7 @@ limit $3
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetKnownPlanHandles: %w", err)
 	}
-	ret := make([][]byte, 0)
+	ret := make([]string, 0)
 	var totalCount int
 	for rows.Next() {
 		var planHandle string
@@ -205,13 +206,8 @@ limit $3
 		if err != nil {
 			return nil, 0, fmt.Errorf("GetKnownPlanHandles scan: %w", err)
 		}
-		var bytePlanHandle []byte
-		bytePlanHandle, err = base64.StdEncoding.DecodeString(planHandle)
-		if err != nil {
-			return nil, 0, fmt.Errorf("GetKnownPlanHandles base64 decode: %w", err)
-		}
 
-		ret = append(ret, bytePlanHandle)
+		ret = append(ret, planHandle)
 	}
 	err = rows.Err()
 	if err != nil {
@@ -348,7 +344,7 @@ func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.
 			return fmt.Errorf("marshal proto: %w", err)
 		}
 
-		_, err = stmt.ExecContext(ctx, snapId, base64.StdEncoding.EncodeToString(sample.QueryHash), protoBytes)
+		_, err = stmt.ExecContext(ctx, snapId, sample.QueryHash, protoBytes)
 		if err != nil {
 			return fmt.Errorf("failed to execute COPY for sample: %w", err)
 		}

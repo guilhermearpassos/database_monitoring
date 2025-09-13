@@ -3,7 +3,7 @@ package domain
 import dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 
 type ExecutionPlan struct {
-	PlanHandle []byte
+	PlanHandle string
 	//Server     ServerMetadata
 	XmlPlan string
 }

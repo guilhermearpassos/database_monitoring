@@ -20,7 +20,7 @@ message GetKnownPlanHandlesRequest {
 }
 
 message GetKnownPlanHandlesResponse {
-  repeated bytes handles = 1;
+  repeated string handles = 1;
   int32 page_number = 2;
   int32 page_size = 3;
   int32 total_pages = 4;

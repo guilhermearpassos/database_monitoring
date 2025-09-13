@@ -97,6 +97,7 @@ type QuerySample struct {
 	SQLHandle     string
 	PlanHandle    string
 	Status        string
+	QueryHash     string
 }
 
 type BlockingNode struct {
