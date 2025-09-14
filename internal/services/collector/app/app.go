@@ -26,6 +26,7 @@ type Commands struct {
 	StoreSnapshot       command.StoreSnapShotHandler
 	StoreQueryMetrics   command.StoreQueryMetricsHandler
 	StoreExecutionPlans command.StoreExecutionPlansHandler
+	PurgeQueryMetrics   command.PurgeQueryMetricsHandler
 }
 
 func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryMetricsRepository) *Application {
@@ -33,6 +34,7 @@ func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryM
 		Commands: Commands{StoreSnapshot: command.NewStoreSnapShotHandler(repo),
 			StoreQueryMetrics:   command.NewStoreQueryMetricsHandler(queryMetricsRepo),
 			StoreExecutionPlans: command.NewStoreExecutionPlansHandler(repo),
+			PurgeQueryMetrics:   *command.NewPurgeQueryMetricsHandler(queryMetricsRepo),
 		},
 		Queries: Queries{
 			GetKnownPlanHandlesHandler: query.NewGetKnownPlanHandlesHandler(repo),

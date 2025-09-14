@@ -7,6 +7,16 @@ import "database_monitoring/v1/snapshot.proto";
 
 service DBMSupportApi {
   rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse);
+  rpc PurgeQueryMetrics(PurgeQueryMetricsRequest) returns (PurgeQueryMetricsResponse);
+}
+
+message PurgeQueryMetricsRequest {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  int64 batch_size = 3;
+}
+message PurgeQueryMetricsResponse {
+
 }
 
 message ListDatabasesRequest{

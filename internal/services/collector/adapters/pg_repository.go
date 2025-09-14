@@ -358,3 +358,40 @@ func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.
 
 	return nil
 }
+
+func (p *PostgresRepo) PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error {
+	// language=SQL
+	query := `
+with rows_to_delete as (
+    select qss.CTID from query_stat_sample qss
+inner join query_stat_snapshot qsnap on qss.snap_id = qsnap.id
+where collected_at between  $1 and $2
+limit $3
+)
+delete from query_stat_sample using rows_to_delete where query_stat_sample.CTID = rows_to_delete.CTID`
+	rowsAffected := int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, query, start, end, batchSize)
+		if err != nil {
+			return fmt.Errorf("purgeQueryMetrics: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+	// language=SQL
+	querySnap := `
+with rows_to_delete as (
+    select CTID from query_stat_snapshot 
+where collected_at between  $1 and $2
+limit $3
+)
+delete from query_stat_snapshot using rows_to_delete where query_stat_snapshot.CTID = rows_to_delete.CTID`
+	rowsAffected = int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, querySnap, start, end, batchSize)
+		if err != nil {
+			return fmt.Errorf("purgeQueryMetrics: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+	return nil
+}

@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/command"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/query"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 )
@@ -25,6 +28,18 @@ func NewGRPCServer(app *app.Application) GRPCServer {
 	return GRPCServer{app: app,
 		tracer: otel.Tracer("grpc-server"),
 	}
+}
+
+func (s GRPCServer) PurgeQueryMetrics(ctx context.Context, in *dbmv1.PurgeQueryMetricsRequest) (*dbmv1.PurgeQueryMetricsResponse, error) {
+	err := s.app.Commands.PurgeQueryMetrics.Handle(ctx, command.PurgeQueryMetrics{
+		Start:     in.Start.AsTime(),
+		End:       in.End.AsTime(),
+		BatchSize: int(in.BatchSize),
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &dbmv1.PurgeQueryMetricsResponse{}, nil
 }
 
 func (s GRPCServer) ListSnapshotSummaries(ctx context.Context, in *dbmv1.ListSnapshotSummariesRequest) (*dbmv1.ListSnapshotSummariesResponse, error) {

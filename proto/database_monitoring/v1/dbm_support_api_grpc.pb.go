@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DBMSupportApi_ListDatabases_FullMethodName = "/database_monitoring.v1.DBMSupportApi/ListDatabases"
+	DBMSupportApi_ListDatabases_FullMethodName     = "/database_monitoring.v1.DBMSupportApi/ListDatabases"
+	DBMSupportApi_PurgeQueryMetrics_FullMethodName = "/database_monitoring.v1.DBMSupportApi/PurgeQueryMetrics"
 )
 
 // DBMSupportApiClient is the client API for DBMSupportApi service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DBMSupportApiClient interface {
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
+	PurgeQueryMetrics(ctx context.Context, in *PurgeQueryMetricsRequest, opts ...grpc.CallOption) (*PurgeQueryMetricsResponse, error)
 }
 
 type dBMSupportApiClient struct {
@@ -47,11 +49,22 @@ func (c *dBMSupportApiClient) ListDatabases(ctx context.Context, in *ListDatabas
 	return out, nil
 }
 
+func (c *dBMSupportApiClient) PurgeQueryMetrics(ctx context.Context, in *PurgeQueryMetricsRequest, opts ...grpc.CallOption) (*PurgeQueryMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeQueryMetricsResponse)
+	err := c.cc.Invoke(ctx, DBMSupportApi_PurgeQueryMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DBMSupportApiServer is the server API for DBMSupportApi service.
 // All implementations must embed UnimplementedDBMSupportApiServer
 // for forward compatibility.
 type DBMSupportApiServer interface {
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
+	PurgeQueryMetrics(context.Context, *PurgeQueryMetricsRequest) (*PurgeQueryMetricsResponse, error)
 	mustEmbedUnimplementedDBMSupportApiServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedDBMSupportApiServer struct{}
 
 func (UnimplementedDBMSupportApiServer) ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListDatabases not implemented")
+}
+func (UnimplementedDBMSupportApiServer) PurgeQueryMetrics(context.Context, *PurgeQueryMetricsRequest) (*PurgeQueryMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PurgeQueryMetrics not implemented")
 }
 func (UnimplementedDBMSupportApiServer) mustEmbedUnimplementedDBMSupportApiServer() {}
 func (UnimplementedDBMSupportApiServer) testEmbeddedByValue()                       {}
@@ -104,6 +120,24 @@ func _DBMSupportApi_ListDatabases_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DBMSupportApi_PurgeQueryMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeQueryMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DBMSupportApiServer).PurgeQueryMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DBMSupportApi_PurgeQueryMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DBMSupportApiServer).PurgeQueryMetrics(ctx, req.(*PurgeQueryMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DBMSupportApi_ServiceDesc is the grpc.ServiceDesc for DBMSupportApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var DBMSupportApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListDatabases",
 			Handler:    _DBMSupportApi_ListDatabases_Handler,
+		},
+		{
+			MethodName: "PurgeQueryMetrics",
+			Handler:    _DBMSupportApi_PurgeQueryMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
