@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
@@ -533,6 +534,9 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []strin
 			var queryPlan *string
 			err = row.Scan(&queryPlan)
 			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
 				return nil, fmt.Errorf("fetch plan handle scan - %w", err)
 			}
 			if queryPlan == nil {

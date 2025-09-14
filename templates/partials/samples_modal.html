@@ -73,7 +73,53 @@
     {{end}}
 </div>
 {{end}}
+{{define "queryMetricsPanel"}}
+<div class="bg-white rounded-lg border p-4 my-4">
+    <h3 class="font-semibold text-lg text-gray-800 mb-3">Query Metrics</h3>
 
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">CPU Time</div>
+            <div class="font-medium">{{printf "%.2f" .CpuTime}} ms</div>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">Avg Logical Reads</div>
+            <div class="font-medium">{{printf "%.2f" .AvgLogicalReads}}</div>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">Avg Physical Reads</div>
+            <div class="font-medium">{{printf "%.2f" .AvgPhysicalReads}}</div>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">Total Logical Reads</div>
+            <div class="font-medium">{{.TotalLogicalReads}}</div>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">Avg Duration</div>
+            <div class="font-medium">{{printf "%.2f" .AvgElapsedTime}} ms</div>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">Avg Logical Writes</div>
+            <div class="font-medium">{{printf "%.2f" .AvgLogicalWrites}}</div>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">Avg Rows</div>
+            <div class="font-medium">{{printf "%.2f" .AvgRows}}</div>
+        </div>
+
+        <div class="bg-gray-50 p-3 rounded">
+            <div class="text-sm text-gray-500">Execution Count</div>
+            <div class="font-medium">{{.ExecutionCount}}</div>
+        </div>
+    </div>
+</div>
+{{end}}
 <div id="samples_modal_container" class="samples_modal_container {{.State}}" onclick="handleOutsideClickSamplesModal(event)">
     <div id="samples_modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
         <div class="bg-white rounded-lg p-6 w-10/12 max-w-5xl" style="overflow-y: scroll; max-height: 85vh">
@@ -184,6 +230,9 @@
                         {{end}}
                     </div>
                 </div>
+
+                {{template "queryMetricsPanel" .QueryMetric}}
+
                 <!-- Execution Plan -->
                 <div class="border rounded p-4" style="max-height: 55vh; overflow-y: scroll;">
                     <h3 class="font-bold mb-4">Execution Plan</h3>

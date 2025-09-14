@@ -451,8 +451,9 @@ func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Req
 		Host:      server,
 		SqlHandle: resp.QuerySample.QueryHash,
 	})
-	_ = resp2
-	_ = resp.QuerySample
+	if err != nil {
+		fmt.Println(fmt.Errorf("unable to get query metrics: %w", err))
+	}
 	w.Header().Set("Content-Type", "text/html")
 	dSample, err := protoSampleToDomain(resp.QuerySample)
 	if err != nil {
@@ -472,16 +473,25 @@ func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Req
 	}
 	if r.Header.Get("Hx-request") == "true" {
 		//partial render
+		domainMetric := &domain.QueryMetric{}
+		if resp2 != nil {
+
+			domainMetric = domain.NewQueryMetric(resp2.Metrics.LastExecutionTime.AsTime(), time.Duration(resp2.Metrics.LastElapsedTimeMicros)*time.Microsecond, resp2.Metrics.Counters, resp2.Metrics.Rates)
+			domainMetric.PopulateMetrics()
+		}
 		err = s.templates.ExecuteTemplate(w, "samples_modal.html", struct {
 			State         string
 			QuerySample   domain.QuerySample
 			BlockChain    domain.BlockChain
 			ExecutionPlan domain.ParsedExecutionPlan
+			QueryMetric   domain.QueryMetric
 		}{
 			State:         "open",
 			QuerySample:   dSample,
 			BlockChain:    blockChain,
 			ExecutionPlan: plan,
+
+			QueryMetric: *domainMetric,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
