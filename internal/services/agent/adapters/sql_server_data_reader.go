@@ -257,10 +257,31 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 			sessionID, err = strconv.Atoi(qs.Session.SessionID)
 			if bl, ok := blockingMap[sessionID]; ok {
 				qs.SetBlockedIds(bl)
+				delete(blockingMap, sessionID)
 			}
 		}
 		querySamples = append(querySamples, qs2...)
 	}
+	missingBlockingSessionIds := make([]int, 0, len(blockingMap))
+	for i := range blockingMap {
+		missingBlockingSessionIds = append(missingBlockingSessionIds, i)
+	}
+
+	sleepingSamples, err := S.getSleepingBlockingSessions(ctx, missingBlockingSessionIds, dbInfo,
+		snapID,
+		snapTime)
+	if err != nil {
+		return nil, fmt.Errorf("getSleepingBlockingSessions: %w", err)
+	}
+	for _, qs := range sleepingSamples {
+		var sessionID int
+		sessionID, err = strconv.Atoi(qs.Session.SessionID)
+		if bl, ok := blockingMap[sessionID]; ok {
+			qs.SetBlockedIds(bl)
+			delete(blockingMap, sessionID)
+		}
+	}
+	querySamples = append(querySamples, sleepingSamples...)
 	snapshots = append(snapshots, &common_domain.DataBaseSnapshot{
 		Samples: querySamples,
 		SnapInfo: common_domain.SnapInfo{
@@ -272,7 +293,6 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 			},
 		},
 	})
-
 	return snapshots, nil
 }
 
@@ -618,4 +638,198 @@ select handle, query_plan from #temp_plans
 		return nil, fmt.Errorf("fetch plans - err: %w", err)
 	}
 	return ret, nil
+}
+
+func (S SQLServerDataReader) getSleepingBlockingSessions(ctx context.Context, ids []int, dbInfo map[string]common_domain.DataBaseMetadata, snapID string, snapTime time.Time) ([]*common_domain.QuerySample, error) {
+	if len(ids) == 0 {
+		return []*common_domain.QuerySample{}, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+SELECT s.session_id,
+       s.login_time,
+       s.host_name,
+       s.program_name,
+       s.login_name,
+       s.status,
+       s.cpu_time,
+       s.memory_usage,
+       0 AS total_elapsed_time,
+       s.last_request_start_time,
+       s.last_request_end_time,
+       s.reads,
+       s.writes,
+       s.logical_reads,
+       s.row_count,
+       s.database_id,
+       0 AS blocking_session_id,
+       NULL AS wait_type,
+       0 AS wait_time,
+       '' AS last_wait_type,
+       '' AS wait_resource,
+       s.status,
+       c.most_recent_sql_handle AS sql_handle,
+       qs.plan_handle AS plan_handle,
+       t.text,
+       0 AS request_id,
+       0 AS transaction_id,
+       c.connection_id,
+       0 AS percent_complete,
+       0 AS estimated_completion_time,
+       s.transaction_isolation_level,
+       qs.query_hash,
+       c.client_net_address
+
+FROM sys.dm_exec_sessions s
+INNER JOIN sys.dm_exec_connections c
+    ON s.session_id = c.session_id
+CROSS APPLY sys.dm_exec_sql_text(c.most_recent_sql_handle) t
+LEFT JOIN sys.dm_exec_query_stats qs
+    ON c.most_recent_sql_handle = qs.sql_handle
+WHERE s.status = 'sleeping'
+  AND c.most_recent_sql_handle IS NOT NULL
+  AND t.text IS NOT NULL
+    AND s.session_id IN (%s)`, strings.Join(placeholders, ","))
+
+	rows, err := S.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error querying sleeping sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var result []*common_domain.QuerySample
+	for rows.Next() {
+
+		var sessionID int
+		var loginTime time.Time
+		var hostName string
+		var programName string
+		var loginName string
+		var status string
+		var cpuTime int
+		var memoryUsage int
+		var totalElapsedTime int
+		var lastRequestStartTime time.Time
+		var lastRequestEndTime time.Time
+		var reads string
+		var writes string
+		var logicalReads string
+		var rowCount int
+		var databaseId int
+		var blockingSessionId int
+		var waitType *string
+		var waitTime int
+		var lastWaitType string
+		var waitResource string
+		var pStatus string
+		var sqlHandle []byte
+		var planHandle []byte
+		var text string
+		var requestId int
+		var transactionId int
+		var connectionId mssql.UniqueIdentifier
+		var percentComplete float64
+		var estimatedCompletionTime int
+		var transactionIsolationLevel int
+		var queryHash []byte
+		var clientNetAddress string
+		err = rows.Scan(&sessionID,
+			&loginTime,
+			&hostName,
+			&programName,
+			&loginName,
+			&status,
+			&cpuTime,
+			&memoryUsage,
+			&totalElapsedTime,
+			&lastRequestStartTime,
+			&lastRequestEndTime,
+			&reads,
+			&writes,
+			&logicalReads,
+			&rowCount,
+			&databaseId,
+			&blockingSessionId,
+			&waitType,
+			&waitTime,
+			&lastWaitType,
+			&waitResource,
+			&pStatus,
+			&sqlHandle,
+			&planHandle,
+			&text,
+			&requestId,
+			&transactionId,
+			&connectionId,
+			&percentComplete,
+			&estimatedCompletionTime,
+			&transactionIsolationLevel,
+			&queryHash,
+			&clientNetAddress,
+		)
+		if err != nil {
+			return nil, err
+		}
+		var blockedBy string
+		sampleId := []byte(fmt.Sprintf("%s_%d_%d_%d", connectionId, sessionID, transactionId, requestId))
+		qs := common_domain.QuerySample{
+			Id:         base64.StdEncoding.EncodeToString(sampleId),
+			Status:     pStatus,
+			Cmd:        "",
+			SqlHandle:  base64.StdEncoding.EncodeToString(sqlHandle),
+			PlanHandle: base64.StdEncoding.EncodeToString(planHandle),
+			QueryHash:  base64.StdEncoding.EncodeToString(queryHash),
+			Text:       text,
+			IsBlocked:  blockingSessionId != 0,
+			IsBlocker:  false,
+			Session: common_domain.SessionMetadata{
+				SessionID:            strconv.Itoa(sessionID),
+				LoginTime:            loginTime,
+				HostName:             hostName,
+				ProgramName:          programName,
+				LoginName:            loginName,
+				Status:               status,
+				LastRequestStartTime: lastRequestStartTime,
+				LastRequestEndTime:   lastRequestEndTime,
+				ConnectionId:         connectionId.String(),
+			},
+			Database: common_domain.DataBaseMetadata{
+				DatabaseID:   strconv.Itoa(databaseId),
+				DatabaseName: dbInfo[strconv.Itoa(databaseId)].DatabaseName,
+			},
+			Block: common_domain.BlockMetadata{
+				BlockedBy:       blockedBy,
+				BlockedSessions: make([]string, 0),
+			},
+			Wait: common_domain.WaitMetadata{
+				WaitType:     waitType,
+				WaitTime:     waitTime,
+				LastWaitType: lastWaitType,
+				WaitResource: waitResource,
+			},
+			Snapshot: common_domain.SnapshotMetadata{
+				ID:        snapID,
+				Timestamp: snapTime,
+			},
+			TimeElapsedMs: int64(totalElapsedTime),
+			CommandMetadata: common_domain.CommandMetadata{
+				TransactionId:           strconv.Itoa(transactionId),
+				RequestId:               strconv.Itoa(requestId),
+				EstimatedCompletionTime: int64(estimatedCompletionTime),
+				PercentComplete:         percentComplete,
+			},
+		}
+		result = append(result, &qs)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("row scan failed: %v", err)
+	}
+	return result, nil
 }
