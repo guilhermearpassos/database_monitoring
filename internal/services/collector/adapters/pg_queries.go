@@ -340,12 +340,11 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 	return ret, nil
 }
 func (p *PostgresRepo) GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) (*common_domain.QueryMetric, error) {
-	q := `select data from query_stat_sample qss
-inner join public.query_stat_snapshot q on q.id = qss.snap_id
+	q := `select data from public.query_stat_snapshot q
+inner join query_stat_sample qss on q.id = qss.snap_id
          inner join target t on q.target_id = t.id
 where q.collected_at between $1 and $2 and t.host = $3
 and qss.sql_handle = $4
-order by q.collected_at desc
 `
 	queryHash := sampleID
 	rows, err := p.db.QueryContext(ctx, q, start, end, serverID, queryHash)
