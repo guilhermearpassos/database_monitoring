@@ -509,7 +509,11 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []strin
 		if _, ok := S.knowPlanHandles[handle]; ok && ignoreKnown {
 			continue
 		}
-		handles2 = append(handles2, handle)
+		decoded, err := base64.StdEncoding.DecodeString(handle)
+		if err == nil {
+
+			handles2 = append(handles2, decoded)
+		}
 	}
 	if len(handles2) == 0 {
 		return make(map[string]*common_domain.ExecutionPlan), nil
@@ -542,7 +546,7 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []strin
 			if queryPlan == nil {
 				continue
 			}
-			ret[string(handle)] = &common_domain.ExecutionPlan{
+			ret[handle] = &common_domain.ExecutionPlan{
 				PlanHandle: handle,
 				XmlData:    *queryPlan,
 				Server:     S.serverData,
