@@ -449,7 +449,7 @@ func (s *HtmxServer) HandleQuerySampleDetails(w http.ResponseWriter, r *http.Req
 		Start:     timestamppb.New(startTime),
 		End:       timestamppb.New(endTime),
 		Host:      server,
-		SqlHandle: sampleID,
+		SqlHandle: resp.QuerySample.QueryHash,
 	})
 	_ = resp2
 	_ = resp.QuerySample
@@ -855,22 +855,28 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) 
 	}
 
 	dSample := domain.QuerySample{
-		SID:           sid,
-		Query:         sample.Text,
-		ExecutionTime: fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
-		User:          sample.Session.LoginName,
-		IsBlocker:     sample.Blocker,
-		IsWaiter:      sample.Blocked,
-		BlockingTime:  blockTime,
-		BlockDetails:  blockDetails,
-		WaitEvent:     sample.WaitInfo.WaitType,
-		Database:      sample.Db.DatabaseName,
-		SampleID:      sample.Id,
-		SnapID:        sample.SnapInfo.Id,
-		SQLHandle:     sample.SqlHandle,
-		PlanHandle:    sample.PlanHandle,
-		Status:        sample.Status,
-		QueryHash:     sample.QueryHash,
+		SID:                     sid,
+		Query:                   sample.Text,
+		ExecutionTime:           fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
+		User:                    sample.Session.LoginName,
+		IsBlocker:               sample.Blocker,
+		IsWaiter:                sample.Blocked,
+		BlockingTime:            blockTime,
+		BlockDetails:            blockDetails,
+		WaitEvent:               sample.WaitInfo.WaitType,
+		Database:                sample.Db.DatabaseName,
+		SampleID:                sample.Id,
+		SnapID:                  sample.SnapInfo.Id,
+		SQLHandle:               sample.SqlHandle,
+		PlanHandle:              sample.PlanHandle,
+		Status:                  sample.Status,
+		QueryHash:               sample.QueryHash,
+		SessionLoginTime:        sample.Session.LoginTime.AsTime(),
+		SessionHost:             sample.Session.Host,
+		SessionStatus:           sample.Session.Status,
+		SessionProgramName:      sample.Session.ProgramName,
+		SessionLastRequestStart: sample.Session.LastRequestStart.AsTime(),
+		SessionLastRequestEnd:   sample.Session.LastRequestEnd.AsTime(),
 	}
 	return dSample, nil
 }

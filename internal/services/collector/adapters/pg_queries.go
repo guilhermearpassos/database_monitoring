@@ -12,6 +12,7 @@ import (
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"google.golang.org/protobuf/proto"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -347,24 +348,53 @@ and qss.sql_handle = $4
 order by q.collected_at desc
 `
 	queryHash := sampleID
-	row := p.db.QueryRowContext(ctx, q, start, end, serverID, queryHash)
-	err := row.Err()
+	rows, err := p.db.QueryContext(ctx, q, start, end, serverID, queryHash)
 	if err != nil {
 		return nil, fmt.Errorf("getting query stats: %w", err)
 	}
-	var protoBytes []byte
-	err = row.Scan(&protoBytes)
-	if err != nil {
-		return nil, fmt.Errorf("scanning query stats: %w", err)
+	var queryMetric *common_domain.QueryMetric
+	for rows.Next() {
+
+		var protoBytes []byte
+		err = rows.Scan(&protoBytes)
+		if err != nil {
+			return nil, fmt.Errorf("scanning query stats: %w", err)
+		}
+		protoMetric := dbmv1.QueryMetric{}
+		err = proto.Unmarshal(protoBytes, &protoMetric)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal query stat: %w", err)
+		}
+		if queryMetric == nil {
+
+			qMetric, err2 := converters.QueryMetricToDomain(&protoMetric)
+			if err2 != nil {
+				return nil, fmt.Errorf("converting query stat: %w", err)
+			}
+			queryMetric = qMetric
+		} else {
+			for k := range queryMetric.Counters {
+				queryMetric.Counters[k] += protoMetric.Counters[k]
+			}
+		}
 	}
-	protoMetric := dbmv1.QueryMetric{}
-	err = proto.Unmarshal(protoBytes, &protoMetric)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal query stat: %w", err)
+	if err2 := rows.Err(); err2 != nil {
+		return nil, fmt.Errorf("scanning query stats err: %w", err2)
 	}
-	queryMetric, err2 := converters.QueryMetricToDomain(&protoMetric)
-	if err2 != nil {
-		return nil, fmt.Errorf("converting query stat: %w", err)
+	if queryMetric == nil {
+		return nil, fmt.Errorf("no query stats found")
+	}
+	if queryMetric.Rates == nil {
+		queryMetric.Rates = make(map[string]float64)
+		execCount, ok := queryMetric.Counters["executionCount"]
+		if ok {
+			for k, v := range queryMetric.Counters {
+				if !strings.HasPrefix(k, "total") {
+					continue
+				}
+				queryMetric.Rates[strings.Replace(k, "total", "avg", 1)] = float64(v) / float64(execCount)
+			}
+		}
 	}
 	return queryMetric, nil
 }

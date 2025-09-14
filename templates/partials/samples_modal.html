@@ -105,9 +105,30 @@
                             <p class="font-medium">{{.QuerySample.QueryHash}}</p>
                         </div>
                         <div>
+                            <p class="text-sm text-gray-600">Database</p>
+                            <p class="font-medium">{{.QuerySample.Database}}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Execution Time</p>
+                            <p class="font-medium">{{.QuerySample.Status}}</p>
+                        </div>
+                    </div>
+                    <br>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-600">Snapshot</p>
+                            <p class="font-medium">{{.QuerySample.SnapID}}</p>
+                        </div>
+                        <div>
                             <p class="text-sm text-gray-600">SQL Handle</p>
                             <p class="font-medium">{{.QuerySample.SQLHandle}}</p>
                         </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Sample</p>
+                            <p class="font-medium">{{.QuerySample.SampleID}}</p>
+                        </div>
+
+
                     </div>
                     <div class="mt-2 truncated-sql-text" style="max-width: 40vw">
                         <p class="text-sm text-gray-600 ">SQL Text</p>
@@ -118,14 +139,38 @@
                 <!-- Session Info -->
                 <div class="border rounded p-4">
                     <h3 class="font-bold mb-2">Session Information</h3>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                         <div>
                             <p class="text-sm text-gray-600">Session ID</p>
                             <p class="font-medium">{{.QuerySample.SID}}</p>
                         </div>
                         <div>
+                            <p class="text-sm text-gray-600">Session Status</p>
+                            <p class="font-medium">{{.QuerySample.SessionStatus}}</p>
+                        </div>
+                        <div>
                             <p class="text-sm text-gray-600">User Name</p>
                             <p class="font-medium">{{.QuerySample.User}}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Host</p>
+                            <p class="font-medium">{{.QuerySample.SessionHost}}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">ProgramName</p>
+                            <p class="font-medium">{{.QuerySample.SessionProgramName}}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Session Login Time</p>
+                            <p class="font-medium">{{.QuerySample.SessionLoginTime}}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Last Request Start</p>
+                            <p class="font-medium">{{.QuerySample.SessionLastRequestStart}}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Last Request End</p>
+                            <p class="font-medium">{{.QuerySample.SessionLastRequestEnd}}</p>
                         </div>
                     </div>
                 </div>

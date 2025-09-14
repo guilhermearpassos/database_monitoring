@@ -82,22 +82,28 @@ type Snapshot struct {
 
 // QuerySample represents a query sample from a snapshot
 type QuerySample struct {
-	SID           int
-	Query         string
-	ExecutionTime string
-	User          string
-	IsBlocker     bool
-	IsWaiter      bool
-	BlockingTime  string
-	BlockDetails  string
-	WaitEvent     string
-	Database      string
-	SampleID      string
-	SnapID        string
-	SQLHandle     string
-	PlanHandle    string
-	Status        string
-	QueryHash     string
+	SID                     int
+	Query                   string
+	ExecutionTime           string
+	User                    string
+	IsBlocker               bool
+	IsWaiter                bool
+	BlockingTime            string
+	BlockDetails            string
+	WaitEvent               string
+	Database                string
+	SampleID                string
+	SnapID                  string
+	SQLHandle               string
+	PlanHandle              string
+	Status                  string
+	QueryHash               string
+	SessionLoginTime        time.Time
+	SessionHost             string
+	SessionStatus           string
+	SessionProgramName      string
+	SessionLastRequestStart time.Time
+	SessionLastRequestEnd   time.Time
 }
 
 type BlockingNode struct {
