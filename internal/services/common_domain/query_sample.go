@@ -52,6 +52,7 @@ type SessionMetadata struct {
 	LastRequestStartTime time.Time
 	LastRequestEndTime   time.Time
 	ConnectionId         string
+	ClientIP             string
 }
 
 type DataBaseMetadata struct {

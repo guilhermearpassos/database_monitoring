@@ -94,9 +94,10 @@ SELECT s.session_id,
        sql_handle,
   plan_handle,
        text, p.request_id, p.transaction_id, p.connection_id, p.percent_complete, p.estimated_completion_time, s.transaction_isolation_level,
-       query_hash
+       query_hash, c.client_net_address
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
+left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
 	 where text is not null
 `
@@ -142,6 +143,7 @@ FROM sys.dm_exec_sessions s
 		var estimatedCompletionTime int
 		var transactionIsolationLevel int
 		var queryHash []byte
+		var clientNetAddress string
 		err = rows.Scan(&sessionID,
 			&loginTime,
 			&hostName,
@@ -174,6 +176,7 @@ FROM sys.dm_exec_sessions s
 			&estimatedCompletionTime,
 			&transactionIsolationLevel,
 			&queryHash,
+			&clientNetAddress,
 		)
 		if err != nil {
 			return nil, err

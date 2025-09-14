@@ -44,6 +44,7 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 			LastRequestStart: timestamppb.New(sample.Session.LastRequestStartTime),
 			LastRequestEnd:   timestamppb.New(sample.Session.LastRequestEndTime),
 			ConnectionId:     sample.Session.ConnectionId,
+			ClientIp:         sample.Session.ClientIP,
 		},
 		Db: &dbmv1.DBMetadata{
 			DatabaseId:   sample.Database.DatabaseID,

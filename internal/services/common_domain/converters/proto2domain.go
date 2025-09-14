@@ -43,6 +43,7 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 			LastRequestStartTime: sample.Session.LastRequestStart.AsTime(),
 			LastRequestEndTime:   sample.Session.LastRequestEnd.AsTime(),
 			ConnectionId:         sample.Session.ConnectionId,
+			ClientIP:             sample.Session.ClientIp,
 		},
 		Database: common_domain.DataBaseMetadata{
 			DatabaseID:   sample.Db.DatabaseId,
