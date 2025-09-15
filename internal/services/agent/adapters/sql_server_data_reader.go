@@ -683,7 +683,7 @@ SELECT s.session_id,
        0 AS percent_complete,
        0 AS estimated_completion_time,
        s.transaction_isolation_level,
-       qs.query_hash,
+       0x0 as query_hash,
        c.client_net_address
 
 FROM sys.dm_exec_sessions s
