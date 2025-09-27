@@ -469,5 +469,5 @@ delete from query_plans using rows_to_delete where query_plans.CTID = rows_to_de
 		}
 		rowsAffected, _ = r.RowsAffected()
 	}
-
+	return nil
 }
