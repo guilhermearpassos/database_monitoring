@@ -28,6 +28,44 @@ func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
 var _ domain.SampleRepository = (*PostgresRepo)(nil)
 var _ domain.QueryMetricsRepository = (*PostgresRepo)(nil)
 
+func (p *PostgresRepo) StoreSnapshotSamples(ctx context.Context, snapID string, samples []*common_domain.QuerySample) error {
+
+	tx, err := p.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err2 := tx.Rollback()
+			if err2 != nil {
+				err = errors.Join(err, err2)
+			}
+			return
+		}
+		err2 := tx.Commit()
+		if err2 != nil {
+			err = errors.Join(err, err2)
+			return
+		}
+	}()
+	querySnapPK := `select id from snapshot where f_id = $1`
+	var snapPK int
+	row := tx.QueryRowContext(ctx, querySnapPK, snapID)
+	err = row.Err()
+	if err != nil {
+		return fmt.Errorf("query snapshot pk: %w", err)
+	}
+	err = row.Scan(&snapPK)
+	if err != nil {
+		return fmt.Errorf("query snapshot pk scan: %w", err)
+	}
+	err = p.bulkInsertSamples(ctx, tx, samples, snapPK)
+	if err != nil {
+		return fmt.Errorf("insert samples: %w", err)
+	}
+	return nil
+}
+
 func (p *PostgresRepo) StoreSnapshot(ctx context.Context, snapshot common_domain.DataBaseSnapshot) (err error) {
 	tx, err := p.db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -390,6 +428,24 @@ delete from query_stat_snapshot using rows_to_delete where query_stat_snapshot.C
 		r, err := p.db.ExecContext(ctx, querySnap, start, end, batchSize)
 		if err != nil {
 			return fmt.Errorf("purgeQueryMetrics: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+	return nil
+}
+
+func (p *PostgresRepo) PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, batchSize int) error {
+	q := `with rows_to_delete as (
+    select CTID from snapshot
+where snap_time between  $1 and $2
+limit $3
+)
+delete from snapshot using rows_to_delete where snapshot.CTID = rows_to_delete.CTID`
+	rowsAffected := int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, q, start, end, batchSize)
+		if err != nil {
+			return fmt.Errorf("purgeSnapshots: %w", err)
 		}
 		rowsAffected, _ = r.RowsAffected()
 	}

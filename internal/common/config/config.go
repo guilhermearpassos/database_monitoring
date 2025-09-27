@@ -7,6 +7,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/jmoiron/sqlx"
 	"net/http"
+	"time"
 )
 
 type AgentConfig struct {
@@ -65,6 +66,12 @@ type CollectorConfig struct {
 	GRPCServerConfig GRPCServerConfig          `toml:"grpc_server"`
 	PostgresConfig   PostgresConfig            `toml:"postgres"`
 	Telemetry        telemetry.TelemetryConfig `toml:"telemetry"`
+	PurgeConfig      PurgeConfig               `toml:"purge"`
+}
+
+type PurgeConfig struct {
+	Enabled bool          `toml:"enabled"`
+	MaxAge  time.Duration `toml:"max_age"`
 }
 
 type GrpcAPIConfig struct {

@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"
 	"os"
+	"slices"
 	"time"
 )
 
@@ -215,15 +216,34 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 			if snapshot == nil {
 				continue
 			}
-			_, err = client.IngestSnapshot(ctx, &collectorv1.IngestSnapshotRequest{
-				Snapshot: converters.DatabaseSnapshotToProto(snapshot),
-			})
-			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(otelcodes.Error, err.Error())
-				span.End()
-				panic(err)
+			sampleChunks := slices.Chunk(snapshot.Samples, 50)
+			firstChunk := true
+			for samples := range sampleChunks {
+				if firstChunk {
+					firstChunk = false
+					snapshot.Samples = samples
+					_, err = client.IngestSnapshot(ctx, &collectorv1.IngestSnapshotRequest{
+						Snapshot: converters.DatabaseSnapshotToProto(snapshot),
+					})
+				} else {
+
+					protoSamples := make([]*dbmv1.QuerySample, len(samples))
+					for i, sample := range samples {
+						protoSamples[i] = converters.SampleToProto(sample)
+					}
+					_, err = client.IngestSnapshotSamples(ctx, &collectorv1.IngestSnapshotSamplesRequest{
+						Id:      snapshot.SnapInfo.ID,
+						Samples: protoSamples,
+					})
+				}
+				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(otelcodes.Error, err.Error())
+					span.End()
+					panic(err)
+				}
 			}
+
 			for _, qs := range snapshot.Samples {
 				if qs.PlanHandle == "" {
 					continue

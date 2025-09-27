@@ -9,6 +9,9 @@ enabled = true
 url = "localhost:7081"
 [postgres]
 connstring = "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"
+[purge]
+enabled = true
+max_age = "1d"
 [telemetry]
 enabled = true
 otlp.endpoint = 'localhost:4317'

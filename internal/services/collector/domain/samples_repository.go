@@ -8,6 +8,7 @@ import (
 
 type SampleRepository interface {
 	StoreSnapshot(ctx context.Context, snapshot common_domain.DataBaseSnapshot) error
+	StoreSnapshotSamples(ctx context.Context, snapID string, samples []*common_domain.QuerySample) error
 	StoreExecutionPlans(ctx context.Context, snapshot []*common_domain.ExecutionPlan) error
 	GetKnownPlanHandles(ctx context.Context, server *common_domain.ServerMeta, pageNumber int, pageSize int) ([]string, int, error)
 	ListServers(ctx context.Context, start time.Time, end time.Time) ([]ServerSummary, error)
@@ -16,6 +17,7 @@ type SampleRepository interface {
 	GetExecutionPlan(ctx context.Context, planHandle string, server *common_domain.ServerMeta) (*common_domain.ExecutionPlan, error)
 	GetQuerySample(ctx context.Context, snapID string, sampleID string) (*common_domain.QuerySample, error)
 	ListSnapshotSummaries(ctx context.Context, serverID string, start time.Time, end time.Time) ([]common_domain.SnapshotSummary, error)
+	PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error
 }
 
 type QueryMetricsRepository interface {

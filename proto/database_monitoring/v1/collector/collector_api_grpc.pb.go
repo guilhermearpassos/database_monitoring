@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IngestionService_RegisterAgent_FullMethodName        = "/database_monitoring.v1.IngestionService/RegisterAgent"
-	IngestionService_IngestMetrics_FullMethodName        = "/database_monitoring.v1.IngestionService/IngestMetrics"
-	IngestionService_IngestSnapshot_FullMethodName       = "/database_monitoring.v1.IngestionService/IngestSnapshot"
-	IngestionService_IngestExecutionPlans_FullMethodName = "/database_monitoring.v1.IngestionService/IngestExecutionPlans"
-	IngestionService_GetKnownPlanHandles_FullMethodName  = "/database_monitoring.v1.IngestionService/GetKnownPlanHandles"
+	IngestionService_RegisterAgent_FullMethodName         = "/database_monitoring.v1.IngestionService/RegisterAgent"
+	IngestionService_IngestMetrics_FullMethodName         = "/database_monitoring.v1.IngestionService/IngestMetrics"
+	IngestionService_IngestSnapshot_FullMethodName        = "/database_monitoring.v1.IngestionService/IngestSnapshot"
+	IngestionService_IngestSnapshotSamples_FullMethodName = "/database_monitoring.v1.IngestionService/IngestSnapshotSamples"
+	IngestionService_IngestExecutionPlans_FullMethodName  = "/database_monitoring.v1.IngestionService/IngestExecutionPlans"
+	IngestionService_GetKnownPlanHandles_FullMethodName   = "/database_monitoring.v1.IngestionService/GetKnownPlanHandles"
 )
 
 // IngestionServiceClient is the client API for IngestionService service.
@@ -33,6 +34,7 @@ type IngestionServiceClient interface {
 	RegisterAgent(ctx context.Context, in *RegisterAgentRequest, opts ...grpc.CallOption) (*RegisterAgentResponse, error)
 	IngestMetrics(ctx context.Context, in *DatabaseMetrics, opts ...grpc.CallOption) (*IngestMetricsResponse, error)
 	IngestSnapshot(ctx context.Context, in *IngestSnapshotRequest, opts ...grpc.CallOption) (*IngestSnapshotResponse, error)
+	IngestSnapshotSamples(ctx context.Context, in *IngestSnapshotSamplesRequest, opts ...grpc.CallOption) (*IngestSnapshotSamplesResponse, error)
 	IngestExecutionPlans(ctx context.Context, in *IngestExecutionPlansRequest, opts ...grpc.CallOption) (*IngestExecutionPlansResponse, error)
 	GetKnownPlanHandles(ctx context.Context, in *GetKnownPlanHandlesRequest, opts ...grpc.CallOption) (*GetKnownPlanHandlesResponse, error)
 }
@@ -75,6 +77,16 @@ func (c *ingestionServiceClient) IngestSnapshot(ctx context.Context, in *IngestS
 	return out, nil
 }
 
+func (c *ingestionServiceClient) IngestSnapshotSamples(ctx context.Context, in *IngestSnapshotSamplesRequest, opts ...grpc.CallOption) (*IngestSnapshotSamplesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IngestSnapshotSamplesResponse)
+	err := c.cc.Invoke(ctx, IngestionService_IngestSnapshotSamples_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *ingestionServiceClient) IngestExecutionPlans(ctx context.Context, in *IngestExecutionPlansRequest, opts ...grpc.CallOption) (*IngestExecutionPlansResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IngestExecutionPlansResponse)
@@ -102,6 +114,7 @@ type IngestionServiceServer interface {
 	RegisterAgent(context.Context, *RegisterAgentRequest) (*RegisterAgentResponse, error)
 	IngestMetrics(context.Context, *DatabaseMetrics) (*IngestMetricsResponse, error)
 	IngestSnapshot(context.Context, *IngestSnapshotRequest) (*IngestSnapshotResponse, error)
+	IngestSnapshotSamples(context.Context, *IngestSnapshotSamplesRequest) (*IngestSnapshotSamplesResponse, error)
 	IngestExecutionPlans(context.Context, *IngestExecutionPlansRequest) (*IngestExecutionPlansResponse, error)
 	GetKnownPlanHandles(context.Context, *GetKnownPlanHandlesRequest) (*GetKnownPlanHandlesResponse, error)
 	mustEmbedUnimplementedIngestionServiceServer()
@@ -122,6 +135,9 @@ func (UnimplementedIngestionServiceServer) IngestMetrics(context.Context, *Datab
 }
 func (UnimplementedIngestionServiceServer) IngestSnapshot(context.Context, *IngestSnapshotRequest) (*IngestSnapshotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IngestSnapshot not implemented")
+}
+func (UnimplementedIngestionServiceServer) IngestSnapshotSamples(context.Context, *IngestSnapshotSamplesRequest) (*IngestSnapshotSamplesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IngestSnapshotSamples not implemented")
 }
 func (UnimplementedIngestionServiceServer) IngestExecutionPlans(context.Context, *IngestExecutionPlansRequest) (*IngestExecutionPlansResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IngestExecutionPlans not implemented")
@@ -204,6 +220,24 @@ func _IngestionService_IngestSnapshot_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IngestionService_IngestSnapshotSamples_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IngestSnapshotSamplesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IngestionServiceServer).IngestSnapshotSamples(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IngestionService_IngestSnapshotSamples_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IngestionServiceServer).IngestSnapshotSamples(ctx, req.(*IngestSnapshotSamplesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _IngestionService_IngestExecutionPlans_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IngestExecutionPlansRequest)
 	if err := dec(in); err != nil {
@@ -258,6 +292,10 @@ var IngestionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IngestSnapshot",
 			Handler:    _IngestionService_IngestSnapshot_Handler,
+		},
+		{
+			MethodName: "IngestSnapshotSamples",
+			Handler:    _IngestionService_IngestSnapshotSamples_Handler,
 		},
 		{
 			MethodName: "IngestExecutionPlans",

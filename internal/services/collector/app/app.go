@@ -23,18 +23,22 @@ type Queries struct {
 }
 
 type Commands struct {
-	StoreSnapshot       command.StoreSnapShotHandler
-	StoreQueryMetrics   command.StoreQueryMetricsHandler
-	StoreExecutionPlans command.StoreExecutionPlansHandler
-	PurgeQueryMetrics   command.PurgeQueryMetricsHandler
+	StoreSnapshot        command.StoreSnapShotHandler
+	StoreQueryMetrics    command.StoreQueryMetricsHandler
+	StoreExecutionPlans  command.StoreExecutionPlansHandler
+	PurgeQueryMetrics    command.PurgeQueryMetricsHandler
+	StoreSnapshotSamples command.StoreSnapShotSamplesHandler
+	PurgeSnapshots       command.PurgeSnapshotsHandler
 }
 
 func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryMetricsRepository) *Application {
 	return &Application{
 		Commands: Commands{StoreSnapshot: command.NewStoreSnapShotHandler(repo),
-			StoreQueryMetrics:   command.NewStoreQueryMetricsHandler(queryMetricsRepo),
-			StoreExecutionPlans: command.NewStoreExecutionPlansHandler(repo),
-			PurgeQueryMetrics:   *command.NewPurgeQueryMetricsHandler(queryMetricsRepo),
+			StoreQueryMetrics:    command.NewStoreQueryMetricsHandler(queryMetricsRepo),
+			StoreExecutionPlans:  command.NewStoreExecutionPlansHandler(repo),
+			PurgeQueryMetrics:    command.NewPurgeQueryMetricsHandler(queryMetricsRepo),
+			StoreSnapshotSamples: command.NewStoreSnapShotSamplesHandler(repo),
+			PurgeSnapshots:       command.NewPurgeSnapshotsHandler(repo),
 		},
 		Queries: Queries{
 			GetKnownPlanHandlesHandler: query.NewGetKnownPlanHandlesHandler(repo),

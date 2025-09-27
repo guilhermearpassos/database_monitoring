@@ -67,10 +67,18 @@ func (s IngestionSvc) IngestSnapshot(ctx context.Context, request *collectorv1.I
 	if err != nil {
 		return nil, err
 	}
-	return &collectorv1.IngestSnapshotResponse{
-		Success: true,
-		Message: "",
-	}, nil
+	return &collectorv1.IngestSnapshotResponse{}, nil
+}
+func (s IngestionSvc) IngestSnapshotSamples(ctx context.Context, request *collectorv1.IngestSnapshotSamplesRequest) (*collectorv1.IngestSnapshotSamplesResponse, error) {
+	samples := make([]*common_domain.QuerySample, len(request.GetSamples()))
+	for i, sample := range request.GetSamples() {
+		samples[i] = converters.SampleToDomain(sample)
+	}
+	err := s.app.Commands.StoreSnapshotSamples.Handle(ctx, request.GetId(), samples)
+	if err != nil {
+		return nil, err
+	}
+	return &collectorv1.IngestSnapshotSamplesResponse{}, nil
 }
 func (s IngestionSvc) IngestExecutionPlans(ctx context.Context, in *collectorv1.IngestExecutionPlansRequest) (*collectorv1.IngestExecutionPlansResponse, error) {
 	domainPlans := make([]*common_domain.ExecutionPlan, len(in.GetPlans()))

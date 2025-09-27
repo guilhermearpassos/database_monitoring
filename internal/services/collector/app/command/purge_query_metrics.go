@@ -16,8 +16,8 @@ type PurgeQueryMetricsHandler struct {
 	repo domain.QueryMetricsRepository
 }
 
-func NewPurgeQueryMetricsHandler(repo domain.QueryMetricsRepository) *PurgeQueryMetricsHandler {
-	return &PurgeQueryMetricsHandler{repo: repo}
+func NewPurgeQueryMetricsHandler(repo domain.QueryMetricsRepository) PurgeQueryMetricsHandler {
+	return PurgeQueryMetricsHandler{repo: repo}
 }
 
 func (h *PurgeQueryMetricsHandler) Handle(ctx context.Context, cmd PurgeQueryMetrics) error {

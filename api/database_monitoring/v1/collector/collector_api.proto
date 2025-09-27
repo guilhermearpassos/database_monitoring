@@ -4,11 +4,13 @@ option go_package = "github.com/guilhermearpassos/database-monitoring/proto/data
 import "database_monitoring/v1/collector/metrics.proto";
 import "database_monitoring/v1/snapshot.proto";
 import "database_monitoring/v1/execution_plan.proto";
+import "database_monitoring/v1/sample.proto";
 
 service IngestionService{
   rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
   rpc IngestMetrics(DatabaseMetrics) returns (IngestMetricsResponse);
   rpc IngestSnapshot(IngestSnapshotRequest) returns (IngestSnapshotResponse);
+  rpc IngestSnapshotSamples(IngestSnapshotSamplesRequest) returns (IngestSnapshotSamplesResponse);
   rpc IngestExecutionPlans(IngestExecutionPlansRequest) returns (IngestExecutionPlansResponse);
   rpc GetKnownPlanHandles(GetKnownPlanHandlesRequest) returns (GetKnownPlanHandlesResponse);
 }
@@ -51,11 +53,16 @@ message IngestMetricsResponse{
 }
 
 message IngestSnapshotRequest{
-    DBSnapshot snapshot = 1;
+  DBSnapshot snapshot = 1;
 }
 
+
 message IngestSnapshotResponse{
-  bool success = 1;
-  string message = 2;
+}
+message IngestSnapshotSamplesRequest{
+  string id = 1;
+  repeated QuerySample samples = 5;
+}
+message IngestSnapshotSamplesResponse{
 
 }

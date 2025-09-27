@@ -9,6 +9,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/adapters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/command"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/ports"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -70,6 +72,42 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 			panic(err)
 		}
 	}()
+	if config.PurgeConfig.Enabled {
+		maxAge := config.PurgeConfig.MaxAge
+		go func() {
+			for {
+				keepUntil := time.Now().Add(-maxAge)
+				wg := sync.WaitGroup{}
+				wg.Add(3)
+				go func() {
+					defer wg.Done()
+					errM := application.Commands.PurgeQueryMetrics.Handle(context.Background(), command.PurgeQueryMetrics{
+						Start:     time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+						End:       keepUntil,
+						BatchSize: 1000,
+					})
+					if errM != nil {
+						log.Println(errM)
+						panic(errM)
+					}
+				}()
+				go func() {
+					defer wg.Done()
+					errM := application.Commands.PurgeSnapshots.Handle(context.Background(), command.PurgeSnapshots{
+						Start:     time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+						End:       keepUntil,
+						BatchSize: 100,
+					})
+					if errM != nil {
+						log.Println(errM)
+						panic(errM)
+					}
+				}()
+				wg.Wait()
+				time.Sleep(1 * time.Second)
+			}
+		}()
+	}
 	if config.GRPCServerConfig.GrpcUiConfig.Enabled {
 
 		cc, err3 := telemetry.OpenInstrumentedClientConn(collectorAddr, int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
