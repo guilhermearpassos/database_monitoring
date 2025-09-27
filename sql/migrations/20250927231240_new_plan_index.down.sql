@@ -1,0 +1,1 @@
+drop index query_plans_target_id_plan_handle_index

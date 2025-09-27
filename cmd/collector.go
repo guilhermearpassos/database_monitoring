@@ -79,7 +79,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 			for {
 				keepUntil := time.Now().Add(-maxAge)
 				wg := sync.WaitGroup{}
-				wg.Add(3)
+				wg.Add(2)
 				go func() {
 					defer wg.Done()
 					errM := application.Commands.PurgeQueryMetrics.Handle(context.Background(), command.PurgeQueryMetrics{
@@ -104,6 +104,14 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 						panic(errM)
 					}
 				}()
+				//go func() {
+				//	defer wg.Done()
+				//	errM := application.Commands.PurgeQueryPlans.Handle(context.Background(), 1000)
+				//	if errM != nil {
+				//		log.Println(errM)
+				//		panic(errM)
+				//	}
+				//}()
 				wg.Wait()
 				time.Sleep(interval)
 			}

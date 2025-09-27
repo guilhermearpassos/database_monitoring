@@ -451,3 +451,23 @@ delete from snapshot using rows_to_delete where snapshot.CTID = rows_to_delete.C
 	}
 	return nil
 }
+
+func (p *PostgresRepo) PurgeQueryPlans(ctx context.Context, batchSize int) error {
+	query := `with rows_to_delete as (
+    select qp.CTID from query_plans qp
+                left join query_samples qs on qs.plan_handle = qp.plan_handle
+                left join snapshot snap on qs.snap_id = snap.id
+                where qs.f_id is null
+limit $1
+)
+delete from query_plans using rows_to_delete where query_plans.CTID = rows_to_delete.CTID`
+	rowsAffected := int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, query, batchSize)
+		if err != nil {
+			return fmt.Errorf("purgeSnapshots: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+
+}

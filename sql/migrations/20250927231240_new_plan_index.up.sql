@@ -1,0 +1,1 @@
+create index query_plans_target_id_plan_handle_index on query_plans (target_id, plan_handle)

@@ -29,6 +29,7 @@ type Commands struct {
 	PurgeQueryMetrics    command.PurgeQueryMetricsHandler
 	StoreSnapshotSamples command.StoreSnapShotSamplesHandler
 	PurgeSnapshots       command.PurgeSnapshotsHandler
+	PurgeQueryPlans      command.PurgeQueryPlansHandler
 }
 
 func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryMetricsRepository) *Application {
@@ -39,6 +40,7 @@ func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryM
 			PurgeQueryMetrics:    command.NewPurgeQueryMetricsHandler(queryMetricsRepo),
 			StoreSnapshotSamples: command.NewStoreSnapShotSamplesHandler(repo),
 			PurgeSnapshots:       command.NewPurgeSnapshotsHandler(repo),
+			PurgeQueryPlans:      command.NewPurgeQueryPlansHandler(repo),
 		},
 		Queries: Queries{
 			GetKnownPlanHandlesHandler: query.NewGetKnownPlanHandlesHandler(repo),
