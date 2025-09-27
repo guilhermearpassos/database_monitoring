@@ -11,7 +11,8 @@ url = "localhost:7081"
 connstring = "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"
 [purge]
 enabled = true
-max_age = "1d"
+max_age = "240h"
+interval = "1m"
 [telemetry]
 enabled = true
 otlp.endpoint = 'localhost:4317'

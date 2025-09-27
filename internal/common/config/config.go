@@ -70,8 +70,9 @@ type CollectorConfig struct {
 }
 
 type PurgeConfig struct {
-	Enabled bool          `toml:"enabled"`
-	MaxAge  time.Duration `toml:"max_age"`
+	Enabled  bool          `toml:"enabled"`
+	MaxAge   time.Duration `toml:"max_age"`
+	Interval time.Duration `toml:"interval"`
 }
 
 type GrpcAPIConfig struct {

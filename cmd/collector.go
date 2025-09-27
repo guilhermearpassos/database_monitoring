@@ -74,6 +74,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 	}()
 	if config.PurgeConfig.Enabled {
 		maxAge := config.PurgeConfig.MaxAge
+		interval := config.PurgeConfig.Interval
 		go func() {
 			for {
 				keepUntil := time.Now().Add(-maxAge)
@@ -104,7 +105,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 					}
 				}()
 				wg.Wait()
-				time.Sleep(1 * time.Second)
+				time.Sleep(interval)
 			}
 		}()
 	}
