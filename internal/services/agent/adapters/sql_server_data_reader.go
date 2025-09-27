@@ -684,7 +684,7 @@ SELECT s.session_id,
        0 AS estimated_completion_time,
        s.transaction_isolation_level,
        0x0 as query_hash,
-       c.client_net_address
+       isnull(c.client_net_address, '') as client_net_address 
 
 FROM sys.dm_exec_sessions s
 INNER JOIN sys.dm_exec_connections c
