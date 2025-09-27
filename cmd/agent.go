@@ -190,7 +190,7 @@ func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.In
 		span.End()
 
 		select {
-		case <-time.After(time.Until(sampleTime.Add(1 * time.Second))):
+		case <-time.After(time.Until(sampleTime.Add(1 * time.Minute))):
 			break
 
 		}
