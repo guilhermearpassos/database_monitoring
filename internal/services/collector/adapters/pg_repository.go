@@ -12,24 +12,31 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"math"
 	"slices"
 	"time"
 )
 
 type PostgresRepo struct {
-	db *sqlx.DB
+	db     *sqlx.DB
+	tracer trace.Tracer
 }
 
 func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
-	return &PostgresRepo{db: db}
+	return &PostgresRepo{db: db, tracer: otel.Tracer("postgres-repo")}
 }
 
 var _ domain.SampleRepository = (*PostgresRepo)(nil)
 var _ domain.QueryMetricsRepository = (*PostgresRepo)(nil)
 
 func (p *PostgresRepo) StoreSnapshotSamples(ctx context.Context, snapID string, samples []*common_domain.QuerySample) error {
-
+	ctx, span := p.tracer.Start(ctx, "StoreSnapshotSamples")
+	defer span.End()
+	span.SetAttributes(attribute.String("snapshot_id", snapID),
+		attribute.Int64("num_samples", int64(len(samples))))
 	tx, err := p.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start transaction: %w", err)
@@ -67,6 +74,10 @@ func (p *PostgresRepo) StoreSnapshotSamples(ctx context.Context, snapID string, 
 }
 
 func (p *PostgresRepo) StoreSnapshot(ctx context.Context, snapshot common_domain.DataBaseSnapshot) (err error) {
+	ctx, span := p.tracer.Start(ctx, "StoreSnapshot")
+	defer span.End()
+	span.SetAttributes(attribute.String("snapshot_id", snapshot.SnapInfo.ID),
+		attribute.Int("num_samples", len(snapshot.Samples)))
 	tx, err := p.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start transaction: %w", err)
@@ -100,6 +111,8 @@ func (p *PostgresRepo) StoreSnapshot(ctx context.Context, snapshot common_domain
 
 // insertSnapshot inserts a single snapshot and returns the generated ID
 func (p *PostgresRepo) insertSnapshot(ctx context.Context, tx *sqlx.Tx, snapshot *common_domain.SnapInfo) (int, error) {
+	ctx, span := p.tracer.Start(ctx, "insertSnapshot")
+	defer span.End()
 	query := `
 		INSERT INTO snapshot (f_id, snap_time, target_id)
 		VALUES ($1, $2, $3)
@@ -120,6 +133,8 @@ func (p *PostgresRepo) insertSnapshot(ctx context.Context, tx *sqlx.Tx, snapshot
 
 // bulkInsertSamples performs bulk insert of samples using PostgreSQL COPY
 func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, samples []*common_domain.QuerySample, snapId int) error {
+	ctx, span := p.tracer.Start(ctx, "bulkInsertSamples")
+	defer span.End()
 	// Prepare the COPY statement
 	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("query_samples", "f_id", "snap_id", "sql_handle",
 		"blocked", "blocker", "plan_handle", "data", "wait_event", "wait_time",
@@ -163,6 +178,9 @@ func (p *PostgresRepo) bulkInsertSamples(ctx context.Context, tx *sqlx.Tx, sampl
 }
 
 func (p *PostgresRepo) StoreExecutionPlans(ctx context.Context, snapshot []*common_domain.ExecutionPlan) error {
+	ctx, span := p.tracer.Start(ctx, "StoreExecutionPlans")
+	defer span.End()
+	span.SetAttributes(attribute.Int("num_samples", len(snapshot)))
 	q := `insert into query_plans (plan_handle, plan_xml, target_id) VALUES `
 	if len(snapshot) == 0 {
 		return nil
@@ -216,6 +234,8 @@ func (p *PostgresRepo) StoreExecutionPlans(ctx context.Context, snapshot []*comm
 }
 
 func (p *PostgresRepo) GetKnownPlanHandles(ctx context.Context, server *common_domain.ServerMeta, pageNumber int, pageSize int) ([]string, int, error) {
+	ctx, span := p.tracer.Start(ctx, "GetKnownPlanHandles")
+	defer span.End()
 	//language=SQL
 	query := `
 select plan_handle, COUNT(*) OVER () AS total_count from query_plans where target_id = $1
@@ -256,6 +276,8 @@ limit $3
 }
 
 func (p *PostgresRepo) getOrCreateTargetID(ctx context.Context, tx *sqlx.Tx, server common_domain.ServerMeta) (int, error) {
+	ctx, span := p.tracer.Start(ctx, "getOrCreateTargetID")
+	defer span.End()
 	tId, err := p.getTargetID(ctx, tx, server)
 	if err != nil {
 		if errors.As(err, &custom_errors.NotFoundErr{}) {
@@ -272,6 +294,8 @@ func (p *PostgresRepo) getOrCreateTargetID(ctx context.Context, tx *sqlx.Tx, ser
 }
 
 func (p *PostgresRepo) getTargetID(ctx context.Context, tx sqlx.QueryerContext, server common_domain.ServerMeta) (int, error) {
+	ctx, span := p.tracer.Start(ctx, "getTargetID")
+	defer span.End()
 	q := "select id from target where host = $1 and type_id = 1;"
 	rows := tx.QueryRowxContext(ctx, q, server.Host)
 	err := rows.Err()
@@ -291,6 +315,8 @@ func (p *PostgresRepo) getTargetID(ctx context.Context, tx sqlx.QueryerContext, 
 }
 
 func (p *PostgresRepo) createTargetID(ctx context.Context, tx *sqlx.Tx, server common_domain.ServerMeta) (int, error) {
+	ctx, span := p.tracer.Start(ctx, "createTargetID")
+	defer span.End()
 	q := "insert into target (host, type_id, agent_version) values ($1, $2, $3);"
 	_, err := tx.ExecContext(ctx, q, server.Host, 1, "-")
 	if err != nil {
@@ -301,7 +327,8 @@ func (p *PostgresRepo) createTargetID(ctx context.Context, tx *sqlx.Tx, server c
 }
 
 func (p *PostgresRepo) StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error {
-
+	ctx, span := p.tracer.Start(ctx, "StoreQueryMetrics")
+	defer span.End()
 	tx, err := p.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("start transaction: %w", err)
@@ -334,6 +361,8 @@ func (p *PostgresRepo) StoreQueryMetrics(ctx context.Context, metrics []*common_
 
 // insertQueryStatSnapshot inserts a single query stat snapshot and returns the generated ID
 func (p *PostgresRepo) insertQueryStatSnapshot(ctx context.Context, tx *sqlx.Tx, meta common_domain.ServerMeta, collectedAt time.Time) (int, error) {
+	ctx, span := p.tracer.Start(ctx, "insertQueryStatSnapshot")
+	defer span.End()
 	query := `
 		INSERT INTO query_stat_snapshot (f_id, target_id, collected_at)
 		VALUES ($1, $2, $3)
@@ -360,6 +389,8 @@ func (p *PostgresRepo) insertQueryStatSnapshot(ctx context.Context, tx *sqlx.Tx,
 
 // bulkInsertQueryStatSamples performs bulk insert of query stat samples using PostgreSQL COPY
 func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.Tx, samples []*common_domain.QueryMetric, snapId int) error {
+	ctx, span := p.tracer.Start(ctx, "bulkInsertQueryStatSamples")
+	defer span.End()
 	// Prepare the COPY statement
 	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("query_stat_sample", "snap_id", "sql_handle", "data"))
 	if err != nil {
@@ -398,6 +429,8 @@ func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.
 }
 
 func (p *PostgresRepo) PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeQueryMetrics")
+	defer span.End()
 	// language=SQL
 	query := `
 with rows_to_delete as (
@@ -435,6 +468,8 @@ delete from query_stat_snapshot using rows_to_delete where query_stat_snapshot.C
 }
 
 func (p *PostgresRepo) PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, batchSize int) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeSnapshots")
+	defer span.End()
 	q := `with rows_to_delete as (
     select CTID from snapshot
 where snap_time between  $1 and $2
@@ -453,6 +488,8 @@ delete from snapshot using rows_to_delete where snapshot.CTID = rows_to_delete.C
 }
 
 func (p *PostgresRepo) PurgeQueryPlans(ctx context.Context, batchSize int) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeQueryPlans")
+	defer span.End()
 	query := `with rows_to_delete as (
     select qp.CTID from query_plans qp
                 left join query_samples qs on qs.plan_handle = qp.plan_handle
@@ -465,7 +502,21 @@ delete from query_plans using rows_to_delete where query_plans.CTID = rows_to_de
 	for rowsAffected > 0 {
 		r, err := p.db.ExecContext(ctx, query, batchSize)
 		if err != nil {
-			return fmt.Errorf("purgeSnapshots: %w", err)
+			return fmt.Errorf("PurgeQueryPlans: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+	return nil
+}
+func (p *PostgresRepo) PurgeAllQueryPlans(ctx context.Context) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeAllQueryPlans")
+	defer span.End()
+	query := `truncate table query_plans `
+	rowsAffected := int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, query)
+		if err != nil {
+			return fmt.Errorf("PurgeAllQueryPlans: %w", err)
 		}
 		rowsAffected, _ = r.RowsAffected()
 	}

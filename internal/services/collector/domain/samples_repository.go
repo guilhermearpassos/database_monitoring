@@ -19,6 +19,7 @@ type SampleRepository interface {
 	ListSnapshotSummaries(ctx context.Context, serverID string, start time.Time, end time.Time) ([]common_domain.SnapshotSummary, error)
 	PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error
 	PurgeQueryPlans(ctx context.Context, batchSize int) error
+	PurgeAllQueryPlans(ctx context.Context) error
 }
 
 type QueryMetricsRepository interface {

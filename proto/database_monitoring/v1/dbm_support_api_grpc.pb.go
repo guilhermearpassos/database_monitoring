@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	DBMSupportApi_ListDatabases_FullMethodName     = "/database_monitoring.v1.DBMSupportApi/ListDatabases"
 	DBMSupportApi_PurgeQueryMetrics_FullMethodName = "/database_monitoring.v1.DBMSupportApi/PurgeQueryMetrics"
+	DBMSupportApi_PurgeQueryPlans_FullMethodName   = "/database_monitoring.v1.DBMSupportApi/PurgeQueryPlans"
 )
 
 // DBMSupportApiClient is the client API for DBMSupportApi service.
@@ -29,6 +30,7 @@ const (
 type DBMSupportApiClient interface {
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
 	PurgeQueryMetrics(ctx context.Context, in *PurgeQueryMetricsRequest, opts ...grpc.CallOption) (*PurgeQueryMetricsResponse, error)
+	PurgeQueryPlans(ctx context.Context, in *PurgeQueryPlansRequest, opts ...grpc.CallOption) (*PurgeQueryPlansResponse, error)
 }
 
 type dBMSupportApiClient struct {
@@ -59,12 +61,23 @@ func (c *dBMSupportApiClient) PurgeQueryMetrics(ctx context.Context, in *PurgeQu
 	return out, nil
 }
 
+func (c *dBMSupportApiClient) PurgeQueryPlans(ctx context.Context, in *PurgeQueryPlansRequest, opts ...grpc.CallOption) (*PurgeQueryPlansResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeQueryPlansResponse)
+	err := c.cc.Invoke(ctx, DBMSupportApi_PurgeQueryPlans_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DBMSupportApiServer is the server API for DBMSupportApi service.
 // All implementations must embed UnimplementedDBMSupportApiServer
 // for forward compatibility.
 type DBMSupportApiServer interface {
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
 	PurgeQueryMetrics(context.Context, *PurgeQueryMetricsRequest) (*PurgeQueryMetricsResponse, error)
+	PurgeQueryPlans(context.Context, *PurgeQueryPlansRequest) (*PurgeQueryPlansResponse, error)
 	mustEmbedUnimplementedDBMSupportApiServer()
 }
 
@@ -80,6 +93,9 @@ func (UnimplementedDBMSupportApiServer) ListDatabases(context.Context, *ListData
 }
 func (UnimplementedDBMSupportApiServer) PurgeQueryMetrics(context.Context, *PurgeQueryMetricsRequest) (*PurgeQueryMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PurgeQueryMetrics not implemented")
+}
+func (UnimplementedDBMSupportApiServer) PurgeQueryPlans(context.Context, *PurgeQueryPlansRequest) (*PurgeQueryPlansResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PurgeQueryPlans not implemented")
 }
 func (UnimplementedDBMSupportApiServer) mustEmbedUnimplementedDBMSupportApiServer() {}
 func (UnimplementedDBMSupportApiServer) testEmbeddedByValue()                       {}
@@ -138,6 +154,24 @@ func _DBMSupportApi_PurgeQueryMetrics_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DBMSupportApi_PurgeQueryPlans_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeQueryPlansRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DBMSupportApiServer).PurgeQueryPlans(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DBMSupportApi_PurgeQueryPlans_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DBMSupportApiServer).PurgeQueryPlans(ctx, req.(*PurgeQueryPlansRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DBMSupportApi_ServiceDesc is the grpc.ServiceDesc for DBMSupportApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +186,10 @@ var DBMSupportApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PurgeQueryMetrics",
 			Handler:    _DBMSupportApi_PurgeQueryMetrics_Handler,
+		},
+		{
+			MethodName: "PurgeQueryPlans",
+			Handler:    _DBMSupportApi_PurgeQueryPlans_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

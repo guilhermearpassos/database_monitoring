@@ -41,8 +41,27 @@ func (s GRPCServer) PurgeQueryMetrics(ctx context.Context, in *dbmv1.PurgeQueryM
 	}
 	return &dbmv1.PurgeQueryMetricsResponse{}, nil
 }
+func (s GRPCServer) PurgeQueryPlans(ctx context.Context, in *dbmv1.PurgeQueryPlansRequest) (*dbmv1.PurgeQueryPlansResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.Int64("request.batch_size", in.BatchSize),
+	)
+
+	err := s.app.Commands.PurgeQueryPlans.Handle(ctx, int(in.BatchSize))
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return &dbmv1.PurgeQueryPlansResponse{}, nil
+}
 
 func (s GRPCServer) ListSnapshotSummaries(ctx context.Context, in *dbmv1.ListSnapshotSummariesRequest) (*dbmv1.ListSnapshotSummariesResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.start", in.Start.AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", in.End.AsTime().Format(time.RFC3339)),
+		attribute.String("request.server", in.Server),
+	)
+
 	resp, err := s.app.Queries.ListSnapshotSummaries.Handle(ctx, query.SnapshotSummariesQuery{
 		Start:      in.Start.AsTime(),
 		End:        in.End.AsTime(),
@@ -56,6 +75,8 @@ func (s GRPCServer) ListSnapshotSummaries(ctx context.Context, in *dbmv1.ListSna
 	for i, snap := range resp {
 		protoSnaps[i] = converters.SnapSummaryToProto(&snap)
 	}
+
+	span.SetAttributes(attribute.Int("response.summaries_count", len(protoSnaps)))
 	return &dbmv1.ListSnapshotSummariesResponse{SnapSummaries: protoSnaps}, nil
 }
 func (s GRPCServer) ListDatabases(ctx context.Context, request *dbmv1.ListDatabasesRequest) (*dbmv1.ListDatabasesResponse, error) {
@@ -162,6 +183,12 @@ func (s GRPCServer) ListSnapshots(ctx context.Context, request *dbmv1.ListSnapsh
 }
 
 func (s GRPCServer) ListServerSummary(ctx context.Context, request *dbmv1.ListServerSummaryRequest) (*dbmv1.ListServerSummaryResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.start", request.Start.AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", request.End.AsTime().Format(time.RFC3339)),
+	)
+
 	resp, err := s.app.Queries.ListServerSummary.Handle(ctx, request.Start.AsTime(), request.End.AsTime())
 	if err != nil {
 		return nil, err
@@ -176,25 +203,17 @@ func (s GRPCServer) ListServerSummary(ctx context.Context, request *dbmv1.ListSe
 			ConnectionsByWaitGroup: srv.ConnsByWaitGroup,
 		}
 	}
+
+	span.SetAttributes(attribute.Int("response.servers_count", len(protoServers)))
 	return &dbmv1.ListServerSummaryResponse{Servers: protoServers}, nil
-	//servers, err := s.app.Queries.ListServerSummary.Handle(ctx, request.GetStart().AsTime(), request.GetEnd().AsTime())
-	//if err != nil {
-	//	return nil, err
-	//}
-	//protoServers := make([]*dbmv1.ServerSummary, len(servers))
-	//for i, server := range servers {
-	//	protoServers[i] = &dbmv1.ServerSummary{
-	//		Name:                   server.Name,
-	//		Type:                   server.Type,
-	//		Connections:            int32(server.Connections),
-	//		RequestRate:            server.RequestRate,
-	//		ConnectionsByWaitGroup: server.ConnsByWaitGroup,
-	//	}
-	//}
-	//return &dbmv1.ListServerSummaryResponse{Servers: protoServers}, nil
 }
 
 func (s GRPCServer) GetSnapshot(ctx context.Context, request *dbmv1.GetSnapshotRequest) (*dbmv1.GetSnapshotResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.id", request.Id),
+	)
+
 	snap, err := s.app.Queries.GetSnapshot.Handle(ctx, request.Id)
 	if err != nil {
 		return nil, err
@@ -233,6 +252,12 @@ func (s GRPCServer) GetQueryMetrics(ctx context.Context, in *dbmv1.GetQueryMetri
 }
 
 func (s GRPCServer) GetSampleDetails(ctx context.Context, in *dbmv1.GetSampleDetailsRequest) (*dbmv1.GetSampleDetailsResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.snap_id", in.GetSnapId()),
+		attribute.String("request.sample_id", in.SampleId),
+	)
+
 	resp, err := s.app.Queries.GetQuerySampleDetails.Handle(ctx, in.GetSnapId(), in.SampleId)
 	if err != nil {
 		return nil, err

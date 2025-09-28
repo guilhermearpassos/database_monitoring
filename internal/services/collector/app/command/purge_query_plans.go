@@ -21,5 +21,8 @@ func NewPurgeQueryPlansHandler(repo domain.SampleRepository) PurgeQueryPlansHand
 }
 
 func (h *PurgeQueryPlansHandler) Handle(ctx context.Context, batchSize int) error {
+	if batchSize < 0 {
+		return h.repo.PurgeAllQueryPlans(ctx)
+	}
 	return h.repo.PurgeQueryPlans(ctx, batchSize)
 }

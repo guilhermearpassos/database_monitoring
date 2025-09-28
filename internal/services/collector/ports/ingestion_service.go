@@ -10,8 +10,11 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"time"
 )
 
 type IngestionSvc struct {
@@ -26,6 +29,13 @@ func NewIngestionSvc(app app.Application) *IngestionSvc {
 }
 
 func (s IngestionSvc) RegisterAgent(ctx context.Context, request *collectorv1.RegisterAgentRequest) (*collectorv1.RegisterAgentResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.target_host", request.TargetHost),
+		attribute.String("request.target_type", request.TargetType),
+		attribute.String("request.agent_version", request.AgentVersion),
+	)
+
 	s.agents[request.TargetHost] = &domain.AgentConfig{
 		ID:           uuid.NewString(),
 		TargetHost:   request.TargetHost,
@@ -37,6 +47,13 @@ func (s IngestionSvc) RegisterAgent(ctx context.Context, request *collectorv1.Re
 }
 
 func (s IngestionSvc) IngestMetrics(ctx context.Context, metrics *collectorv1.DatabaseMetrics) (*collectorv1.IngestMetricsResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.timestamp", metrics.Timestamp.AsTime().Format(time.RFC3339)),
+		attribute.String("request.server.host", metrics.Server.Host),
+		attribute.String("request.server.type", metrics.Server.Type),
+		attribute.Int("request.metrics_count", len(metrics.GetQueryMetrics().QueryMetrics)),
+	)
 
 	timestamp := metrics.Timestamp.AsTime()
 	domainMetrics := make([]*common_domain.QueryMetric, len(metrics.GetQueryMetrics().QueryMetrics))
@@ -61,15 +78,30 @@ func (s IngestionSvc) IngestMetrics(ctx context.Context, metrics *collectorv1.Da
 }
 
 func (s IngestionSvc) IngestSnapshot(ctx context.Context, request *collectorv1.IngestSnapshotRequest) (*collectorv1.IngestSnapshotResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	snapshot := request.GetSnapshot()
+	span.SetAttributes(
+		attribute.String("request.snapshot.id", snapshot.Id),
+		attribute.String("request.snapshot.server_host", snapshot.Server.Host),
+		attribute.String("request.snapshot.server_type", snapshot.Server.Type),
+		attribute.Int("request.snapshot.samples_count", len(snapshot.Samples)),
+	)
 
-	domain_snap := converters.DatabaseSnapshotToDomain(request.GetSnapshot())
+	domain_snap := converters.DatabaseSnapshotToDomain(snapshot)
 	err := s.app.Commands.StoreSnapshot.Handle(ctx, domain_snap)
 	if err != nil {
 		return nil, err
 	}
 	return &collectorv1.IngestSnapshotResponse{}, nil
 }
+
 func (s IngestionSvc) IngestSnapshotSamples(ctx context.Context, request *collectorv1.IngestSnapshotSamplesRequest) (*collectorv1.IngestSnapshotSamplesResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.id", request.GetId()),
+		attribute.Int("request.samples_count", len(request.GetSamples())),
+	)
+
 	samples := make([]*common_domain.QuerySample, len(request.GetSamples()))
 	for i, sample := range request.GetSamples() {
 		samples[i] = converters.SampleToDomain(sample)
@@ -80,7 +112,13 @@ func (s IngestionSvc) IngestSnapshotSamples(ctx context.Context, request *collec
 	}
 	return &collectorv1.IngestSnapshotSamplesResponse{}, nil
 }
+
 func (s IngestionSvc) IngestExecutionPlans(ctx context.Context, in *collectorv1.IngestExecutionPlansRequest) (*collectorv1.IngestExecutionPlansResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.Int("request.plans_count", len(in.GetPlans())),
+	)
+
 	domainPlans := make([]*common_domain.ExecutionPlan, len(in.GetPlans()))
 	for i, plan := range in.GetPlans() {
 		protoPlan, err := converters.ExecutionPlanToDomain(plan)
@@ -97,6 +135,10 @@ func (s IngestionSvc) IngestExecutionPlans(ctx context.Context, in *collectorv1.
 }
 
 func (s IngestionSvc) GetKnownPlanHandles(ctx context.Context, in *collectorv1.GetKnownPlanHandlesRequest) (*collectorv1.GetKnownPlanHandlesResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(attribute.String("host", in.Server.Host),
+		attribute.Int("page_size", int(in.PageSize)),
+		attribute.Int("page_number", int(in.PageNumber)))
 	ret, totalPages, err := s.app.Queries.GetKnownPlanHandlesHandler.Handle(ctx, &common_domain.ServerMeta{
 		Host: in.GetServer().Host,
 		Type: in.GetServer().Type,
