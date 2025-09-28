@@ -21,5 +21,8 @@ func NewPurgeSnapshotsHandler(repo domain.SampleRepository) PurgeSnapshotsHandle
 }
 
 func (h *PurgeSnapshotsHandler) Handle(ctx context.Context, cmd PurgeSnapshots) error {
+	if cmd.BatchSize < 0 {
+		return h.repo.PurgeAllSnapshots(ctx)
+	}
 	return h.repo.PurgeSnapshots(ctx, cmd.Start, cmd.End, cmd.BatchSize)
 }

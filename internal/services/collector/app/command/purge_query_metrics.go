@@ -21,5 +21,8 @@ func NewPurgeQueryMetricsHandler(repo domain.QueryMetricsRepository) PurgeQueryM
 }
 
 func (h *PurgeQueryMetricsHandler) Handle(ctx context.Context, cmd PurgeQueryMetrics) error {
+	if cmd.BatchSize <= 0 {
+		return h.repo.PurgeAllQueryMetrics(ctx)
+	}
 	return h.repo.PurgeQueryMetrics(ctx, cmd.Start, cmd.End, cmd.BatchSize)
 }

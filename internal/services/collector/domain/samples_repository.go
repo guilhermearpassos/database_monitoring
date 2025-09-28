@@ -20,6 +20,7 @@ type SampleRepository interface {
 	PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error
 	PurgeQueryPlans(ctx context.Context, batchSize int) error
 	PurgeAllQueryPlans(ctx context.Context) error
+	PurgeAllSnapshots(ctx context.Context) error
 }
 
 type QueryMetricsRepository interface {
@@ -27,4 +28,5 @@ type QueryMetricsRepository interface {
 	ListQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string) ([]*common_domain.QueryMetric, error)
 	GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) (*common_domain.QueryMetric, error)
 	PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error
+	PurgeAllQueryMetrics(ctx context.Context) error
 }

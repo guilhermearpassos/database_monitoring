@@ -466,6 +466,20 @@ delete from query_stat_snapshot using rows_to_delete where query_stat_snapshot.C
 	}
 	return nil
 }
+func (p *PostgresRepo) PurgeAllQueryMetrics(ctx context.Context) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeAllQueryMetrics")
+	defer span.End()
+	// language=SQL
+	query := `
+truncate table query_stat_snapshot cascade`
+	r, err := p.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("purgeQueryMetrics: %w", err)
+	}
+	rowsAffected, _ := r.RowsAffected()
+	span.SetAttributes(attribute.Int64("rows_affected", rowsAffected))
+	return nil
+}
 
 func (p *PostgresRepo) PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, batchSize int) error {
 	ctx, span := p.tracer.Start(ctx, "PurgeSnapshots")
@@ -487,6 +501,20 @@ delete from snapshot using rows_to_delete where snapshot.CTID = rows_to_delete.C
 	return nil
 }
 
+func (p *PostgresRepo) PurgeAllSnapshots(ctx context.Context) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeAllSnapshots")
+	defer span.End()
+	// language=SQL
+	query := `
+truncate table snapshot cascade`
+	r, err := p.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("purgeSnapshots: %w", err)
+	}
+	rowsAffected, _ := r.RowsAffected()
+	span.SetAttributes(attribute.Int64("rows_affected", rowsAffected))
+	return nil
+}
 func (p *PostgresRepo) PurgeQueryPlans(ctx context.Context, batchSize int) error {
 	ctx, span := p.tracer.Start(ctx, "PurgeQueryPlans")
 	defer span.End()
@@ -508,6 +536,7 @@ delete from query_plans using rows_to_delete where query_plans.CTID = rows_to_de
 	}
 	return nil
 }
+
 func (p *PostgresRepo) PurgeAllQueryPlans(ctx context.Context) error {
 	ctx, span := p.tracer.Start(ctx, "PurgeAllQueryPlans")
 	defer span.End()
