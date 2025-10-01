@@ -80,14 +80,14 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 		GetPlanPageSize = 100
 	}
 	for _, tgt := range config.TargetHosts {
-		startTarget(ctx, tgt, client, tracer, GetPlanPageSize)
+		startTarget(ctx, tgt, client, tracer, GetPlanPageSize, config.CollectMetrics)
 	}
 	for {
 		time.Sleep(5 * time.Second)
 	}
 	return nil
 }
-func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer, pageSize int32) {
+func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, collectorClient collectorv1.IngestionServiceClient, tracer trace.Tracer, pageSize int32, collectMetrics bool) {
 	db, err := telemetry.OpenInstrumentedDB(config.Driver, config.ConnString)
 	if err != nil {
 		panic(fmt.Errorf("error connecting to %s: %w", config.Alias, err))
@@ -103,7 +103,9 @@ func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, col
 	dataReader := adapters.NewSQLServerDataReader(db, serverMeta, knownHandlesSlice)
 	metricsSnapshotProcessor := adapters.NewSnapshotMetricsProcessor(600)
 	go collectSnapshots(dataReader, collectorClient, metricsSnapshotProcessor, tracer)
-	go collectQueryMetrics(dataReader, collectorClient, serverMeta, tracer)
+	if collectMetrics {
+		go collectQueryMetrics(dataReader, collectorClient, serverMeta, tracer)
+	}
 	go metricsSnapshotProcessor.Run(ctx)
 }
 

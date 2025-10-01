@@ -16,6 +16,7 @@ type AgentConfig struct {
 	MaxSamplesBatchSize  int                       `toml:"max_samples_batch_size"`
 	GetKnownPlanPageSize int                       `toml:"get_known_plan_page_size"`
 	Telemetry            telemetry.TelemetryConfig `toml:"telemetry"`
+	CollectMetrics       bool                      `toml:"collect_metrics"`
 }
 
 type GrpcConfig struct {
