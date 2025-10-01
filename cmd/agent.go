@@ -101,7 +101,7 @@ func startTarget(ctx context.Context, config config2.DBDataCollectionConfig, col
 		Type: config.Driver,
 	}
 	dataReader := adapters.NewSQLServerDataReader(db, serverMeta, knownHandlesSlice)
-	metricsSnapshotProcessor := adapters.NewSnapshotMetricsProcessor(600)
+	metricsSnapshotProcessor := adapters.NewSnapshotMetricsProcessor(10)
 	go collectSnapshots(dataReader, collectorClient, metricsSnapshotProcessor, tracer)
 	if collectMetrics {
 		go collectQueryMetrics(dataReader, collectorClient, serverMeta, tracer)
@@ -279,14 +279,16 @@ func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.Ingest
 			protoPlans = append(protoPlans, protoPlan)
 		}
 		if len(protoPlans) != 0 {
+			for chunk := range slices.Chunk(protoPlans, 10) {
+				_, err = client.IngestExecutionPlans(ctx, &collectorv1.IngestExecutionPlansRequest{Plans: chunk})
+				if err != nil {
 
-			_, err = client.IngestExecutionPlans(ctx, &collectorv1.IngestExecutionPlansRequest{Plans: protoPlans})
-			if err != nil {
+					span.RecordError(err)
+					span.SetStatus(otelcodes.Error, err.Error())
+					span.End()
+					panic(err)
+				}
 
-				span.RecordError(err)
-				span.SetStatus(otelcodes.Error, err.Error())
-				span.End()
-				panic(err)
 			}
 		}
 		span.End()
