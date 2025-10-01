@@ -104,6 +104,7 @@ type QuerySample struct {
 	SessionProgramName      string
 	SessionLastRequestStart time.Time
 	SessionLastRequestEnd   time.Time
+	SessionClientIp         string
 }
 
 type BlockingNode struct {

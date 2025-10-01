@@ -883,6 +883,7 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) 
 		QueryHash:               sample.QueryHash,
 		SessionLoginTime:        sample.Session.LoginTime.AsTime(),
 		SessionHost:             sample.Session.Host,
+		SessionClientIp:         sample.Session.ClientIp,
 		SessionStatus:           sample.Session.Status,
 		SessionProgramName:      sample.Session.ProgramName,
 		SessionLastRequestStart: sample.Session.LastRequestStart.AsTime(),
