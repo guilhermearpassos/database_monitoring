@@ -2,8 +2,9 @@ package domain
 
 import (
 	"context"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"time"
+
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 )
 
 type SampleRepository interface {
@@ -29,4 +30,14 @@ type QueryMetricsRepository interface {
 	GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) (*common_domain.QueryMetric, error)
 	PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error
 	PurgeAllQueryMetrics(ctx context.Context) error
+}
+
+type WarningsRepository interface {
+	StoreWarnings(ctx context.Context, warnings []*common_domain.Warning, serverMeta common_domain.ServerMeta) error
+	GetKnownWarnings(ctx context.Context, serverID string, pageSize int, pageNumber int) ([]*common_domain.Warning, error)
+	GetWarningsByType(ctx context.Context, serverID string, warningType string) ([]*common_domain.Warning, error)
+	DeleteWarning(ctx context.Context, serverID string, warningName string) error
+	DeleteWarningsByType(ctx context.Context, serverID string, warningType string) error
+	GetWarningStats(ctx context.Context) (map[string]map[string]int, error)
+	BatchStoreWarnings(ctx context.Context, warnings []*common_domain.Warning, serverMeta common_domain.ServerMeta, batchSize int) error
 }

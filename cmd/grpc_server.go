@@ -58,7 +58,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 		panic(err)
 	}
 	elk := adapters.NewPostgresRepo(db)
-	application := app.NewApplication(elk, elk)
+	application := app.NewApplication(elk, elk, elk)
 	server := ports.NewGRPCServer(application)
 	dbmv1.RegisterDBMApiServer(grpcServer, server)
 	dbmv1.RegisterDBMSupportApiServer(grpcServer, server)

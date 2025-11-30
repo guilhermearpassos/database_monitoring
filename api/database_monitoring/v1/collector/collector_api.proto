@@ -5,6 +5,7 @@ import "database_monitoring/v1/collector/metrics.proto";
 import "database_monitoring/v1/snapshot.proto";
 import "database_monitoring/v1/execution_plan.proto";
 import "database_monitoring/v1/sample.proto";
+import "database_monitoring/v1/warning.proto";
 
 service IngestionService{
   rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
@@ -13,8 +14,31 @@ service IngestionService{
   rpc IngestSnapshotSamples(IngestSnapshotSamplesRequest) returns (IngestSnapshotSamplesResponse);
   rpc IngestExecutionPlans(IngestExecutionPlansRequest) returns (IngestExecutionPlansResponse);
   rpc GetKnownPlanHandles(GetKnownPlanHandlesRequest) returns (GetKnownPlanHandlesResponse);
+  rpc IngestWarnings(IngestWarningsRequest) returns (IngestWarningsResponse);
+  rpc GetKnownWarnings(GetKnownWarningsRequest) returns (GetKnownWarningsResponse);
 }
 
+message GetKnownWarningsRequest {
+  ServerMetadata server = 1;
+  int32 page_size = 2;
+  int32 page_number = 3;
+
+}
+message GetKnownWarningsResponse {
+  repeated Warning warnings = 1;
+  int32 page_number = 2;
+  int32 page_size = 3;
+  int32 total_pages = 4;
+
+}
+message IngestWarningsRequest{
+  repeated Warning warnings = 1;
+  ServerMetadata server = 2;
+}
+
+message IngestWarningsResponse{
+
+}
 message GetKnownPlanHandlesRequest {
   ServerMetadata server = 1;
   int32 page_size = 2;

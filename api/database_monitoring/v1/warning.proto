@@ -1,0 +1,80 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1;dbmv1";
+
+import "database_monitoring/v1/snapshot.proto";
+message Warning {
+  string id = 1;
+  ServerMetadata server = 2;
+  oneof type {
+    SnapshotWarning snapshot = 3;
+    ExecutionPlanWarning plan = 4;
+    QueryStatWarning query = 5;
+  }
+}
+
+
+message SnapshotWarning {
+  oneof warning {
+    FrequentLock frequent_lock = 1;
+    LockingSleepingSession locking_sleeping_session = 2;
+  }
+}
+
+message ExecutionPlanWarning {
+  oneof warning {
+    ImplicitConversion implicit_conversion = 1;
+    RecommendedIndex missing_index = 2;
+    LargeTableScan large_table_scan = 3;
+  }
+}
+
+message QueryStatWarning {
+  oneof warning {
+    MemorySpill memory_spill = 1;
+    LargeRead large_read = 2;
+  }
+}
+
+message FrequentLock {
+  string resource_type = 1;
+  string resource_description = 2;
+  string blocking_query_hash = 3;
+  int32 lock_count = 4;
+  double average_duration_ms = 5;
+  double average_waiters = 6;
+}
+
+message LockingSleepingSession {
+  string blocking_query_hash = 1;
+  int32 max_blocked_session_count = 2;
+  int64 max_blocking_duration_ms = 3;
+}
+
+message ImplicitConversion {
+  string query_hash = 1;
+  string query_plan_hash = 2;
+  string column_name = 3;
+  string from_type = 4;
+  string to_type = 5;
+  int64 estimated_rows = 6;
+  string table_name = 7;
+}
+message RecommendedIndex {
+  string query_hash = 1;
+  string query_plan_hash = 2;
+  string index = 3;
+
+}
+message LargeTableScan {
+  string query_hash = 1;
+  string query_plan_hash = 2;
+}
+message MemorySpill {
+  string query_hash = 1;
+
+}
+message LargeRead {
+  string query_text = 1;
+  string query_hash = 2;
+}

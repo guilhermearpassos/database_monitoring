@@ -6,10 +6,10 @@ package dbmv1
 
 import (
 	fmt "fmt"
+	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	timestamppb "github.com/planetscale/vtprotobuf/types/known/timestamppb"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb1 "google.golang.org/protobuf/types/known/timestamppb"
 	io "io"
 )
 
@@ -623,7 +623,7 @@ func (m *PurgeQueryMetricsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamppb1.Timestamp{}
+				m.Start = &timestamp.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -659,7 +659,7 @@ func (m *PurgeQueryMetricsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamppb1.Timestamp{}
+				m.End = &timestamp.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -816,7 +816,7 @@ func (m *ListDatabasesRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamppb1.Timestamp{}
+				m.Start = &timestamp.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -852,7 +852,7 @@ func (m *ListDatabasesRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamppb1.Timestamp{}
+				m.End = &timestamp.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

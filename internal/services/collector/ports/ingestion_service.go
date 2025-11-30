@@ -3,18 +3,21 @@ package ports
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/command"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
+	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"time"
 )
 
 type IngestionSvc struct {
@@ -155,4 +158,43 @@ func (s IngestionSvc) GetKnownPlanHandles(ctx context.Context, in *collectorv1.G
 		PageSize:   in.PageSize,
 		TotalPages: int32(totalPages),
 	}, nil
+}
+
+func (s IngestionSvc) IngestWarnings(ctx context.Context, in *collectorv1.IngestWarningsRequest) (*collectorv1.IngestWarningsResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.Int("request.warnings_count", len(in.GetWarnings())),
+	)
+	domainWarnings := make([]*common_domain.Warning, len(in.GetWarnings()))
+	for i, warning := range in.GetWarnings() {
+		domainWarnings[i] = common_domain.NewWarning(warning)
+	}
+	err := s.app.Commands.StoreWarnings.Handle(ctx, command.StoreWarnings{
+		Warnings: domainWarnings,
+		ServerMeta: common_domain.ServerMeta{
+			Host: in.GetServer().GetHost(),
+			Type: in.GetServer().GetType(),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &collectorv1.IngestWarningsResponse{}, nil
+}
+
+func (s IngestionSvc) GetKnownWarnings(ctx context.Context, in *collectorv1.GetKnownWarningsRequest) (*collectorv1.GetKnownWarningsResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(attribute.String("request.host", in.GetServer().GetHost()),
+		attribute.Int("request.page_size", int(in.GetPageSize())),
+		attribute.Int("request.page_number", int(in.GetPageNumber())),
+	)
+	warns, err := s.app.Queries.GetKnownWarnings.Handle(ctx, in.GetServer().GetHost(), int(in.GetPageSize()), int(in.GetPageNumber()))
+	if err != nil {
+		return nil, err
+	}
+	protoW := make([]*dbmv1.Warning, len(warns))
+	for i, w := range warns {
+		protoW[i] = w.WarningData
+	}
+	return &collectorv1.GetKnownWarningsResponse{Warnings: protoW}, nil
 }

@@ -7,11 +7,11 @@ package collectorv1
 import (
 	binary "encoding/binary"
 	fmt "fmt"
+	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	v1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	timestamppb "github.com/planetscale/vtprotobuf/types/known/timestamppb"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb1 "google.golang.org/protobuf/types/known/timestamppb"
 	io "io"
 	math "math"
 )
@@ -585,7 +585,7 @@ func (m *DatabaseMetrics) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Timestamp == nil {
-				m.Timestamp = &timestamppb1.Timestamp{}
+				m.Timestamp = &timestamp.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Timestamp).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

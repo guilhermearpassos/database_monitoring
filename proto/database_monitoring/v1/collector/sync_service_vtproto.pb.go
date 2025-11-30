@@ -6,10 +6,10 @@ package collectorv1
 
 import (
 	fmt "fmt"
+	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	timestamppb "github.com/planetscale/vtprotobuf/types/known/timestamppb"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb1 "google.golang.org/protobuf/types/known/timestamppb"
 	io "io"
 )
 
@@ -524,7 +524,7 @@ func (m *PeerStateRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.SinceTimestamp == nil {
-				m.SinceTimestamp = &timestamppb1.Timestamp{}
+				m.SinceTimestamp = &timestamp.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.SinceTimestamp).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

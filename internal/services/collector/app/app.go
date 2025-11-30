@@ -20,6 +20,7 @@ type Queries struct {
 	ListSnapshots              query.ListSnapshotsHandler
 	ListSnapshotSummaries      query.ListSnapshotSummariesHandler
 	GetQueryMetrics            query.GetQueryMetricsHandler
+	GetKnownWarnings           query.GetKnownWarningsHandler
 }
 
 type Commands struct {
@@ -30,9 +31,10 @@ type Commands struct {
 	StoreSnapshotSamples command.StoreSnapShotSamplesHandler
 	PurgeSnapshots       command.PurgeSnapshotsHandler
 	PurgeQueryPlans      command.PurgeQueryPlansHandler
+	StoreWarnings        command.StoreWarningsHandler
 }
 
-func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryMetricsRepository) *Application {
+func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryMetricsRepository, warnRepo domain.WarningsRepository) *Application {
 	return &Application{
 		Commands: Commands{StoreSnapshot: command.NewStoreSnapShotHandler(repo),
 			StoreQueryMetrics:    command.NewStoreQueryMetricsHandler(queryMetricsRepo),
@@ -41,6 +43,7 @@ func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryM
 			StoreSnapshotSamples: command.NewStoreSnapShotSamplesHandler(repo),
 			PurgeSnapshots:       command.NewPurgeSnapshotsHandler(repo),
 			PurgeQueryPlans:      command.NewPurgeQueryPlansHandler(repo),
+			StoreWarnings:        command.NewStoreWarningsHandler(warnRepo),
 		},
 		Queries: Queries{
 			GetKnownPlanHandlesHandler: query.NewGetKnownPlanHandlesHandler(repo),
@@ -51,6 +54,7 @@ func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryM
 			ListSnapshots:              query.NewListSnapshotsHandler(repo),
 			ListSnapshotSummaries:      query.NewListSnapshotSummariesHandler(repo),
 			GetQueryMetrics:            query.NewGetQueryMetricsHandler(queryMetricsRepo),
+			GetKnownWarnings:           query.NewGetKnownWarningsHandler(warnRepo),
 		},
 	}
 }
