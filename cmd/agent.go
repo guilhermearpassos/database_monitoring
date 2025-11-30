@@ -157,141 +157,156 @@ func getKnownPlanHandles(err error, collectorClient collectorv1.IngestionService
 
 func collectQueryMetrics(reader domain.QueryMetricsReader, client collectorv1.IngestionServiceClient, serverName common_domain.ServerMeta, tracer trace.Tracer) {
 	for {
-		ctx, span := tracer.Start(context.Background(), "QueryMetrics")
+		func() {
+			defer handlePanic("collectQueryMetrics")
 
-		sampleTime := time.Now()
-		metrics, err := reader.CollectMetrics(ctx)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(otelcodes.Error, err.Error())
-			span.End()
-			panic(err)
-		}
-		protoMetrics := make([]*dbmv1.QueryMetric, len(metrics))
+			ctx, span := tracer.Start(context.Background(), "QueryMetrics")
 
-		for i, m := range metrics {
-			protoMetrics[i], err = converters.QueryMetricToProto(m)
+			sampleTime := time.Now()
+			metrics, err := reader.CollectMetrics(ctx)
 			if err != nil {
 				span.RecordError(err)
 				span.SetStatus(otelcodes.Error, err.Error())
 				span.End()
 				panic(err)
 			}
-		}
-		_, err = client.IngestMetrics(ctx, &collectorv1.DatabaseMetrics{
-			Server:    &dbmv1.ServerMetadata{Host: serverName.Host, Type: serverName.Type},
-			Timestamp: timestamppb.New(sampleTime),
-			Metrics:   &collectorv1.DatabaseMetrics_QueryMetrics{QueryMetrics: &collectorv1.DatabaseMetrics_QueryMetricSample{QueryMetrics: protoMetrics}},
-		})
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(otelcodes.Error, err.Error())
+			protoMetrics := make([]*dbmv1.QueryMetric, len(metrics))
+
+			for i, m := range metrics {
+				protoMetrics[i], err = converters.QueryMetricToProto(m)
+				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(otelcodes.Error, err.Error())
+					span.End()
+					panic(err)
+				}
+			}
+			_, err = client.IngestMetrics(ctx, &collectorv1.DatabaseMetrics{
+				Server:    &dbmv1.ServerMetadata{Host: serverName.Host, Type: serverName.Type},
+				Timestamp: timestamppb.New(sampleTime),
+				Metrics:   &collectorv1.DatabaseMetrics_QueryMetrics{QueryMetrics: &collectorv1.DatabaseMetrics_QueryMetricSample{QueryMetrics: protoMetrics}},
+			})
+			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(otelcodes.Error, err.Error())
+				span.End()
+				panic(err)
+			}
 			span.End()
-			panic(err)
-		}
-		span.End()
 
-		select {
-		case <-time.After(time.Until(sampleTime.Add(1 * time.Minute))):
-			break
+			select {
+			case <-time.After(time.Until(sampleTime.Add(1 * time.Minute))):
+				break
 
-		}
+			}
+		}()
 	}
 }
 
 func collectSnapshots(dataReader domain.SamplesReader, client collectorv1.IngestionServiceClient, metricsSnapshotProcessor domain.MetricsProcessor, tracer trace.Tracer) {
 
 	for {
-		ctx, span := tracer.Start(context.Background(), "CollectSnapshots")
-		var snapshots []*common_domain.DataBaseSnapshot
-		snapshots, err := dataReader.TakeSnapshot(ctx)
-		if err != nil {
+		func() {
+			defer handlePanic("collectSnapshots")
 
-			span.RecordError(err)
-			span.SetStatus(otelcodes.Error, err.Error())
-			span.End()
-			panic(err)
-		}
-		planHandleStrings := make(map[string]struct{})
-		for _, snapshot := range snapshots {
-			metricsSnapshotProcessor.QueueSnapshot(snapshot)
-			if snapshot == nil {
-				continue
-			}
-			sampleChunks := slices.Chunk(snapshot.Samples, 50)
-			firstChunk := true
-			for samples := range sampleChunks {
-				if firstChunk {
-					firstChunk = false
-					snapshot.Samples = samples
-					_, err = client.IngestSnapshot(ctx, &collectorv1.IngestSnapshotRequest{
-						Snapshot: converters.DatabaseSnapshotToProto(snapshot),
-					})
-				} else {
-
-					protoSamples := make([]*dbmv1.QuerySample, len(samples))
-					for i, sample := range samples {
-						protoSamples[i] = converters.SampleToProto(sample)
-					}
-					_, err = client.IngestSnapshotSamples(ctx, &collectorv1.IngestSnapshotSamplesRequest{
-						Id:      snapshot.SnapInfo.ID,
-						Samples: protoSamples,
-					})
-				}
-				if err != nil {
-					span.RecordError(err)
-					span.SetStatus(otelcodes.Error, err.Error())
-					span.End()
-					panic(err)
-				}
-			}
-
-			for _, qs := range snapshot.Samples {
-				if qs.PlanHandle == "" {
-					continue
-				}
-				planHandleStrings[string(qs.PlanHandle)] = struct{}{}
-			}
-
-		}
-		planHandles := make([]string, 0)
-		for k := range planHandleStrings {
-			planHandles = append(planHandles, k)
-		}
-		executionPlans, err := dataReader.GetPlanHandles(ctx, planHandles, true)
-		if err != nil {
-
-			span.RecordError(err)
-			span.SetStatus(otelcodes.Error, err.Error())
-			span.End()
-			panic(err)
-		}
-		protoPlans := make([]*dbmv1.ExecutionPlan, 0, len(executionPlans))
-		for _, p := range executionPlans {
-			protoPlan, err2 := converters.ExecutionPlanToProto(p)
-			if err2 != nil {
+			ctx, span := tracer.Start(context.Background(), "CollectSnapshots")
+			var snapshots []*common_domain.DataBaseSnapshot
+			snapshots, err := dataReader.TakeSnapshot(ctx)
+			if err != nil {
 
 				span.RecordError(err)
 				span.SetStatus(otelcodes.Error, err.Error())
 				span.End()
-				panic(err2)
+				panic(err)
 			}
-			protoPlans = append(protoPlans, protoPlan)
-		}
-		if len(protoPlans) != 0 {
-			for chunk := range slices.Chunk(protoPlans, 10) {
-				_, err = client.IngestExecutionPlans(ctx, &collectorv1.IngestExecutionPlansRequest{Plans: chunk})
-				if err != nil {
+			planHandleStrings := make(map[string]struct{})
+			for _, snapshot := range snapshots {
+				metricsSnapshotProcessor.QueueSnapshot(snapshot)
+				if snapshot == nil {
+					continue
+				}
+				sampleChunks := slices.Chunk(snapshot.Samples, 50)
+				firstChunk := true
+				for samples := range sampleChunks {
+					if firstChunk {
+						firstChunk = false
+						snapshot.Samples = samples
+						_, err = client.IngestSnapshot(ctx, &collectorv1.IngestSnapshotRequest{
+							Snapshot: converters.DatabaseSnapshotToProto(snapshot),
+						})
+					} else {
+
+						protoSamples := make([]*dbmv1.QuerySample, len(samples))
+						for i, sample := range samples {
+							protoSamples[i] = converters.SampleToProto(sample)
+						}
+						_, err = client.IngestSnapshotSamples(ctx, &collectorv1.IngestSnapshotSamplesRequest{
+							Id:      snapshot.SnapInfo.ID,
+							Samples: protoSamples,
+						})
+					}
+					if err != nil {
+						span.RecordError(err)
+						span.SetStatus(otelcodes.Error, err.Error())
+						span.End()
+						panic(err)
+					}
+				}
+
+				for _, qs := range snapshot.Samples {
+					if qs.PlanHandle == "" {
+						continue
+					}
+					planHandleStrings[string(qs.PlanHandle)] = struct{}{}
+				}
+
+			}
+			planHandles := make([]string, 0)
+			for k := range planHandleStrings {
+				planHandles = append(planHandles, k)
+			}
+			executionPlans, err := dataReader.GetPlanHandles(ctx, planHandles, true)
+			if err != nil {
+
+				span.RecordError(err)
+				span.SetStatus(otelcodes.Error, err.Error())
+				span.End()
+				panic(err)
+			}
+			protoPlans := make([]*dbmv1.ExecutionPlan, 0, len(executionPlans))
+			for _, p := range executionPlans {
+				protoPlan, err2 := converters.ExecutionPlanToProto(p)
+				if err2 != nil {
 
 					span.RecordError(err)
 					span.SetStatus(otelcodes.Error, err.Error())
 					span.End()
-					panic(err)
+					panic(err2)
 				}
-
+				protoPlans = append(protoPlans, protoPlan)
 			}
-		}
-		span.End()
-		time.Sleep(10 * time.Second)
+			if len(protoPlans) != 0 {
+				for chunk := range slices.Chunk(protoPlans, 10) {
+					_, err = client.IngestExecutionPlans(ctx, &collectorv1.IngestExecutionPlansRequest{Plans: chunk})
+					if err != nil {
+
+						span.RecordError(err)
+						span.SetStatus(otelcodes.Error, err.Error())
+						span.End()
+						panic(err)
+					}
+
+				}
+			}
+			span.End()
+			time.Sleep(10 * time.Second)
+		}()
+	}
+}
+func handlePanic(functionName string) {
+	if r := recover(); r != nil {
+		fmt.Printf("Recovered from panic in %s: %v\n", functionName, r)
+		// Give the goroutine some time to recover before restarting
+		time.Sleep(5 * time.Second)
 	}
 }
