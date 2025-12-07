@@ -1,10 +1,10 @@
 ARG release_image_tag
-FROM golang:1.24.0 as base
+FROM golang:1.24.0 AS base
 LABEL authors="guilherme passos"
 COPY ./go.mod ./go.sum ./
 RUN go mod download
 
-FROM base as build
+FROM base AS build
 #ENV CGO_ENABLED 1
 RUN go env -w GOCACHE=/go-cache
 COPY . .
