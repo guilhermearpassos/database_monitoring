@@ -4,16 +4,14 @@ import {
     DataQueryRequest,
     DataQueryResponse,
     DataSourceApi,
-    DataSourceInstanceSettings,
-    createDataFrame,
-    FieldType, SelectableValue, MutableDataFrame,
+    DataSourceInstanceSettings, SelectableValue,
 } from '@grafana/data';
 
 import { MyQuery, MyDataSourceOptions, DEFAULT_QUERY, DataSourceResponse } from './types';
 import { lastValueFrom } from 'rxjs';
 
 // Function to fetch HTML content from backend
-const getOpts = async (query) => {
+const getOpts: (query: string) => Promise<{ label: string; value: string }[]> = async (query: string) => {
     try {
         const response = await getBackendSrv().fetch({
             url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?' + query,
@@ -89,12 +87,6 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
         return this.getDropdownOptions('databases');
     }
 
-    async getTableOptions(database: string): Promise<SelectableValue[]> {
-        return this.getDropdownOptions('tables', { database });
-    }
-    async getColumnOptions(database: string, table: string): Promise<SelectableValue[]> {
-        return this.getDropdownOptions('columns', { database, table });
-    }
   async request(url: string, params?: string) {
     const response = getBackendSrv().fetch<DataSourceResponse>({
       url: `${this.baseUrl}${url}${params?.length ? `?${params}` : ''}`,
