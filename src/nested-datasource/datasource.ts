@@ -1,4 +1,4 @@
-import { getBackendSrv, isFetchError } from '@grafana/runtime';
+import {FetchResponse, getBackendSrv, isFetchError} from '@grafana/runtime';
 import {
     CoreApp,
     DataQueryRequest,
@@ -8,12 +8,13 @@ import {
 } from '@grafana/data';
 
 import { MyQuery, MyDataSourceOptions, DEFAULT_QUERY, DataSourceResponse } from './types';
-import { lastValueFrom } from 'rxjs';
+import {lastValueFrom, Observable} from 'rxjs';
 
 // Function to fetch HTML content from backend
 const getOpts: (query: string) => Promise<{ label: string; value: string }[]> = async (query: string) => {
     try {
-        const response = await getBackendSrv().fetch({
+        let response: Observable<FetchResponse<{ label: string; value: string }[]>>;
+        response = await getBackendSrv().fetch({
             url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?' + query,
         });
         // Get the response as text since it's HTML

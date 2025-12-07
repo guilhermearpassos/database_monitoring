@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { PluginPage, getBackendSrv } from '@grafana/runtime';
-import { lastValueFrom } from 'rxjs';
+import {PluginPage, getBackendSrv, FetchResponse} from '@grafana/runtime';
+import {lastValueFrom, Observable} from 'rxjs';
 // import {InteractiveTable} from "@grafana/ui";
 const PageOne = () => {
     const [htmlContent, setHtmlContent] = useState<string>('Loading...');
@@ -11,11 +11,12 @@ const PageOne = () => {
     // Function to fetch HTML content from backend
     const getMyCustomEndpoint = async () => {
         try {
-            const response = await getBackendSrv().fetch({
+            let response: Observable<FetchResponse<string>>;
+            response = await getBackendSrv().fetch({
                 url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/myCustomEndpoint',
             });
             // Get the response as text since it's HTML
-            const textResponse: { data: string } = await lastValueFrom[htmlContent](response);
+            const textResponse: { data: string } = await lastValueFrom(response);
             return textResponse.data;
         } catch (err) {
             throw new Error(`Failed to fetch: ${err}`);
