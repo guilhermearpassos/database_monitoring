@@ -73,7 +73,7 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
         try {
             const options = await getOpts(`${query.toString()}`);
 
-            return options.map((option: { label: string; value: string }) => ({
+            return options.map((option: SelectableValue) => ({
                 label: option.label,
                 value: option.value,
             }));
