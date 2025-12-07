@@ -11,9 +11,9 @@ import { MyQuery, MyDataSourceOptions, DEFAULT_QUERY, DataSourceResponse } from 
 import {lastValueFrom, Observable} from 'rxjs';
 
 // Function to fetch HTML content from backend
-const getOpts: (query: string) => Promise<{ label: string; value: string }[]> = async (query: string) => {
+const getOpts: (query: string) => Promise<SelectableValue[]> = async (query: string) => {
     try {
-        let response: Observable<FetchResponse<{ label: string; value: string }[]>>;
+        let response: Observable<FetchResponse<SelectableValue[]>>;
         response = await getBackendSrv().fetch({
             url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?' + query,
         });
