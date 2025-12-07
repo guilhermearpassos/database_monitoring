@@ -17,32 +17,32 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type SQLServerDataReader struct {
-	db                *sqlx.DB
-	lastQueryCounters map[string]map[string]int64
-	knowPlanHandles   map[string]struct{}
-	serverData        common_domain.ServerMeta
-	tracer            trace.Tracer
+	dbByHost                map[string]*sqlx.DB
+	lastQueryCountersByHost map[string]map[string]map[string]int64
+	qCountMu                *sync.Mutex
+	tracer                  trace.Tracer
 }
 
 var _ domain.SamplesReader = (*SQLServerDataReader)(nil)
 var _ domain.QueryMetricsReader = (*SQLServerDataReader)(nil)
 
-func NewSQLServerDataReader(db *sqlx.DB, serverData common_domain.ServerMeta, knowPlanHandles []string) SQLServerDataReader {
-	knowPlanHandlesMap := make(map[string]struct{}, len(knowPlanHandles))
-	for _, knowPlanHandle := range knowPlanHandles {
-		knowPlanHandlesMap[knowPlanHandle] = struct{}{}
-	}
-	return SQLServerDataReader{db: db, lastQueryCounters: make(map[string]map[string]int64), knowPlanHandles: knowPlanHandlesMap, serverData: serverData,
+func NewSQLServerDataReader(dbByHost map[string]*sqlx.DB) SQLServerDataReader {
+	return SQLServerDataReader{dbByHost: dbByHost, lastQueryCountersByHost: make(map[string]map[string]map[string]int64), qCountMu: &sync.Mutex{},
 		tracer: otel.Tracer("SQLServerDataReader")}
 }
 
-func (S SQLServerDataReader) TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error) {
+func (S SQLServerDataReader) TakeSnapshot(ctx context.Context, server common_domain.ServerMeta) ([]*common_domain.DataBaseSnapshot, error) {
 	qDBName := `select database_id, name from sys.databases`
-	rowsDB, err := S.db.QueryContext(ctx, qDBName)
+	db, ok := S.dbByHost[server.Host]
+	if !ok {
+		return nil, fmt.Errorf("dbByHost[%s] not found", server.Host)
+	}
+	rowsDB, err := db.QueryContext(ctx, qDBName)
 	if err != nil {
 		return nil, fmt.Errorf("queryDatabases: %w", err)
 	}
@@ -101,7 +101,7 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
 	 where text is not null
 `
-	rows, err := S.db.QueryxContext(ctx, query)
+	rows, err := db.QueryxContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 		missingBlockingSessionIds = append(missingBlockingSessionIds, i)
 	}
 
-	sleepingSamples, err := S.getSleepingBlockingSessions(ctx, missingBlockingSessionIds, dbInfo,
+	sleepingSamples, err := S.getSleepingBlockingSessions(ctx, db, missingBlockingSessionIds, dbInfo,
 		snapID,
 		snapTime)
 	if err != nil {
@@ -288,15 +288,21 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 			ID:        snapID,
 			Timestamp: snapTime,
 			Server: common_domain.ServerMeta{
-				Host: S.serverData.Host,
-				Type: S.serverData.Type,
+				Host: server.Host,
+				Type: server.Type,
 			},
 		},
 	})
 	return snapshots, nil
 }
 
-func (S SQLServerDataReader) CollectMetrics(ctx context.Context) ([]*common_domain.QueryMetric, error) {
+func (S SQLServerDataReader) CollectMetrics(ctx context.Context, server common_domain.ServerMeta) ([]*common_domain.QueryMetric, error) {
+	ctx, span := S.tracer.Start(ctx, "CollectMetrics")
+	defer span.End()
+	db, ok := S.dbByHost[server.Host]
+	if !ok {
+		return nil, fmt.Errorf("no db for host %s", server.Host)
+	}
 	ret := make([]*common_domain.QueryMetric, 0)
 	query := `
 with qstats as (select query_hash,
@@ -397,7 +403,7 @@ from qstats_aggr_split qas
          cross apply sys.dm_exec_sql_text(plan_handle)
  where text is not null
 `
-	rows, err := S.db.QueryContext(ctx, query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("collecting metrics: %w", err)
 	}
@@ -479,8 +485,11 @@ from qstats_aggr_split qas
 			"totalColumnstoreSegmentSkips": totalColumnstoreSegmentSkips,
 			"totalSpills":                  totalSpills,
 		}
-		lastCounters, ok := S.lastQueryCounters[string(queryHash)]
-		S.lastQueryCounters[string(queryHash)] = counters
+		S.qCountMu.Lock()
+		lastQueryCounters := S.lastQueryCountersByHost[server.Host]
+		lastCounters, ok := lastQueryCounters[string(queryHash)]
+		lastQueryCounters[string(queryHash)] = counters
+		S.qCountMu.Unlock()
 		digestedCounters := counters
 		if ok {
 			digestedCounters = map[string]int64{
@@ -524,14 +533,15 @@ from qstats_aggr_split qas
 	return ret, nil
 }
 
-func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []string, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error) {
+func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []string, server common_domain.ServerMeta) (map[string]*common_domain.ExecutionPlan, error) {
 	ctx, span := S.tracer.Start(ctx, "GetPlanHandles")
 	defer span.End()
+	db, ok := S.dbByHost[server.Host]
+	if !ok {
+		return nil, fmt.Errorf("db not found for host %s", server.Host)
+	}
 	handles2 := make([]interface{}, 0, len(handles))
 	for _, handle := range handles {
-		if _, ok := S.knowPlanHandles[handle]; ok && ignoreKnown {
-			continue
-		}
 		decoded, err := base64.StdEncoding.DecodeString(handle)
 		if err == nil {
 
@@ -542,7 +552,7 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []strin
 		return make(map[string]*common_domain.ExecutionPlan), nil
 	}
 
-	ret, err3 := S._batch_fetch_plan_handles(ctx, handles2)
+	ret, err3 := S._batch_fetch_plan_handles(ctx, db, handles2, server)
 	if err3 != nil {
 		ret = make(map[string]*common_domain.ExecutionPlan)
 		//fallback to 1 by 1 strategy, as there might be a problem with tempdb
@@ -553,7 +563,7 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []strin
 				span.RecordError(err3)
 				continue
 			}
-			row := S.db.QueryRowContext(ctx, query, decodeString)
+			row := db.QueryRowContext(ctx, query, decodeString)
 			err := row.Err()
 			if err != nil {
 				return nil, fmt.Errorf("fetch plan handle - %w", err)
@@ -572,19 +582,16 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []strin
 			ret[handle] = &common_domain.ExecutionPlan{
 				PlanHandle: handle,
 				XmlData:    *queryPlan,
-				Server:     S.serverData,
+				Server:     server,
 			}
 		}
-	}
-	for k := range ret {
-		S.knowPlanHandles[k] = struct{}{}
 	}
 	return ret, nil
 }
 
-func (S SQLServerDataReader) _batch_fetch_plan_handles(ctx context.Context, handles2 []interface{}) (map[string]*common_domain.ExecutionPlan, error) {
+func (S SQLServerDataReader) _batch_fetch_plan_handles(ctx context.Context, db *sqlx.DB, handles2 []interface{}, server common_domain.ServerMeta) (map[string]*common_domain.ExecutionPlan, error) {
 
-	tx, err := S.db.BeginTx(ctx, nil)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
@@ -629,7 +636,7 @@ select handle, query_plan from #temp_plans
 		ret[string(handle)] = &common_domain.ExecutionPlan{
 			PlanHandle: base64.StdEncoding.EncodeToString(handle),
 			XmlData:    *queryPlan,
-			Server:     S.serverData,
+			Server:     server,
 		}
 
 	}
@@ -640,7 +647,7 @@ select handle, query_plan from #temp_plans
 	return ret, nil
 }
 
-func (S SQLServerDataReader) getSleepingBlockingSessions(ctx context.Context, ids []int, dbInfo map[string]common_domain.DataBaseMetadata, snapID string, snapTime time.Time) ([]*common_domain.QuerySample, error) {
+func (S SQLServerDataReader) getSleepingBlockingSessions(ctx context.Context, db *sqlx.DB, ids []int, dbInfo map[string]common_domain.DataBaseMetadata, snapID string, snapTime time.Time) ([]*common_domain.QuerySample, error) {
 	if len(ids) == 0 {
 		return []*common_domain.QuerySample{}, nil
 	}
@@ -697,7 +704,7 @@ WHERE s.status = 'sleeping'
   AND t.text IS NOT NULL
     AND s.session_id IN (%s)`, strings.Join(placeholders, ","))
 
-	rows, err := S.db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("error querying sleeping sessions: %w", err)
 	}

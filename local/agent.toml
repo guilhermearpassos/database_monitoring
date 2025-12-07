@@ -12,6 +12,22 @@ grpc_message_max_size=1000000
 alias = "localhost"
 driver = "mssql"
 conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "localhost2"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "localhost3"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "localhost4"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "localhost5"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
 [telemetry]
 enabled = true
 otlp.endpoint = 'localhost:4317'

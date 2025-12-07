@@ -6,9 +6,9 @@ import (
 )
 
 type SamplesReader interface {
-	TakeSnapshot(ctx context.Context) ([]*common_domain.DataBaseSnapshot, error)
-	GetPlanHandles(ctx context.Context, handles []string, ignoreKnown bool) (map[string]*common_domain.ExecutionPlan, error)
+	TakeSnapshot(ctx context.Context, server common_domain.ServerMeta) ([]*common_domain.DataBaseSnapshot, error)
+	GetPlanHandles(ctx context.Context, handles []string, server common_domain.ServerMeta) (map[string]*common_domain.ExecutionPlan, error)
 }
 type QueryMetricsReader interface {
-	CollectMetrics(ctx context.Context) ([]*common_domain.QueryMetric, error)
+	CollectMetrics(ctx context.Context, server common_domain.ServerMeta) ([]*common_domain.QueryMetric, error)
 }
