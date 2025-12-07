@@ -1,0 +1,11 @@
+apiVersion: 1
+
+apps:
+  - type: 'guilhermearpassos-sqlsights-app'
+    org_id: 1
+    org_name: 'guilhermearpassos'
+    disabled: false
+    jsonData:
+      apiUrl: host.docker.internal:8082
+    secureJsonData:
+      apiKey: secret-key
