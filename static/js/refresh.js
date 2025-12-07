@@ -45,7 +45,7 @@ function toggleRefreshDropdown() {
 // Handle refresh interval selection
 document.querySelectorAll('.refresh-option').forEach(option => {
     option.addEventListener('click', () => {
-        const interval = parseInt(option.dataset.interval);
+        const interval = parseInt(option.dataset.interval, 10);
         refreshInterval = interval;
 
         document.getElementById('refreshInterval').textContent = interval === 0 ? 'Auto (Off)' :
