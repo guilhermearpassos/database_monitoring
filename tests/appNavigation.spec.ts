@@ -4,7 +4,7 @@ import { ROUTES } from '../src/constants';
 test.describe('navigating app', () => {
   test('page one should render successfully', async ({ gotoPage, page }) => {
     await gotoPage(`/${ROUTES.One}`);
-    await expect(page.getByText('This is page one.')).toBeVisible();
+    await expect(page.getByText('Use SQL Insights panels in your dashboards')).toBeVisible();
   });
 
   // test('page two should render successfully', async ({ gotoPage, page }) => {
