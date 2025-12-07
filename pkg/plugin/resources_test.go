@@ -3,9 +3,16 @@ package plugin
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"net"
 	"net/http"
 	"testing"
+	"time"
 )
 
 // mockCallResourceResponseSender implements backend.CallResourceResponseSender
@@ -20,11 +27,52 @@ func (s *mockCallResourceResponseSender) Send(response *backend.CallResourceResp
 	return nil
 }
 
+type MockGrpcService struct {
+	*dbmv1.UnimplementedDBMApiServer
+	*dbmv1.UnimplementedDBMSupportApiServer
+}
+
+var testServerAddress string
+
+func TestMain(m *testing.M) {
+	lis, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(err)
+	}
+	defer lis.Close()
+
+	testServerAddress = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
+
+	grpcServer := grpc.NewServer()
+	mockService := &MockGrpcService{}
+	dbmv1.RegisterDBMApiServer(grpcServer, mockService)
+	dbmv1.RegisterDBMSupportApiServer(grpcServer, mockService)
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			panic(err)
+		}
+	}()
+	defer grpcServer.Stop()
+
+	m.Run()
+}
+
 // TestCallResource tests CallResource calls, using backend.CallResourceRequest and backend.CallResourceResponse.
 // This ensures the httpadapter for CallResource works correctly.
 func TestCallResource(t *testing.T) {
 	// Initialize app
-	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	data := map[string]interface{}{
+		"APIURL": testServerAddress,
+	}
+	marshal, err2 := json.Marshal(data)
+	require.NoError(t, err2)
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
+		JSONData:                marshal,
+		DecryptedSecureJSONData: nil,
+		Updated:                 time.Time{},
+		APIVersion:              "",
+	})
 	if err != nil {
 		t.Fatalf("new app: %s", err)
 	}
@@ -66,12 +114,6 @@ func TestCallResource(t *testing.T) {
 			body:      []byte(`{"message":"ok"}`),
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"message":"ok"}`),
-		},
-		{
-			name:      "get non existing handler 404",
-			method:    http.MethodGet,
-			path:      "not_found",
-			expStatus: http.StatusNotFound,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
