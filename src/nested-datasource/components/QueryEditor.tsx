@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { QueryEditorProps, SelectableValue } from '@grafana/data';
+import { QueryEditorProps } from '@grafana/data';
 import { Combobox, InlineField, InlineFieldRow, ComboboxOption } from '@grafana/ui';
 import { DataSource } from '../datasource';
 import { MyDataSourceOptions, MyQuery } from '../types';
@@ -17,7 +17,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
 
     const onDatabaseChange = (value: ComboboxOption<string|number> | null) => {
-        onChange({ ...query, database: value?.value });
+        const databaseValue = value?.value ? String(value.value) : undefined;
+
+        onChange({ ...query, database: databaseValue });
     };
 
 
@@ -26,6 +28,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
             <InlineFieldRow>
                 <InlineField label="Database">
                     <Combobox
+                        width={"auto"}
                         options={databaseOptions}
                         value={query.database}
                         onChange={onDatabaseChange}
