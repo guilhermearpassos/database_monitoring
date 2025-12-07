@@ -33,6 +33,6 @@ describe('Components/App', () => {
     );
 
     // Application is lazy loaded, so we need to wait for the component and routes to be rendered
-    await waitFor(() => expect(queryByText(/this is page one./i)).toBeInTheDocument(), { timeout: 2000 });
+    await waitFor(() => expect(queryByText(/Use SQL Insights panels in your dashboards/i)).toBeInTheDocument(), { timeout: 2000 });
   });
 });
