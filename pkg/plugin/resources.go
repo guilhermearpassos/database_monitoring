@@ -1,0 +1,328 @@
+package plugin
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/data"
+	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// handlePing is an example HTTP GET resource that returns a {"message": "ok"} JSON response.
+func (a *App) handlePing(w http.ResponseWriter, req *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	if _, err := w.Write([]byte(`{"message": "ok"}`)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleEcho is an example HTTP POST resource that accepts a JSON with a "message" key and
+// returns to the client whatever it is sent.
+func (a *App) handleEcho(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Add("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (a *App) handleMyCustomEndpoint(w http.ResponseWriter, r *http.Request) {
+	// handle the request
+	// e.g. call a third-party API
+	w.Write([]byte("<div>my custom response</div>"))
+	w.WriteHeader(http.StatusOK)
+}
+
+// registerRoutes takes a *http.ServeMux and registers some HTTP handlers.
+func (a *App) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/ping", a.handlePing)
+	mux.HandleFunc("/", a.handlePing)
+	mux.HandleFunc("/myCustomEndpoint", a.handleMyCustomEndpoint)
+	mux.HandleFunc("/echo", a.handleEcho)
+	mux.HandleFunc("/datasource-options", a.handleDropdownOptions)
+	mux.HandleFunc("/query", a.handleQuery)
+}
+
+// Add this method to handle queries from nested datasource
+func (a *App) handleQuery(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse the request body to match Grafana's query format
+	var queryReq struct {
+		Queries       []json.RawMessage `json:"queries"`
+		Range         interface{}       `json:"range"`
+		IntervalMs    int64             `json:"intervalMs"`
+		MaxDataPoints int64             `json:"maxDataPoints"`
+	}
+
+	if err := json.NewDecoder(req.Body).Decode(&queryReq); err != nil {
+		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Create a backend query request
+	backendReq := &backend.QueryDataRequest{
+		Queries: make([]backend.DataQuery, len(queryReq.Queries)),
+	}
+
+	// Convert each query
+	for i, rawQuery := range queryReq.Queries {
+		var query map[string]interface{}
+		if err := json.Unmarshal(rawQuery, &query); err != nil {
+			http.Error(w, fmt.Sprintf("invalid query format: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		refID, _ := query["refId"].(string)
+		if refID == "" {
+			refID = fmt.Sprintf("A%d", i)
+		}
+
+		backendReq.Queries[i] = backend.DataQuery{
+			RefID: refID,
+			JSON:  rawQuery,
+			TimeRange: backend.TimeRange{
+				From: time.Now().Add(-1 * time.Hour), // Default range, adjust as needed
+				To:   time.Now(),
+			},
+		}
+	}
+
+	// Call your existing QueryData method
+	resp, err := a.QueryData(req.Context(), backendReq)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("query failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert response to the format expected by frontend
+	result := map[string]interface{}{
+		"data": make([]interface{}, 0),
+	}
+
+	for _, dataResp := range resp.Responses {
+		if dataResp.Error != nil {
+			http.Error(w, fmt.Sprintf("query error: %v", dataResp.Error), http.StatusInternalServerError)
+			return
+		}
+
+		for _, frame := range dataResp.Frames {
+			// Convert frame to JSON format
+			frameJSON, err := frame.MarshalJSON()
+			if err != nil {
+				continue
+			}
+
+			var frameData interface{}
+			if err := json.Unmarshal(frameJSON, &frameData); err != nil {
+				continue
+			}
+
+			result["data"] = append(result["data"].([]interface{}), frameData)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// QueryData handles data source queries
+func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+	response := backend.NewQueryDataResponse()
+
+	// Process each query in the request
+	for _, q := range req.Queries {
+		res := a.query(ctx, req.PluginContext, q)
+		response.Responses[q.RefID] = res
+	}
+
+	return response, nil
+}
+
+// SubscribeStream handles streaming data
+func (a *App) SubscribeStream(_ context.Context, req *backend.SubscribeStreamRequest) (*backend.SubscribeStreamResponse, error) {
+	return &backend.SubscribeStreamResponse{
+		Status: backend.SubscribeStreamStatusPermissionDenied,
+	}, nil
+}
+
+// RunStream handles running streams
+func (a *App) RunStream(ctx context.Context, req *backend.RunStreamRequest, sender *backend.StreamSender) error {
+	return nil
+}
+
+// PublishStream handles stream publishing
+func (a *App) PublishStream(_ context.Context, req *backend.PublishStreamRequest) (*backend.PublishStreamResponse, error) {
+	return &backend.PublishStreamResponse{
+		Status: backend.PublishStreamStatusPermissionDenied,
+	}, nil
+}
+
+// query processes individual queries
+func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	// Implement your SQL query logic here
+	response := backend.DataResponse{}
+	q := struct {
+		Database string `json:"database"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	timeRange := query.TimeRange
+	from := timeRange.From
+	to := timeRange.To
+	r, err := a.client.ListSnapshotSummaries(ctx, &dbmv1.ListSnapshotSummariesRequest{
+		Start:  timestamppb.New(from),
+		End:    timestamppb.New(to),
+		Server: q.Database,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	interval := time.Minute * 1 // 1-minute intervals
+	points := int(to.Sub(from)/interval) + 1
+
+	times := make([]time.Time, points)
+	valuesByWaitType := make(map[string][]float64, points)
+	for i := 0; i < points; i++ {
+		times[i] = from.Add(time.Duration(i) * interval)
+	}
+	for _, sum := range r.GetSnapSummaries() {
+		idx := int(sum.Timestamp.AsTime().Sub(from).Minutes())
+		for we, c := range sum.GetConnectionsByWaitEvent() {
+
+			if we == "" {
+				we = "cpu"
+			}
+			if _, ok := valuesByWaitType[we]; !ok {
+				valuesByWaitType[we] = make([]float64, points)
+			}
+			valuesByWaitType[we][idx] = float64(c)
+		}
+	}
+	frame := data.NewFrame("locks by type",
+		data.NewField("time", nil, times),
+	)
+	for we, v := range valuesByWaitType {
+		frame.Fields = append(frame.Fields, data.NewField(we, nil, v))
+	}
+
+	// Set the RefID to match the query
+	frame.RefID = query.RefID
+
+	// Add metadata for proper visualization
+	frame.Meta = &data.FrameMeta{
+		Type: data.FrameTypeTimeSeriesWide,
+	}
+
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+// DropdownOption represents a single dropdown option
+type DropdownOption struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// handleDropdownOptions returns available options for query parameters
+func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get the option type from query parameters
+	optionType := req.URL.Query().Get("type")
+
+	var options []DropdownOption
+	var err error
+	// Customize this based on your needs
+	switch optionType {
+	case "databases":
+		options, err = a.getDatabaseOptions(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	case "tables":
+		database := req.URL.Query().Get("database")
+		options = a.getTableOptions(database)
+	case "columns":
+		database := req.URL.Query().Get("database")
+		table := req.URL.Query().Get("table")
+		options = a.getColumnOptions(database, table)
+	default:
+		http.Error(w, "invalid option type", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(options); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// getDatabaseOptions fetches available databases
+func (a *App) getDatabaseOptions(ctx context.Context) ([]DropdownOption, error) {
+	resp, err := a.client.ListServerSummary(ctx, &dbmv1.ListServerSummaryRequest{
+		Start: timestamppb.New(time.Now().Add(-15 * time.Minute)),
+		End:   timestamppb.New(time.Now()),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list databases: %w", err)
+	}
+	ret := make([]DropdownOption, len(resp.GetServers()))
+	for i, server := range resp.GetServers() {
+		ret[i] = DropdownOption{
+			Label: server.GetName(),
+			Value: server.GetName(),
+		}
+	}
+	return ret, nil
+}
+
+// getTableOptions fetches tables for a given database
+func (a *App) getTableOptions(database string) []DropdownOption {
+	// Replace with your actual table query logic
+	return []DropdownOption{
+		{Label: "Users", Value: "users"},
+		{Label: "Orders", Value: "orders"},
+		{Label: "Products", Value: "products"},
+	}
+}
+
+// getColumnOptions fetches columns for a given database and table
+func (a *App) getColumnOptions(database, table string) []DropdownOption {
+	// Replace with your actual column query logic
+	return []DropdownOption{
+		{Label: "ID", Value: "id"},
+		{Label: "Name", Value: "name"},
+		{Label: "Created At", Value: "created_at"},
+	}
+}
