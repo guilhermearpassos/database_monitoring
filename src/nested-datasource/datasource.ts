@@ -4,16 +4,17 @@ import {
     DataQueryRequest,
     DataQueryResponse,
     DataSourceApi,
-    DataSourceInstanceSettings, SelectableValue,
+    DataSourceInstanceSettings,
 } from '@grafana/data';
 
 import { MyQuery, MyDataSourceOptions, DEFAULT_QUERY, DataSourceResponse } from './types';
 import {lastValueFrom, Observable} from 'rxjs';
+import {ComboboxOption} from "@grafana/ui";
 
 // Function to fetch HTML content from backend
-const getOpts: (query: string) => Promise<SelectableValue[]> = async (query: string) => {
+const getOpts: (query: string) => Promise<ComboboxOption[]> = async (query: string) => {
     try {
-        let response: Observable<FetchResponse<SelectableValue[]>>;
+        let response: Observable<FetchResponse<ComboboxOption[]>>;
         response = await getBackendSrv().fetch({
             url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?' + query,
         });
@@ -67,13 +68,13 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
     }
 
     // Method to fetch dropdown options from backend
-    async getDropdownOptions(type: string, params?: Record<string, string>): Promise<SelectableValue[]> {
+    async getDropdownOptions(type: string, params?: Record<string, string>): Promise<ComboboxOption[]> {
         const query = new URLSearchParams({ type, ...params });
 
         try {
             const options = await getOpts(`${query.toString()}`);
 
-            return options.map((option: SelectableValue) => ({
+            return options.map((option: ComboboxOption) => ({
                 label: option.label,
                 value: option.value,
             }));
@@ -84,7 +85,7 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
     }
 
     // Specific methods for different option types
-    async getDatabaseOptions(): Promise<SelectableValue[]> {
+    async getDatabaseOptions(): Promise<ComboboxOption[]> {
         return this.getDropdownOptions('databases');
     }
 

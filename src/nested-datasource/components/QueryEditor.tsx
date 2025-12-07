@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
-import { Select, InlineField, InlineFieldRow } from '@grafana/ui';
+import { Combobox, InlineField, InlineFieldRow, ComboboxOption } from '@grafana/ui';
 import { DataSource } from '../datasource';
 import { MyDataSourceOptions, MyQuery } from '../types';
 
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
-    const [databaseOptions, setDatabaseOptions] = useState<SelectableValue[]>([]);
+    const [databaseOptions, setDatabaseOptions] = useState<ComboboxOption[]>([]);
 
     // Load database options on component mount
     useEffect(() => {
@@ -16,8 +16,8 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     }, [datasource]);
 
 
-    const onDatabaseChange = (value: SelectableValue<string>) => {
-        onChange({ ...query, database: value.value });
+    const onDatabaseChange = (value: ComboboxOption<string|number> | null) => {
+        onChange({ ...query, database: value?.value });
     };
 
 
@@ -25,13 +25,13 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
         <>
             <InlineFieldRow>
                 <InlineField label="Database">
-                    <Select
+                    <Combobox
                         options={databaseOptions}
                         value={query.database}
                         onChange={onDatabaseChange}
                         placeholder="Select database"
-                        width={20}
-                    />
+                     minWidth={20}
+                     isClearable={true}/>
                 </InlineField>
 
             </InlineFieldRow>
