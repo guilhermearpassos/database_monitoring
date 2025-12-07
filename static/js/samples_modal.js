@@ -1,7 +1,9 @@
 // samples_modal.js - Optimize memory usage
 function openSlideover() {
     const modalContainer = document.getElementById('samples_modal_container');
-    if (!modalContainer) return;
+    if (!modalContainer) {
+        return;
+    }
     
     modalContainer.classList.add('open');
     

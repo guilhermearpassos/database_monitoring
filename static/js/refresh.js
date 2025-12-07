@@ -48,10 +48,9 @@ document.querySelectorAll('.refresh-option').forEach(option => {
         const interval = parseInt(option.dataset.interval);
         refreshInterval = interval;
 
-        const text = interval === 0 ? 'Auto (Off)' :
-            interval >= 60 ? 'Auto (' + (interval/60) + 'm)' :
+        document.getElementById('refreshInterval').textContent = interval === 0 ? 'Auto (Off)' :
+            interval >= 60 ? 'Auto (' + (interval / 60) + 'm)' :
                 'Auto (' + interval + 's)';
-        document.getElementById('refreshInterval').textContent = text;
 
         document.querySelectorAll('.refresh-option').forEach(opt => opt.classList.remove('active'));
         option.classList.add('active');

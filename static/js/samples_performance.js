@@ -11,7 +11,9 @@ function initSamplesTableOptimizations() {
         const queryColumns = table.querySelectorAll('tr td:nth-child(2)');
         queryColumns.forEach(cell => {
             // Check if we need to process this cell
-            if (cell.dataset.processed) return;
+            if (cell.dataset.processed) {
+                return;
+            }
 
             const originalText = cell.textContent;
 

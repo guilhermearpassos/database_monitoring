@@ -4,13 +4,19 @@ document.addEventListener('htmx:afterSettle', initializeTableVirtualization);
 
 function initializeTableVirtualization() {
     const samplesTable = document.querySelector('#snapshots-table, .samples-table');
-    if (!samplesTable) return;
+    if (!samplesTable) {
+        return;
+    }
 
     const tbody = samplesTable.querySelector('tbody');
-    if (!tbody) return;
+    if (!tbody) {
+        return;
+    }
 
     const rows = Array.from(tbody.querySelectorAll('tr:not(.expandable-row)'));
-    if (rows.length <= 50) return; // Only apply for larger tables
+    if (rows.length <= 50) {
+        return; // Only apply for larger tables
+    }
 
     // Find the container or create a wrapper
     let container = samplesTable.closest('.table-container');
@@ -26,7 +32,7 @@ function initializeTableVirtualization() {
 
     // Setup scroll optimization
     let scrollTimeout;
-    container.addEventListener('scroll', function() {
+    container.addEventListener('scroll', function () {
         if (!container.classList.contains('is-scrolling')) {
             container.classList.add('is-scrolling');
         }
