@@ -7,6 +7,17 @@ type DataBaseSnapshot struct {
 	Samples  []*QuerySample
 }
 
+func (s *DataBaseSnapshot) GetPlanHandles() []string {
+	handles := make([]string, len(s.Samples))
+	for i, sample := range s.Samples {
+		if sample.PlanHandle == "" {
+			continue
+		}
+		handles[i] = sample.PlanHandle
+	}
+	return handles
+}
+
 type ServerMeta struct {
 	Host string
 	Type string

@@ -1,69 +1,51 @@
-package adapters
+package event_processors
 
 import (
 	"context"
 	"fmt"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters/metrics"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain/events"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"regexp"
 	"strings"
-	"sync"
 )
 
-type SnapshotMetricsProcessor struct {
-	snapshotCh chan *common_domain.DataBaseSnapshot
-
-	done chan struct{}
-
-	wg                   sync.WaitGroup
+type MetricsDetector struct {
+	app                  app.Application
+	in                   chan events.Event
+	trace                trace.Tracer
+	knownHandlesByServer map[string]map[string]struct{}
 	lockThresholdSeconds float64
-	mu                   sync.Mutex
 }
 
-// NewSnapshotMetricsProcessor creates a new metrics processor
-func NewSnapshotMetricsProcessor(lockThresholdSeconds float64) *SnapshotMetricsProcessor {
-	return &SnapshotMetricsProcessor{
-		snapshotCh:           make(chan *common_domain.DataBaseSnapshot, 200), // buffered channel
-		done:                 make(chan struct{}),
-		wg:                   sync.WaitGroup{},
-		lockThresholdSeconds: lockThresholdSeconds,
-		mu:                   sync.Mutex{},
+func NewMetricsDetector(app app.Application) *MetricsDetector {
+	return &MetricsDetector{
+		app:                  app,
+		in:                   make(chan events.Event, 200),
+		trace:                otel.Tracer("MetricsDetector"),
+		knownHandlesByServer: make(map[string]map[string]struct{}),
 	}
 }
 
-// Start begins processing metrics in a separate goroutine
-func (m *SnapshotMetricsProcessor) Run(ctx context.Context) {
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		for {
-			select {
-			case snapshot := <-m.snapshotCh:
-				m.processSnapshot(snapshot)
-			case <-m.done:
-				return
-			case <-ctx.Done():
-				return
-			}
+func (f MetricsDetector) Run(ctx context.Context) {
+	for ev := range f.in {
+		snapTakenEvent, ok := ev.(events.SampleSnapshotTaken)
+		if !ok {
+			continue
 		}
-	}()
-}
+		_, span := f.trace.Start(ctx, "ExtractMetricsFromSnap")
 
-// Stop gracefully shuts down the processor
-func (m *SnapshotMetricsProcessor) Stop() {
-	close(m.done)
-	m.wg.Wait()
-}
-
-// QueueSnapshot adds a snapshot for asynchronous processing
-func (m *SnapshotMetricsProcessor) QueueSnapshot(snapshot *common_domain.DataBaseSnapshot) {
-	select {
-	case m.snapshotCh <- snapshot:
-		// snapshot queued successfully
-	default:
-		// channel is full, this could be logged as a warning
+		f.processSnapshot(snapTakenEvent.Snap)
+		span.End()
 	}
+}
+
+func (f MetricsDetector) Register(router *events.EventRouter) {
+	router.Register(events.SampleSnapshotTaken{}.EventName(), f.in, "lockDetector")
 }
 
 // generateLockKey creates a unique key for a lock
@@ -72,7 +54,7 @@ func generateLockKey(server, database, sessionID string) string {
 }
 
 // processSnapshot extracts metrics from a database snapshot
-func (m *SnapshotMetricsProcessor) processSnapshot(snapshot *common_domain.DataBaseSnapshot) {
+func (f MetricsDetector) processSnapshot(snapshot *common_domain.DataBaseSnapshot) {
 	server := snapshot.SnapInfo.Server.Host
 
 	// Track the current set of active locks in this snapshot
@@ -118,7 +100,7 @@ func (m *SnapshotMetricsProcessor) processSnapshot(snapshot *common_domain.DataB
 			}).Inc()
 
 			// Check if this is a long-running lock
-			if waitTimeSeconds > m.lockThresholdSeconds {
+			if waitTimeSeconds > f.lockThresholdSeconds {
 				longRunningLocks[sample.Database.DatabaseName]++
 			}
 		}
