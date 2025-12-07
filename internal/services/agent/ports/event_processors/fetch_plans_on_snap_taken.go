@@ -70,5 +70,5 @@ func (f PlanFetcher) Run(ctx context.Context) {
 }
 
 func (f PlanFetcher) Register(router *events.EventRouter) {
-	router.Register(events.SampleSnapshotTaken{}.EventName(), f.in)
+	router.Register(events.SampleSnapshotTaken{}.EventName(), f.in, "planFetcher")
 }

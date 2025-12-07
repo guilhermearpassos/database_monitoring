@@ -45,7 +45,7 @@ func (f MetricsDetector) Run(ctx context.Context) {
 }
 
 func (f MetricsDetector) Register(router *events.EventRouter) {
-	router.Register(events.SampleSnapshotTaken{}.EventName(), f.in)
+	router.Register(events.SampleSnapshotTaken{}.EventName(), f.in, "lockDetector")
 }
 
 // generateLockKey creates a unique key for a lock

@@ -83,6 +83,7 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	}
 	reader := adapters.NewSQLServerDataReader(dbByHost)
 	router := events.NewEventRouter()
+	go router.StartMetrics(ctx)
 	a := app.NewApplication(reader, reader, adapters.NewGRPCIngestionClient(client), router)
 	pf := event_processors.NewPlanFetcher(*a)
 	ld := event_processors.NewMetricsDetector(*a)
