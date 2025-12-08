@@ -2,9 +2,12 @@ package plugin
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"net/http"
+	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
@@ -46,7 +49,18 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 	if err := json.Unmarshal(settings.JSONData, &cfg); err != nil {
 		return nil, fmt.Errorf("missing or invalid JSON data in settings: %w", err)
 	}
-	client, err := grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	port := strings.Split(cfg.APIURL, ":")
+	if len(port) != 2 {
+		return nil, fmt.Errorf("invalid API URL: %s", cfg.APIURL)
+	}
+	var client *grpc.ClientConn
+	var err error
+	if port[1] == "443" {
+		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	} else {
+		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	}
 	if err != nil {
 		return nil, err
 	}
