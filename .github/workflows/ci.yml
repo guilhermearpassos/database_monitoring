@@ -185,6 +185,16 @@ jobs:
           docker compose pull
           ANONYMOUS_AUTH_ENABLED=false DEVELOPMENT=false GRAFANA_VERSION=${{ matrix.GRAFANA_IMAGE.VERSION }} GRAFANA_IMAGE=${{ matrix.GRAFANA_IMAGE.NAME }} docker compose up -d
 
+      - name: Wait for all services
+        run: |
+          until docker compose ps | grep -q "grafana.*Up"; do
+            echo "Waiting for Grafana to be ready..."
+            sleep 5
+          done
+      - name: Debug docker containers
+        run: |
+          docker compose ps
+          docker compose logs grafana
       - name: Wait for grafana server
         uses: grafana/plugin-actions/wait-for-grafana@wait-for-grafana/v1.0.2
         with:
@@ -210,6 +220,12 @@ jobs:
         run: |
           docker logs guilhermearpassos-sqlsights-app >& grafana-server.log
 
+      - name: Debug docker containers 2
+        if: ${{ always() && !cancelled() }}
+
+        run: |
+          docker compose ps
+          docker compose logs grafana
       - name: Stop grafana docker
         run: docker compose down
 
