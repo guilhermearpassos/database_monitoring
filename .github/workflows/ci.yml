@@ -222,6 +222,8 @@ jobs:
           docker logs guilhermearpassos-sqlsights-app >& grafana-server.log
 
       - name: Debug docker containers 2
+        if: ${{ always() && !cancelled() }}
+
         run: |
           docker compose ps
           docker compose logs grafana
