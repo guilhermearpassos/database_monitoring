@@ -20,7 +20,6 @@ func NewEventRouter() *EventRouter {
 		Help:        "",
 		ConstLabels: nil,
 	}, []string{"eventType", "channelName"})
-	prometheus.MustRegister(vec)
 	return &EventRouter{
 		receiversByType: make(map[string][]chan<- Event),
 		chNames:         make(map[string][]string),
@@ -39,6 +38,7 @@ func (r *EventRouter) Route(event Event) {
 	}
 }
 func (r *EventRouter) StartMetrics(ctx context.Context) {
+	prometheus.MustRegister(r.chSizeCounter)
 	t := time.NewTicker(10 * time.Second)
 	for {
 		select {

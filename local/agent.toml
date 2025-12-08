@@ -28,6 +28,10 @@ conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
 alias = "localhost5"
 driver = "mssql"
 conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "localhost6"
+driver = "mssql"
+conn_string = "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
 [telemetry]
 enabled = true
 otlp.endpoint = 'localhost:4317'

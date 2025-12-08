@@ -25,7 +25,6 @@ func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain
 	ctx, span := m.tracer.Start(ctx, "MetricsSnapshot")
 	defer func() {
 		if err != nil {
-
 			span.RecordError(err)
 			span.SetStatus(otelcodes.Error, err.Error())
 		}

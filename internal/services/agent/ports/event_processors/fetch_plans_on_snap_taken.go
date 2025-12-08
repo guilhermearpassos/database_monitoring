@@ -65,6 +65,9 @@ func (f PlanFetcher) Run(ctx context.Context) {
 			span.SetStatus(otelcodes.Error, err.Error())
 			span.RecordError(err)
 		}
+		for _, plan := range plans {
+			f.app.EventRouter.Route(events.ExecutionPlanFetched{Plan: plan})
+		}
 		span.End()
 	}
 }
