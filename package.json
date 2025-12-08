@@ -11,7 +11,7 @@
     "lint:fix": "npm run lint -- --fix && prettier --write --list-different .",
     "e2e": "playwright test",
     "server": "docker compose up --build",
-    "sign": "npx @grafana/sign-plugin --rootUrls=\"*\""
+    "sign": "npx @grafana/sign-plugin --rootUrls=\"https://*\""
   },
   "author": "Guilhermearpassos",
   "license": "Apache-2.0",
