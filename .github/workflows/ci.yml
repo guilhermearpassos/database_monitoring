@@ -221,6 +221,10 @@ jobs:
         run: |
           docker logs guilhermearpassos-sqlsights-app >& grafana-server.log
 
+      - name: Debug docker containers 2
+        run: |
+          docker compose ps
+          docker compose logs grafana
       - name: Stop grafana docker
         run: docker compose down
 
