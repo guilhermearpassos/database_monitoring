@@ -14,20 +14,35 @@ import (
 	"strings"
 )
 
+// MetricsCollector interface for collecting metrics (makes testing easier)
+type MetricsCollector interface {
+	RecordLockDuration(server, database, waitType, table string, duration float64)
+	IncrementTotalLocks(server, database string)
+}
+
+// SQLParser interface for parsing SQL queries
+type SQLParser interface {
+	ExtractTablesFromQuery(query string) ([]string, error)
+}
+
 type MetricsDetector struct {
-	app                  app.Application
+	app                  *app.Application
 	in                   chan events.Event
 	trace                trace.Tracer
 	knownHandlesByServer map[string]map[string]struct{}
 	lockThresholdSeconds float64
+	metricsCollector     MetricsCollector
+	sqlParser            SQLParser
 }
 
-func NewMetricsDetector(app app.Application) *MetricsDetector {
+func NewMetricsDetector(app *app.Application, metricsCollector MetricsCollector, sqlParser SQLParser) *MetricsDetector {
 	return &MetricsDetector{
 		app:                  app,
 		in:                   make(chan events.Event, 200),
 		trace:                otel.Tracer("MetricsDetector"),
 		knownHandlesByServer: make(map[string]map[string]struct{}),
+		metricsCollector:     metricsCollector,
+		sqlParser:            sqlParser,
 	}
 }
 
@@ -48,84 +63,85 @@ func (f MetricsDetector) Register(router *events.EventRouter) {
 	router.Register(events.SampleSnapshotTaken{}.EventName(), f.in, "lockDetector")
 }
 
-// generateLockKey creates a unique key for a lock
-func generateLockKey(server, database, sessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", server, database, sessionID)
-}
-
 // processSnapshot extracts metrics from a database snapshot
 func (f MetricsDetector) processSnapshot(snapshot *common_domain.DataBaseSnapshot) {
 	server := snapshot.SnapInfo.Server.Host
 
 	// Track the current set of active locks in this snapshot
 	currentLocks := make(map[string]bool)
-	longRunningLocks := make(map[string]int) // database -> count
+	longRunningLocks := make(map[string]int)
 
 	// Process each sample to update metrics and track active locks
 	for _, sample := range snapshot.Samples {
 		if sample.IsBlocked {
-			// Create a unique key for this lock
 			lockKey := generateLockKey(server, sample.Database.DatabaseName, sample.Session.SessionID)
-			tables, err := ExtractTablesFromQuery(sample.Text)
-			if err != nil {
-				fmt.Println(fmt.Errorf("Error extracting tables: %s", err))
-			}
-			// Mark this lock as currently active
 			currentLocks[lockKey] = true
 
-			// Get wait time in seconds
-			waitTimeSeconds := float64(sample.Wait.WaitTime) / 1000.0
+			tables, err := f.sqlParser.ExtractTablesFromQuery(sample.Text)
+			if err != nil {
+				fmt.Printf("Error extracting tables: %s\n", err)
+				continue
+			}
 
-			// Update lock duration metric
-			var waitType string
+			waitTimeSeconds := float64(sample.Wait.WaitTime) / 1000.0
+			waitType := "unknown"
 			if sample.Wait.WaitType != nil {
 				waitType = *sample.Wait.WaitType
-			} else {
-				waitType = "unknown"
-			}
-			for _, t := range tables {
-
-				metrics.DatabaseLockDuration.With(prometheus.Labels{
-					"server":    server,
-					"database":  sample.Database.DatabaseName,
-					"wait_type": waitType,
-					"table":     t,
-				}).Observe(float64(sample.Wait.WaitTime) / 1000.0)
 			}
 
-			// Increment total locks counter
-			metrics.DatabaseLocksTotal.With(prometheus.Labels{
-				"server":   server,
-				"database": sample.Database.DatabaseName,
-			}).Inc()
+			for _, table := range tables {
+				f.metricsCollector.RecordLockDuration(server, sample.Database.DatabaseName, waitType, table, waitTimeSeconds)
+			}
 
-			// Check if this is a long-running lock
+			f.metricsCollector.IncrementTotalLocks(server, sample.Database.DatabaseName)
+
 			if waitTimeSeconds > f.lockThresholdSeconds {
 				longRunningLocks[sample.Database.DatabaseName]++
 			}
 		}
 	}
-
-	// Clear databases with no long-running locks
-	// This ensures metrics are properly zeroed when locks clear
-	databasesWithLocks := make(map[string]bool)
-	for database := range longRunningLocks {
-		databasesWithLocks[database] = true
-	}
-
-	// Get databases from this server that don't have long-running locks
-	// and set their metrics to zero
-
 }
 
-// ExtractTablesFromQuery parses a SQL query and returns a slice of table names
-// that are involved in the query.
-func ExtractTablesFromQuery(batchQuery string) ([]string, error) {
+// generateLockKey creates a unique key for a lock
+func generateLockKey(server, database, sessionID string) string {
+	return fmt.Sprintf("%s:%s:%s", server, database, sessionID)
+}
+
+// PrometheusMetricsCollector implements MetricsCollector using Prometheus
+type PrometheusMetricsCollector struct{}
+
+func NewPrometheusMetricsCollector() *PrometheusMetricsCollector {
+	return &PrometheusMetricsCollector{}
+}
+
+func (p *PrometheusMetricsCollector) RecordLockDuration(server, database, waitType, table string, duration float64) {
+	metrics.DatabaseLockDuration.With(prometheus.Labels{
+		"server":    server,
+		"database":  database,
+		"wait_type": waitType,
+		"table":     table,
+	}).Observe(duration)
+}
+
+func (p *PrometheusMetricsCollector) IncrementTotalLocks(server, database string) {
+	metrics.DatabaseLocksTotal.With(prometheus.Labels{
+		"server":   server,
+		"database": database,
+	}).Inc()
+}
+
+// DefaultSQLParser implements SQLParser
+type DefaultSQLParser struct{}
+
+func NewDefaultSQLParser() *DefaultSQLParser {
+	return &DefaultSQLParser{}
+}
+
+func (p *DefaultSQLParser) ExtractTablesFromQuery(batchQuery string) ([]string, error) {
 	// Parse the SQL query
 	batchQuery = strings.ReplaceAll(batchQuery, "\r\n", "\n")
 
 	// First, handle the case where the query begins with parameter declarations
-	// and we need to skip the first line
 	if strings.HasPrefix(batchQuery, "(@p") {
 		lines := strings.SplitN(batchQuery, "\n", 2)
 		if len(lines) > 1 {
@@ -133,9 +149,8 @@ func ExtractTablesFromQuery(batchQuery string) ([]string, error) {
 		}
 	}
 
-	// Split into individual statements (separated by semicolons)
-	statements := splitBatchIntoStatements(batchQuery)
-
+	// Split into individual statements
+	statements := p.splitBatchIntoStatements(batchQuery)
 	tableSet := make(map[string]struct{})
 
 	// Process each statement
@@ -147,15 +162,15 @@ func ExtractTablesFromQuery(batchQuery string) ([]string, error) {
 
 		// Extract tables based on statement type
 		if strings.HasPrefix(strings.ToUpper(stmt), "INSERT INTO") {
-			extractTablesFromInsert(stmt, tableSet)
+			p.extractTablesFromInsert(stmt, tableSet)
 		} else if strings.HasPrefix(strings.ToUpper(stmt), "UPDATE") {
-			extractTablesFromUpdate(stmt, tableSet)
+			p.extractTablesFromUpdate(stmt, tableSet)
 		} else if strings.HasPrefix(strings.ToUpper(stmt), "DELETE") {
-			extractTablesFromDelete(stmt, tableSet)
+			p.extractTablesFromDelete(stmt, tableSet)
 		} else if strings.HasPrefix(strings.ToUpper(stmt), "SELECT") {
-			extractTablesFromSelect(stmt, tableSet)
+			p.extractTablesFromSelect(stmt, tableSet)
 		} else if strings.Contains(strings.ToUpper(stmt), "JOIN") {
-			extractTablesFromJoin(stmt, tableSet)
+			p.extractTablesFromJoin(stmt, tableSet)
 		}
 	}
 
@@ -168,13 +183,9 @@ func ExtractTablesFromQuery(batchQuery string) ([]string, error) {
 	return tables, nil
 }
 
-// splitBatchIntoStatements splits a SQL batch into individual statements
-func splitBatchIntoStatements(batch string) []string {
-	// This is a simplified approach - in a real implementation, you'd need to
-	// handle semicolons in strings, comments, etc.
+// ... (all the existing helper methods with receiver *DefaultSQLParser)
+func (p *DefaultSQLParser) splitBatchIntoStatements(batch string) []string {
 	statements := []string{}
-
-	// Simple split by semicolon
 	rawStatements := strings.Split(batch, ";")
 
 	for _, stmt := range rawStatements {
@@ -188,7 +199,7 @@ func splitBatchIntoStatements(batch string) []string {
 }
 
 // extractTablesFromInsert extracts table names from INSERT statements
-func extractTablesFromInsert(stmt string, tableSet map[string]struct{}) {
+func (p *DefaultSQLParser) extractTablesFromInsert(stmt string, tableSet map[string]struct{}) {
 	// Pattern for INSERT INTO [table]
 	re := regexp.MustCompile(`(?i)INSERT\s+INTO\s+([^\s(]+)`)
 	matches := re.FindStringSubmatch(stmt)
@@ -202,13 +213,13 @@ func extractTablesFromInsert(stmt string, tableSet map[string]struct{}) {
 	if strings.Contains(strings.ToUpper(stmt), "SELECT") {
 		selectPart := strings.SplitN(stmt, "SELECT", 2)
 		if len(selectPart) > 1 {
-			extractTablesFromSelect("SELECT"+selectPart[1], tableSet)
+			p.extractTablesFromSelect("SELECT"+selectPart[1], tableSet)
 		}
 	}
 }
 
 // extractTablesFromUpdate extracts table names from UPDATE statements
-func extractTablesFromUpdate(stmt string, tableSet map[string]struct{}) {
+func (p *DefaultSQLParser) extractTablesFromUpdate(stmt string, tableSet map[string]struct{}) {
 	// Pattern for UPDATE [table]
 	re := regexp.MustCompile(`(?i)UPDATE\s+([^\s]+)`)
 	matches := re.FindStringSubmatch(stmt)
@@ -222,13 +233,13 @@ func extractTablesFromUpdate(stmt string, tableSet map[string]struct{}) {
 	if strings.Contains(strings.ToUpper(stmt), "FROM") {
 		fromPart := strings.SplitN(strings.ToUpper(stmt), "FROM", 2)
 		if len(fromPart) > 1 {
-			extractTablesFromFromClause("FROM"+fromPart[1], tableSet)
+			p.extractTablesFromFromClause("FROM"+fromPart[1], tableSet)
 		}
 	}
 }
 
 // extractTablesFromDelete extracts table names from DELETE statements
-func extractTablesFromDelete(stmt string, tableSet map[string]struct{}) {
+func (p *DefaultSQLParser) extractTablesFromDelete(stmt string, tableSet map[string]struct{}) {
 	// Pattern for DELETE FROM [table]
 	re := regexp.MustCompile(`(?i)DELETE\s+FROM\s+([^\s(]+)`)
 	matches := re.FindStringSubmatch(stmt)
@@ -240,23 +251,23 @@ func extractTablesFromDelete(stmt string, tableSet map[string]struct{}) {
 
 	// Also check for tables in JOIN parts of the DELETE
 	if strings.Contains(strings.ToUpper(stmt), "JOIN") {
-		extractTablesFromJoin(stmt, tableSet)
+		p.extractTablesFromJoin(stmt, tableSet)
 	}
 }
 
 // extractTablesFromSelect extracts table names from SELECT statements
-func extractTablesFromSelect(stmt string, tableSet map[string]struct{}) {
+func (p *DefaultSQLParser) extractTablesFromSelect(stmt string, tableSet map[string]struct{}) {
 	// Extract tables from FROM clause
 	if strings.Contains(strings.ToUpper(stmt), "FROM") {
 		parts := strings.SplitN(strings.ToUpper(stmt), "FROM", 2)
 		if len(parts) > 1 {
-			extractTablesFromFromClause("FROM"+parts[1], tableSet)
+			p.extractTablesFromFromClause("FROM"+parts[1], tableSet)
 		}
 	}
 }
 
 // extractTablesFromJoin extracts table names from JOIN clauses
-func extractTablesFromJoin(stmt string, tableSet map[string]struct{}) {
+func (p *DefaultSQLParser) extractTablesFromJoin(stmt string, tableSet map[string]struct{}) {
 	// Pattern for all types of JOINs
 	re := regexp.MustCompile(`(?i)(JOIN)\s+([^\s(]+)`)
 	matches := re.FindAllStringSubmatch(stmt, -1)
@@ -270,7 +281,7 @@ func extractTablesFromJoin(stmt string, tableSet map[string]struct{}) {
 }
 
 // extractTablesFromFromClause extracts table names from FROM clauses
-func extractTablesFromFromClause(fromClause string, tableSet map[string]struct{}) {
+func (p *DefaultSQLParser) extractTablesFromFromClause(fromClause string, tableSet map[string]struct{}) {
 	// Handle basic FROM clause with commas
 	// Cut off any WHERE, GROUP BY, etc. that might follow
 	fromClauseParts := strings.Split(fromClause, " WHERE ")
@@ -292,7 +303,7 @@ func extractTablesFromFromClause(fromClause string, tableSet map[string]struct{}
 
 	// Handle JOIN clauses
 	if strings.Contains(strings.ToUpper(tableList), "JOIN") {
-		extractTablesFromJoin(tableList, tableSet)
+		p.extractTablesFromJoin(tableList, tableSet)
 
 		// Also handle tables before the first JOIN
 		beforeJoin := strings.SplitN(tableList, "JOIN", 2)
