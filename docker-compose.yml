@@ -25,8 +25,8 @@ services:
     extends:
       file: .config/docker-compose-base.yaml
       service: grafana
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+#    extra_hosts:
+#      - "host.docker.internal:host-gateway"
 
   #  collector:
 #    image: guilhermearpassos/sql-sight:v0.0.8
@@ -97,15 +97,6 @@ services:
       - "16686:16686"
       - "14268"
       - "14250"
-
-  # Zipkin
-  zipkin-all-in-one:
-    image: openzipkin/zipkin:latest
-    environment:
-      - JAVA_OPTS=-Xms1024m -Xmx1024m -XX:+ExitOnOutOfMemoryError
-    restart: always
-    ports:
-      - "9411:9411"
 
   # Collector
   otel-collector:
