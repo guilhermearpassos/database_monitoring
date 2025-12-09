@@ -1,0 +1,18 @@
+# Agent configuration file
+
+# Collector configuration section
+[grpc_server.grpc]
+url = "0.0.0.0:7080"
+grpc_message_max_size=1000000
+[grpc_server.grpc_ui]
+enabled = true
+url = "0.0.0.0:7081"
+[postgres]
+connstring = "postgres://postgres:example@postgres:5432/postgres?sslmode=disable"
+[purge]
+enabled = true
+max_age = "240h"
+interval = "1m"
+[telemetry]
+enabled = true
+otlp.endpoint = 'otel-collector:4317'

@@ -1,0 +1,40 @@
+# Agent configuration file
+
+max_samples_batch_size=10000
+get_known_plan_page_size=10
+collect_metrics=false
+# Collector configuration section
+[collector]
+url = "sqlsights-collector:7080"
+grpc_message_max_size=1000000
+# Target hosts configurations
+[[target_hosts]]
+alias = "sqlserver"
+driver = "mssql"
+conn_string = "server=sqlserver;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "sqlserver2"
+driver = "mssql"
+conn_string = "server=sqlserver;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "sqlserver3"
+driver = "mssql"
+conn_string = "server=sqlserver;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "sqlserver4"
+driver = "mssql"
+conn_string = "server=sqlserver;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "sqlserver5"
+driver = "mssql"
+conn_string = "server=sqlserver;port=1433;user id=sa;password=SqlServer2019!"
+[[target_hosts]]
+alias = "sqlserver6"
+driver = "mssql"
+conn_string = "server=sqlserver;port=1433;user id=sa;password=SqlServer2019!"
+[telemetry]
+enabled = true
+otlp.endpoint = 'otel-collector:4317'
+[telemetry.metrics]
+enabled = true
+host = 'localhost:9009'
