@@ -1,7 +1,7 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {FetchResponse, getBackendSrv, getDataSourceSrv, PluginPage} from '@grafana/runtime';
 import {lastValueFrom, Observable} from 'rxjs';
-import {Alert, Button, Card, LegendDisplayMode, LoadingPlaceholder, Select, TimeSeries, useStyles2} from '@grafana/ui';
+import {Alert, Button, Card, LoadingPlaceholder, Select, useStyles2} from '@grafana/ui';
 import {
     CoreApp,
     DataFrame,
@@ -9,16 +9,17 @@ import {
     DataQueryRequest,
     DataSourceApi,
     dateTime,
-    FieldType,
+    EventBusSrv,
     GrafanaTheme2,
-    RawTimeRange,
-    ScopedVars,
+    LoadingState,
     SelectableValue,
     TimeRange
 } from '@grafana/data';
 import {css} from '@emotion/css';
 import {MyQuery} from '../nested-datasource/types';
 import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
+import {MyGraph} from "./graph";
+import {NestedTablesWithEventBus} from "./nested_table";
 
 // Updated interfaces based on your protobuf definitions
 interface ServerMetadata {
@@ -65,15 +66,6 @@ interface PaginatedResponse<T> {
     pageNumber: number;
 }
 
-// Define table data interface that extends the expected TableData structure
-interface SnapshotTableRow {
-    id: string;
-    timestamp: string;
-    servername: string;
-    servertype: string;
-
-    [key: string]: any; // This allows for additional properties
-}
 
 const getStyles = (theme: GrafanaTheme2) => ({
     container: css`
@@ -112,13 +104,15 @@ const getStyles = (theme: GrafanaTheme2) => ({
     `
 });
 
+
 const PageOne = () => {
     const styles = useStyles2(getStyles);
 
+    const panelEventBus = useMemo(() => new EventBusSrv(), []);
     // State management
     const [servers, setServers] = useState<ServerMetadata[]>([]);
     const [selectedServer, setSelectedServer] = useState<SelectableValue<string> | null>(null);
-    const [snapshots, setSnapshots] = useState<DBSnapshot[]>([]);
+    const [snapshots, setSnapshots] = useState<DataFrame[]>([]);
     const [chartFrames, setChartFrames] = useState<DataFrame[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
@@ -195,8 +189,13 @@ const PageOne = () => {
         }
     }, []);
 
-    // // Load snapshots with pagination
+    // // // Load snapshots with pagination
     // const loadSnapshots = useCallback(async (serverName: string, page: number) => {
+    //     if (!datasource) {
+    //         console.warn('Datasource not available');
+    //         setChartFrames([]);
+    //         return;
+    //     }
     //     try {
     //         setDataLoading(true);
     //         setError(null);
@@ -230,133 +229,72 @@ const PageOne = () => {
 
     // Load chart data using the datasource
     const loadChartData = useCallback(async (serverName: string) => {
+        if (!datasource) {
+            console.warn('Datasource not available');
+            setChartFrames([]);
+            return;
+        }
+
         try {
             setChartLoading(true);
+            setError(null);
 
-            if (!datasource) {
-                console.warn('Datasource not available, falling back to direct API calls');
-                // Fallback to the original implementation
-                const now = new Date();
-                const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
-                const params = {
-                    start: oneHourAgo.toISOString(),
-                    end: now.toISOString(),
-                    server: serverName
-                };
-
-                const response = await makeApiCall<{
-                    snapSummaries: SnapshotSummary[]
-                }>('list-snapshot-summaries', params);
-                const summaries = response.snapSummaries || [];
-
-                if (summaries.length === 0) {
-                    setChartFrames([]);
-                    return;
-                }
-
-                // Convert backend data to DataFrame format
-                const timestamps = summaries.map(s => new Date(s.timestamp).getTime());
-                const connectionCounts = summaries.map(s =>
-                    Object.values(s.connectionsByWaitEvent).reduce((sum, count) => sum + count, 0)
-                );
-                const avgWaitTimes = summaries.map(s => {
-                    const totalTime = Object.values(s.timeMsByWaitEvent).reduce((sum, time) => sum + time, 0);
-                    const totalConnections = Object.values(s.connectionsByWaitEvent).reduce((sum, count) => sum + count, 0);
-                    return totalConnections > 0 ? totalTime / totalConnections : 0;
-                });
-
-                // In your loadChartData function, replace the DataFrame creation with:
-                const frames: DataFrame[] = [{
-                    refId: 'database-metrics',
-                    name: 'Database Metrics',
-                    meta: {},
-                    fields: [
-                        {
-                            name: 'Time',
-                            type: FieldType.time,
-                            values: new Array(timestamps.length),
-                            config: {},
-                        },
-                        {
-                            name: 'Active Connections',
-                            type: FieldType.number,
-                            values: new Array(connectionCounts.length),
-                            config: {
-                                displayName: 'Active Connections',
-                            }
-                        },
-                        {
-                            name: 'Avg Wait Time (ms)',
-                            type: FieldType.number,
-                            values: new Array(avgWaitTimes.length),
-                            config: {
-                                displayName: 'Avg Wait Time (ms)',
-                            }
-                        }
-                    ],
-                    length: timestamps.length
-                }];
-
-                // Populate the values
-                frames[0].fields[0].values = timestamps;
-                frames[0].fields[1].values = connectionCounts;
-                frames[0].fields[2].values = avgWaitTimes;
-
-                setChartFrames(frames);
-                return;
-            }
-
-            // Use datasource to query chart data
-            const now = Date.now();
-            const oneHourAgo = now - (60 * 60 * 1000);
+            // Create the exact same query structure as Explore tab
+            const now = dateTime();
+            const from = now.subtract(1, 'hour');
 
             const timeRange: TimeRange = {
-                from: dateTime(oneHourAgo),
-                to: dateTime(now),
-                raw: {from: 'now-1h', to: 'now'} as RawTimeRange
+                from,
+                to: now,
+                raw: {from: 'now-1h', to: 'now'}
             };
 
+            // This mirrors what Explore does - simple query structure
             const query: MyQuery = {
-                refId: 'chart-data',
+                refId: 'A', // Explore always starts with 'A'
                 database: serverName,
                 hide: false,
-                key: `chart-${Date.now()}`,
-                queryType: '',
                 datasource: {
-                    type: 'guilhermearpassos-sqlsights-datasource',
-                    uid: datasource.uid || ''
+                    type: datasource.type,
+                    uid: datasource.uid
                 }
             };
 
-            const scopedVars: ScopedVars = {};
-
+            // Mimic Explore's query request structure exactly
             const queryRequest: DataQueryRequest<MyQuery> = {
-                app: CoreApp.Dashboard,
-                requestId: `chart-${Date.now()}`,
+                app: CoreApp.Explore, // Use Explore app context
+                requestId: `explore_${Date.now()}`,
                 timezone: 'browser',
                 panelId: 1,
                 dashboardUID: '',
                 range: timeRange,
                 timeInfo: '',
-                interval: '30s',
-                intervalMs: 30000,
+                interval: '1m',
+                intervalMs: 60000,
                 targets: [query],
-                maxDataPoints: 100,
-                scopedVars: scopedVars,
+                maxDataPoints: 1000, // Explore uses higher maxDataPoints
+                scopedVars: {},
                 startTime: Date.now(),
                 liveStreaming: false
             };
 
-            const response: Promise<DataQueryResponse> | Observable<DataQueryResponse> = datasource.query(queryRequest);
-            if (response instanceof Promise) {
-                response.then(result => processResponse(result));
+            console.log('Query request (same as Explore):', queryRequest);
+
+            // Use the datasource query method directly - exactly like Explore
+            const result = await datasource.query(queryRequest);
+
+            console.log('Query response (raw):', result);
+
+            // Explore doesn't transform the data - it uses it directly
+            if (result.data && Array.isArray(result.data)) {
+                processResponse(result)
             } else {
-                response.subscribe(result => processResponse(result));
+                setChartFrames([]);
             }
 
         } catch (err) {
-            console.error('Failed to load chart data:', err);
+            console.error('Query failed:', err);
+            setError(err instanceof Error ? err.message : 'Query failed');
             setChartFrames([]);
         } finally {
             setChartLoading(false);
@@ -451,6 +389,7 @@ const PageOne = () => {
         id: snapshot.id
     }));
 
+
     return (
         <PluginPage>
             <div className={styles.container}>
@@ -488,22 +427,15 @@ const PageOne = () => {
                                             <LoadingPlaceholder text="Loading chart data..."/>
                                         </div>
                                     ) : chartFrames.length > 0 ? (
-                                        <TimeSeries
-                                            frames={chartFrames}
-                                            timeRange={{
-                                                from: dateTime(Math.min(...(chartFrames[0].fields[0].values as number[]))),
-                                                to: dateTime(Math.max(...(chartFrames[0].fields[0].values as number[]))),
-                                                raw: {from: 'now-1h', to: 'now'}
-                                            }}
-                                            width={800}
-                                            height={350}
-                                            legend={{
-                                                calcs: new Array<string>(),
-                                                displayMode: LegendDisplayMode.List,
-                                                showLegend: false, placement: "right"
-                                            }}
-                                            timeZone={"utc"}
-                                        />
+                                        <>
+                                            {chartFrames.length > 0 && (
+                                                <MyGraph
+                                                    data={chartFrames}
+                                                    loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
+                                                    eventBus={panelEventBus}
+                                                />
+                                            )}
+                                        </>
                                     ) : (
                                         <div className={styles.loadingContainer}>
                                             <p>No chart data available</p>
@@ -521,11 +453,21 @@ const PageOne = () => {
                                         <LoadingPlaceholder text="Loading snapshots..."/>
                                     ) : (
                                         <>
-                                            {/*<InteractiveTable*/}
-                                            {/*    columns={tableColumns}*/}
-                                            {/*    data={tableData as any[]}*/}
-                                            {/*    getRowId={(row) => row.id}*/}
-                                            {/*/>*/}
+                                            {/*<NestedTablesWithEventBus*/}
+                                            {/*    getDetailsData={*/}
+                                            {/*        (id: string) => {*/}
+                                            {/*            return {*/}
+                                            {/*                series: [], state: LoadingState.Loading,*/}
+                                            {/*                timeRange: {*/}
+                                            {/*                    from: dateTime().subtract(1, 'hour'),*/}
+                                            {/*                    to: dateTime(),*/}
+                                            {/*                    raw: {from: 'now-1h', to: 'now'}*/}
+                                            {/*                }*/}
+                                            {/*            }*/}
+                                            {/*        }*/}
+                                            {/*    }*/}
+                                            {/*    summaryData={snapshots}*/}
+                                            {/*    timeRange={}/>*/}
 
                                             <div className={styles.paginationContainer}>
                                                 <span>
