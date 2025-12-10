@@ -112,6 +112,39 @@ func (m *SnapshotSummary) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaxDuration != 0 {
+		i -= 8
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.MaxDuration))))
+		i--
+		dAtA[i] = 0x59
+	}
+	if m.AvgDuration != 0 {
+		i -= 8
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.AvgDuration))))
+		i--
+		dAtA[i] = 0x51
+	}
+	if m.WaitDuration != 0 {
+		i -= 8
+		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.WaitDuration))))
+		i--
+		dAtA[i] = 0x49
+	}
+	if m.Blockers != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Blockers))
+		i--
+		dAtA[i] = 0x40
+	}
+	if m.Waiters != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Waiters))
+		i--
+		dAtA[i] = 0x38
+	}
+	if m.Connections != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Connections))
+		i--
+		dAtA[i] = 0x30
+	}
 	if len(m.TimeMsByWaitEvent) > 0 {
 		for k := range m.TimeMsByWaitEvent {
 			v := m.TimeMsByWaitEvent[k]
@@ -1547,6 +1580,24 @@ func (m *SnapshotSummary) SizeVT() (n int) {
 			n += mapEntrySize + 1 + protohelpers.SizeOfVarint(uint64(mapEntrySize))
 		}
 	}
+	if m.Connections != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Connections))
+	}
+	if m.Waiters != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Waiters))
+	}
+	if m.Blockers != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Blockers))
+	}
+	if m.WaitDuration != 0 {
+		n += 9
+	}
+	if m.AvgDuration != 0 {
+		n += 9
+	}
+	if m.MaxDuration != 0 {
+		n += 9
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2554,6 +2605,96 @@ func (m *SnapshotSummary) UnmarshalVT(dAtA []byte) error {
 			}
 			m.TimeMsByWaitEvent[mapkey] = mapvalue
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Connections", wireType)
+			}
+			m.Connections = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Connections |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Waiters", wireType)
+			}
+			m.Waiters = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Waiters |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Blockers", wireType)
+			}
+			m.Blockers = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Blockers |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WaitDuration", wireType)
+			}
+			var v uint64
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			iNdEx += 8
+			m.WaitDuration = float64(math.Float64frombits(v))
+		case 10:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AvgDuration", wireType)
+			}
+			var v uint64
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			iNdEx += 8
+			m.AvgDuration = float64(math.Float64frombits(v))
+		case 11:
+			if wireType != 1 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxDuration", wireType)
+			}
+			var v uint64
+			if (iNdEx + 8) > l {
+				return io.ErrUnexpectedEOF
+			}
+			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			iNdEx += 8
+			m.MaxDuration = float64(math.Float64frombits(v))
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

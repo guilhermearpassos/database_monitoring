@@ -21,11 +21,27 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
         onChange({ ...query, database: databaseValue });
     };
+    const onQueryTypeChange = (value: ComboboxOption<string|number> | null) => {
+        const databaseValue = value?.value ? String(value.value) : undefined;
+
+        onChange({ ...query, queryType: databaseValue });
+    };
 
 
     return (
         <>
             <InlineFieldRow>
+                <InlineField label="Query type">
+
+                    <Combobox
+                        width={"auto"}
+                        options={[{label: "chart", value: "chart"}, {label: "snapshot-list", value: "snapshot-list"}]}
+                        value={query.queryType??"chart"}
+                        onChange={onQueryTypeChange}
+                        placeholder="Select query type"
+                        minWidth={20}
+                        isClearable={true}/>
+                </InlineField>
                 <InlineField label="Database">
                     <Combobox
                         width={"auto"}
@@ -33,8 +49,8 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                         value={query.database}
                         onChange={onDatabaseChange}
                         placeholder="Select database"
-                     minWidth={20}
-                     isClearable={true}/>
+                        minWidth={20}
+                        isClearable={true}/>
                 </InlineField>
 
             </InlineFieldRow>

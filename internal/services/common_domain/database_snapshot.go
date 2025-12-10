@@ -35,4 +35,10 @@ type SnapshotSummary struct {
 	Server           ServerMeta
 	ConnsByWaitType  map[string]int64
 	TimeMsByWaitType map[string]int64
+	Connections      int
+	Waiters          int
+	Blockers         int
+	WaitDuration     float64
+	AvgDuration      float64
+	MaxDuration      float64
 }

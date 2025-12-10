@@ -189,43 +189,75 @@ const PageOne = () => {
         }
     }, []);
 
-    // // // Load snapshots with pagination
-    // const loadSnapshots = useCallback(async (serverName: string, page: number) => {
-    //     if (!datasource) {
-    //         console.warn('Datasource not available');
-    //         setChartFrames([]);
-    //         return;
-    //     }
-    //     try {
-    //         setDataLoading(true);
-    //         setError(null);
-    //
-    //         const now = new Date();
-    //         const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-    //
-    //         const params = {
-    //             start: oneHourAgo.toISOString(),
-    //             end: now.toISOString(),
-    //             host: serverName,
-    //             page_size: pageSize.toString(),
-    //             page_number: page.toString()
-    //         };
-    //
-    //         const response = await makeApiCall<{
-    //             snapshots: DBSnapshot[];
-    //             totalCount: number;
-    //             pageNumber: number;
-    //         }>('list-snapshots', params);
-    //
-    //         setSnapshots(response.snapshots || []);
-    //         setTotalCount(response.totalCount || 0);
-    //         setCurrentPage(response.pageNumber || page);
-    //     } catch (err) {
-    //         setError(err instanceof Error ? err.message : 'Failed to load snapshots');
-    //     } finally {
-    //         setDataLoading(false);
-    //     }
-    // }, [pageSize]);
+    // // Load snapshots with pagination
+    const loadSnapshots = useCallback(async (serverName: string, page: number) => {
+        if (!datasource) {
+            console.warn('Datasource not available');
+            setSnapshots([]);
+            return;
+        }
+        try {
+            setDataLoading(true);
+            setError(null);
+
+            const now = dateTime();
+            const from = now.subtract(1, 'hour');
+            const timeRange: TimeRange = {
+                from,
+                to: now,
+                raw: {from: 'now-1h', to: 'now'}
+            };
+
+            // This mirrors what Explore does - simple query structure
+            const query: MyQuery = {
+                refId: 'A', // Explore always starts with 'A'
+                database: serverName,
+                hide: false,
+                datasource: {
+                    type: datasource.type,
+                    uid: datasource.uid
+                },
+                queryType: "snapshot-list"
+            };
+
+            // Mimic Explore's query request structure exactly
+            const queryRequest: DataQueryRequest<MyQuery> = {
+                app: CoreApp.Explore, // Use Explore app context
+                requestId: `explore_${Date.now()}`,
+                timezone: 'browser',
+                panelId: 1,
+                dashboardUID: '',
+                range: timeRange,
+                timeInfo: '',
+                interval: '1m',
+                intervalMs: 60000,
+                targets: [query],
+                maxDataPoints: 1000, // Explore uses higher maxDataPoints
+                scopedVars: {},
+                startTime: Date.now(),
+                liveStreaming: false
+            };
+
+            console.log('Query request (same as Explore):', queryRequest);
+
+            // Use the datasource query method directly - exactly like Explore
+            const result = await datasource.query(queryRequest);
+
+            console.log('Query response (raw):', result);
+
+            // Explore doesn't transform the data - it uses it directly
+            if (result.data && Array.isArray(result.data)) {
+                const transformedFrames: DataFrame[] = processResponse(result)
+                setSnapshots(transformedFrames);
+            } else {
+                setSnapshots([]);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load snapshots');
+        } finally {
+            setDataLoading(false);
+        }
+    }, [datasource,pageSize]);
 
     // Load chart data using the datasource
     const loadChartData = useCallback(async (serverName: string) => {
@@ -257,7 +289,8 @@ const PageOne = () => {
                 datasource: {
                     type: datasource.type,
                     uid: datasource.uid
-                }
+                },
+                queryType: "chart"
             };
 
             // Mimic Explore's query request structure exactly
@@ -287,7 +320,8 @@ const PageOne = () => {
 
             // Explore doesn't transform the data - it uses it directly
             if (result.data && Array.isArray(result.data)) {
-                processResponse(result)
+                const transformedFrames: DataFrame[] = processResponse(result)
+                setChartFrames(transformedFrames);
             } else {
                 setChartFrames([]);
             }
@@ -301,7 +335,7 @@ const PageOne = () => {
         }
     }, [datasource]);
 
-    const processResponse = (result: DataQueryResponse) => {
+    const processResponse = (result: DataQueryResponse): DataFrame[] => {
         const transformedFrames: DataFrame[] = [];
 
         result.data.forEach((rawFrame: any) => {
@@ -318,7 +352,7 @@ const PageOne = () => {
             }
         });
 
-        setChartFrames(transformedFrames);
+        return transformedFrames
     };
 
     // Handle server selection
@@ -326,13 +360,13 @@ const PageOne = () => {
         setSelectedServer(option);
         if (option?.value) {
             setCurrentPage(1);
-            // loadSnapshots(option.value, 1);
+            loadSnapshots(option.value, 1);
             loadChartData(option.value);
         } else {
             setSnapshots([]);
             setChartFrames([]);
         }
-    }, [/*loadSnapshots,*/ loadChartData]);
+    }, [loadSnapshots, loadChartData]);
 
     // Handle pagination
     const handlePageChange = useCallback((page: number) => {
@@ -453,21 +487,25 @@ const PageOne = () => {
                                         <LoadingPlaceholder text="Loading snapshots..."/>
                                     ) : (
                                         <>
-                                            {/*<NestedTablesWithEventBus*/}
-                                            {/*    getDetailsData={*/}
-                                            {/*        (id: string) => {*/}
-                                            {/*            return {*/}
-                                            {/*                series: [], state: LoadingState.Loading,*/}
-                                            {/*                timeRange: {*/}
-                                            {/*                    from: dateTime().subtract(1, 'hour'),*/}
-                                            {/*                    to: dateTime(),*/}
-                                            {/*                    raw: {from: 'now-1h', to: 'now'}*/}
-                                            {/*                }*/}
-                                            {/*            }*/}
-                                            {/*        }*/}
-                                            {/*    }*/}
-                                            {/*    summaryData={snapshots}*/}
-                                            {/*    timeRange={}/>*/}
+                                            <NestedTablesWithEventBus
+                                                getDetailsData={
+                                                    (id: string) => {
+                                                        return {
+                                                            series: [], state: LoadingState.Loading,
+                                                            timeRange: {
+                                                                from: dateTime().subtract(1, 'hour'),
+                                                                to: dateTime(),
+                                                                raw: {from: 'now-1h', to: 'now'}
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                summaryData={snapshots}
+                                                timeRange={{
+                                                    from: dateTime().subtract(1, 'hour'),
+                                                    to: dateTime(),
+                                                    raw: {from: 'now-1h', to: 'now'}
+                                                }}/>
 
                                             <div className={styles.paginationContainer}>
                                                 <span>

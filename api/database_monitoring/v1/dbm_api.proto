@@ -28,6 +28,12 @@ message SnapshotSummary {
   ServerMetadata server = 3;
   map<string, int64> connections_by_wait_event = 4;
   map<string, int64> time_ms_by_wait_event = 5;
+  int32 connections = 6;
+  int32 waiters = 7;
+  int32 blockers = 8;
+  double wait_duration = 9;
+  double avg_duration = 10;
+  double max_duration = 11;
 }
 
 message ListSnapshotSummariesResponse {

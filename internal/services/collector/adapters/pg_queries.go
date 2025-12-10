@@ -273,7 +273,11 @@ func (p *PostgresRepo) GetQuerySample(ctx context.Context, snapID string, sample
 }
 
 func (p *PostgresRepo) ListSnapshotSummaries(ctx context.Context, serverID string, start time.Time, end time.Time) ([]common_domain.SnapshotSummary, error) {
-	q := `select s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event, count(qs.id), sum(qs.wait_time) from snapshot s
+	q := `select s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event, count(qs.id), sum(qs.wait_time),
+       sum(case when blocked=true then 1 else 0 end) as waiters,
+       sum(case when blocker=true then 1 else 0 end) as blockers ,
+       sum(case when blocked=true then wait_time else 0 end) as waiter_time,
+       sum(case when blocker=true then block_ms else 0 end) as blocker_time from snapshot s
 inner join public.query_samples qs on s.id = qs.snap_id
          inner join target t on s.target_id = t.id
 where t.host = $1 and snap_time between $2 and $3
@@ -291,6 +295,13 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 	})
 	connsMapByID := make(map[string]map[string]int64)
 	timeMsMapByID := make(map[string]map[string]int64)
+	baseCountByID := make(map[string]*struct {
+		waiters     int64
+		blockers    int64
+		waiterTime  int64
+		blockerTime int64
+		connections int64
+	})
 	for rows.Next() {
 		var snapTime time.Time
 		var snapID string
@@ -299,7 +310,12 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 		var waitEvent string
 		var count int64
 		var waitTime int64
-		err = rows.Scan(&snapTime, &snapID, &host, &typeID, &waitEvent, &count, &waitTime)
+		var waiters int64
+		var blockers int64
+		var waiterTime int64
+		var blockerTime int64
+		err = rows.Scan(&snapTime, &snapID, &host, &typeID, &waitEvent, &count, &waitTime,
+			&waiters, &blockers, &waiterTime, &blockerTime)
 		if err != nil {
 			return nil, fmt.Errorf("listing snapshot summaries scan: %w", err)
 		}
@@ -317,6 +333,21 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 				},
 			}
 		}
+		if _, ok := baseCountByID[snapID]; !ok {
+			baseCountByID[snapID] = &struct {
+				waiters     int64
+				blockers    int64
+				waiterTime  int64
+				blockerTime int64
+				connections int64
+			}{waiters: waiters, blockers: blockers, waiterTime: waiterTime, blockerTime: blockerTime, connections: count}
+		} else {
+			baseCountByID[snapID].waiters += waiters
+			baseCountByID[snapID].waiterTime += waiterTime
+			baseCountByID[snapID].blockers += blockers
+			baseCountByID[snapID].blockerTime += blockerTime
+			baseCountByID[snapID].connections += count
+		}
 		if _, ok := connsMapByID[snapID]; !ok {
 			connsMapByID[snapID] = make(map[string]int64)
 		}
@@ -329,14 +360,27 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 	for k, v := range detailsMapByID {
 		connMap := connsMapByID[k]
 		TimeMap := timeMsMapByID[k]
+		baseCount := baseCountByID[k]
 		ret = append(ret, common_domain.SnapshotSummary{
 			ID:               v.id,
 			Timestamp:        v.timestamp,
 			Server:           v.server,
 			ConnsByWaitType:  connMap,
 			TimeMsByWaitType: TimeMap,
+			Connections:      int(baseCount.connections),
+			Waiters:          int(baseCount.waiters),
+			Blockers:         int(baseCount.blockers),
+			WaitDuration:     float64(baseCount.waiterTime),
+			AvgDuration:      0,
+			MaxDuration:      0,
 		})
 	}
+	slices.SortFunc(ret, func(a, b common_domain.SnapshotSummary) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return 1
+		}
+		return -1
+	})
 	return ret, nil
 }
 func (p *PostgresRepo) GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) (*common_domain.QueryMetric, error) {
