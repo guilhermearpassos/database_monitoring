@@ -203,7 +203,7 @@ const PageOne = () => {
             const from = now.subtract(1, 'hour');
             const timeRange: TimeRange = {
                 from,
-                to: now,
+                to: dateTime(),
                 raw: {from: 'now-1h', to: 'now'}
             };
             console.log(pageSize)
@@ -272,11 +272,10 @@ const PageOne = () => {
 
             // Create the exact same query structure as Explore tab
             const now = dateTime();
-            const from = now.subtract(1, 'hour');
 
             const timeRange: TimeRange = {
-                from,
-                to: now,
+                from: now.subtract(1, 'hour'),
+                to: dateTime(),
                 raw: {from: 'now-1h', to: 'now'}
             };
 
