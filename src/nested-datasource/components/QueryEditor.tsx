@@ -55,12 +55,9 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                 {(query.queryType==="snapshot") && (
                     <InlineField label="Snapshot ID">
                         <Input
-                            width={"auto"}
                             value={query.snapshotID}
-                            onChange={event => {onChange({...query, snapshotID: event.target.value})}}
-                            placeholder="Select snapshot"
-                            minWidth={20}
-                            isClearable={true}/>
+                            onChange={event => {onChange({...query, snapshotID: event.currentTarget.value || ''})}}
+                            placeholder="Select snapshot"/>
                     </InlineField>
                 )}
 

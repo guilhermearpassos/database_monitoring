@@ -1,16 +1,20 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {PanelRenderer} from '@grafana/runtime';
 import {
-    AppEvents,
+    BusEventWithPayload,
     DataFrame,
-    DataLink, DataLinksContext,
     EventBusSrv,
     LoadingState,
     PanelData,
-    ScopedVars,
     TimeRange,
 } from '@grafana/data';
-import {PanelContextProvider, } from '@grafana/ui';
+import {PanelContext, PanelContextProvider,} from '@grafana/ui';
+
+// Define a proper event class
+class TableRowClickEvent extends BusEventWithPayload<{ id: string; rowIndex: number }> {
+    static type = 'table-row-click';  // Must be static!
+}
+
 
 export function NestedTablesWithEventBus({
                                              summaryData,
@@ -24,7 +28,6 @@ export function NestedTablesWithEventBus({
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [detailsCache, setDetailsCache] = useState<Map<string, PanelData>>(new Map());
 
-    const tableRef = useRef<HTMLDivElement>(null);
     const panelEventBus = useMemo(() => new EventBusSrv(), []);
     const panelData: PanelData = {
         series: summaryData,
@@ -50,18 +53,9 @@ export function NestedTablesWithEventBus({
 
     useEffect(() => {
 
-        // Listen for cell/row click events from the table panel
-        const subscription = panelEventBus.subscribe(AppEvents.alertSuccess, (event) => {
-            // Table panels emit events when rows are clicked
-            console.log('Panel event:', event);
-        });
-
         // Better: Listen for data selection events
-        const dataSubscription = panelEventBus.getStream({
-            type: 'table-row-click' // Custom event from table interactions
-        }).subscribe({
+        const dataSubscription = panelEventBus.getStream(TableRowClickEvent).subscribe({
             next: (event: any) => {
-                const rowIndex = event.payload?.rowIndex;
                 const rowID = event.payload?.id;
 
                 if (rowID) {
@@ -71,13 +65,13 @@ export function NestedTablesWithEventBus({
         });
 
         return () => {
-            subscription.unsubscribe();
             dataSubscription.unsubscribe();
         };
     });
 
-    const panelContext = useMemo(() => ({
+    const panelContext: PanelContext = useMemo(() => ({
         eventBus: panelEventBus,
+        eventsScope: "sqlsights-one",
         onInstanceStateChange: () => {
         },
         canAddAnnotations: () => false,
@@ -100,7 +94,11 @@ export function NestedTablesWithEventBus({
                                 targetBlank: false,
                                 onClick: event => {
                                     const snapID: string = event.origin.field.values[event.origin.rowIndex];
-                                    panelEventBus.publish({type:'table-row-click', payload: {id: snapID, rowIndex: event.origin.rowIndex}});
+                                    panelEventBus.publish(
+                                        new TableRowClickEvent({
+                                            id: snapID,
+                                            rowIndex: event.origin.rowIndex
+                                        }));
 
                                 }
                             }]
@@ -115,25 +113,24 @@ export function NestedTablesWithEventBus({
     return (
         <div>
             {/*<DataLinksContext value={{dataLinkPostProcessor}}>*/}
-                <PanelContextProvider value={panelContext}>
-                    <PanelRenderer
-                        pluginId="table"
-                        width={1200}
-                        height={400}
-                        data={summaryDataWithLinks}
-                        timeRange={timeRange}
-                        options={props => {return }}
-                        // options={{
-                        //     showHeader: true,
-                        //     cellHeight: 'md',
-                        //     footer: {
-                        //         show: false,
-                        //     },
-                        // }}
-                    />
-                </PanelContextProvider>
+            <PanelContextProvider value={panelContext}>
+                <PanelRenderer
+                    title="nestedtable"
+                    pluginId="table"
+                    width={1200}
+                    height={400}
+                    data={summaryDataWithLinks}
+                    // options={{
+                    //     showHeader: true,
+                    //     cellHeight: 'md',
+                    //     footer: {
+                    //         show: false,
+                    //     },
+                    // }}
+                />
+            </PanelContextProvider>
             {/*</DataLinksContext>*/}
-             Detail Tables
+            Detail Tables
             {Array.from(expandedRows).map(snapshotId => {
                 const detailData = detailsCache.get(snapshotId);
                 if (!detailData) {
@@ -154,11 +151,11 @@ export function NestedTablesWithEventBus({
                     >
                         <h4>Details for Snapshot: {snapshotId}</h4>
                         <PanelRenderer
+                            title="detailsnestedtable"
                             pluginId="table"
                             width={1100}
                             height={300}
                             data={detailData}
-                            timeRange={timeRange}
                         />
                     </div>
                 );

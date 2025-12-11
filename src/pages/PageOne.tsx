@@ -27,45 +27,6 @@ interface ServerMetadata {
     host?: string;
 }
 
-interface ServerSummary {
-    name: string;
-    type: string;
-    connections: number;
-    requestRate: number;
-    connectionsByWaitGroup: Record<string, number>;
-}
-
-interface DBSnapshot {
-    id: string;
-    timestamp: string;
-    server: ServerMetadata;
-    // Add other fields from your snapshot.proto as needed
-}
-
-interface QueryMetric {
-    sqlHandle: string;
-    host: string;
-    database: string;
-    avgDuration: number;
-    executionCount: number;
-    // Add other fields from your proto definitions
-}
-
-interface SnapshotSummary {
-    id: string;
-    timestamp: string;
-    server: ServerMetadata;
-    connectionsByWaitEvent: Record<string, number>;
-    timeMsByWaitEvent: Record<string, number>;
-}
-
-interface PaginatedResponse<T> {
-    data: T[];
-    totalCount: number;
-    pageNumber: number;
-}
-
-
 const getStyles = (theme: GrafanaTheme2) => ({
     container: css`
         padding: ${theme.spacing(2)};
@@ -119,7 +80,7 @@ const PageOne = () => {
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
 
     // Loading states
-    const [serversLoading, setServersLoading] = useState(false);
+    // const [serversLoading, setServersLoading] = useState(false);
     const [dataLoading, setDataLoading] = useState(false);
     const [chartLoading, setChartLoading] = useState(false);
 
@@ -161,7 +122,7 @@ const PageOne = () => {
     // Load available servers from backend
     const loadServers = useCallback(async () => {
         try {
-            setServersLoading(true);
+            // setServersLoading(true);
             setError(null);
 
             const now = new Date();
@@ -173,9 +134,7 @@ const PageOne = () => {
                 type: "databases"
             };
 
-            const response = await makeApiCall<{
-                servers: Array<{ label: string, value: string }>
-            }>('datasource-options', params);
+            const response = await makeApiCall<Array<{ label: string, value: string }>>('datasource-options', params);
             let servers: ServerMetadata[] = []
             for (const server of response) {
                 servers.push({name: server.label, type: server.label, host: server.label})
@@ -184,7 +143,7 @@ const PageOne = () => {
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load servers');
         } finally {
-            setServersLoading(false);
+            // setServersLoading(false);
         }
     }, []);
 
@@ -207,6 +166,7 @@ const PageOne = () => {
                 raw: {from: 'now-1h', to: 'now'}
             };
             console.log(pageSize)
+            console.log(page)
             // This mirrors what Explore does - simple query structure
             const query: MyQuery = {
                 refId: 'A', // Explore always starts with 'A'
@@ -239,9 +199,16 @@ const PageOne = () => {
 
             console.log('Query request (same as Explore):', queryRequest);
 
+            setTotalCount(1)
             // Use the datasource query method directly - exactly like Explore
-            const result = await datasource.query(queryRequest);
+            const resultObservable = datasource.query(queryRequest);
+            let result: DataQueryResponse
+            if (resultObservable instanceof Observable) {
+                result = await lastValueFrom(resultObservable);
 
+            } else{
+                result = await resultObservable;
+            }
             console.log('Query response (raw):', result);
 
             // Explore doesn't transform the data - it uses it directly
@@ -311,9 +278,14 @@ const PageOne = () => {
 
             console.log('Query request (same as Explore):', queryRequest);
 
-            // Use the datasource query method directly - exactly like Explore
-            const result = await datasource.query(queryRequest);
+            const resultObservable = datasource.query(queryRequest);
+            let result: DataQueryResponse
+            if (resultObservable instanceof Observable) {
+                result = await lastValueFrom(resultObservable);
 
+            } else{
+                result = await resultObservable;
+            }
             console.log('Query response (raw):', result);
 
             // Explore doesn't transform the data - it uses it directly
@@ -354,7 +326,7 @@ const PageOne = () => {
     };
 
     // Handle server selection
-    const handleServerChange = useCallback((option: ComboboxOption<string> ) => {
+    const handleServerChange = useCallback((option: ComboboxOption<string> | null ) => {
         setSelectedServer(option);
         if (option?.value) {
             setCurrentPage(1);
@@ -410,7 +382,6 @@ const PageOne = () => {
                             onChange={handleServerChange}
                             placeholder="Select a server..."
                             minWidth={20}
-                            isLoading={serversLoading}
                             isClearable/>
                     </div>
                 </div>

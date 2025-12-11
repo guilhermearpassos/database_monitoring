@@ -1,25 +1,19 @@
 import {
-    GraphDrawStyle,
-    GraphThresholdsStyleConfig,
-    TimeZone,
-    TooltipDisplayMode,
-    VizLegendOptions
+    GraphDrawStyle
 } from "@grafana/schema";
-import {GraphFieldConfig, PanelContextProvider, SeriesVisibilityChangeMode, StackingMode, useTheme2} from "@grafana/ui";
+import {GraphFieldConfig, PanelContext, PanelContextProvider, StackingMode, useTheme2} from "@grafana/ui";
 import {
-    AbsoluteTimeRange, applyFieldOverrides,
+    applyFieldOverrides,
     DataFrame, dateTime,
     EventBus, FieldColorModeId, FieldConfigSource,
     LoadingState, PanelData,
-    SplitOpen,
-    ThresholdsConfig, TimeRange,
 
 } from "@grafana/data";
 import {PanelRenderer} from "@grafana/runtime";
 import React, {useMemo, useState} from "react";
 
-export const GRAPH_STYLES = ['lines', 'bars', 'points', 'stacked_lines', 'stacked_bars'] as const;
-export type GraphStyle = (typeof GRAPH_STYLES)[number];
+// export const GRAPH_STYLES = ['lines', 'bars', 'points', 'stacked_lines', 'stacked_bars'] as const;
+// export type GraphStyle = (typeof GRAPH_STYLES)[number];
 
 interface Props {
     data: DataFrame[];
@@ -34,7 +28,7 @@ export function MyGraph ({
                }: Props) {
     const theme = useTheme2();
 
-    const [fieldConfig, setFieldConfig] = useState<FieldConfigSource<GraphFieldConfig>>({
+    const [fieldConfig, _] = useState<FieldConfigSource<GraphFieldConfig>>({
         defaults: {
             min: undefined,
             max: undefined,
@@ -55,12 +49,13 @@ export function MyGraph ({
         },
         overrides: [],
     });
-    const panelContext = useMemo(() => ({
+    const panelContext: PanelContext = useMemo(() => ({
         eventBus: eventBus,
         onInstanceStateChange: () => {
         },
         canAddAnnotations: () => false,
         canEditAnnotations: () => false,
+        eventsScope: "sqlsights-one",
         canDeleteAnnotations: () => false,
         // onToggleSeriesVisibility(label: string, mode: SeriesVisibilityChangeMode) {
         //     setFieldConfig(seriesVisibilityConfigFactory(label, mode, fieldConfig, data));
