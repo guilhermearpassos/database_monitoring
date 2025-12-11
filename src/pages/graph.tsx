@@ -76,7 +76,7 @@ export function MyGraph ({
             replaceVariables: (value) => value, // We don't need proper replace here as it is only used in getLinks and we use getFieldLinks
             theme,
         });
-    }, [data, theme]);
+    }, [data, theme, fieldConfig]);
 
     const panelData: PanelData = {
         series: dataWithConfig, state: LoadingState.Loading,

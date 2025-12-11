@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {FetchResponse, getBackendSrv, getDataSourceSrv, PluginPage} from '@grafana/runtime';
 import {lastValueFrom, Observable} from 'rxjs';
-import {Alert, Button, Card, LoadingPlaceholder, Select, useStyles2} from '@grafana/ui';
+import {Alert, Button, Card, Combobox, ComboboxOption, LoadingPlaceholder, useStyles2} from '@grafana/ui';
 import {
     CoreApp,
     DataFrame,
@@ -12,7 +12,6 @@ import {
     EventBusSrv,
     GrafanaTheme2,
     LoadingState,
-    SelectableValue,
     TimeRange
 } from '@grafana/data';
 import {css} from '@emotion/css';
@@ -111,7 +110,7 @@ const PageOne = () => {
     const panelEventBus = useMemo(() => new EventBusSrv(), []);
     // State management
     const [servers, setServers] = useState<ServerMetadata[]>([]);
-    const [selectedServer, setSelectedServer] = useState<SelectableValue<string> | null>(null);
+    const [selectedServer, setSelectedServer] = useState<ComboboxOption | null>(null);
     const [snapshots, setSnapshots] = useState<DataFrame[]>([]);
     const [chartFrames, setChartFrames] = useState<DataFrame[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -175,7 +174,7 @@ const PageOne = () => {
             };
 
             const response = await makeApiCall<{
-                servers: { label: string, value: string }[]
+                servers: Array<{ label: string, value: string }>
             }>('datasource-options', params);
             let servers: ServerMetadata[] = []
             for (const server of response) {
@@ -207,7 +206,7 @@ const PageOne = () => {
                 to: now,
                 raw: {from: 'now-1h', to: 'now'}
             };
-
+            console.log(pageSize)
             // This mirrors what Explore does - simple query structure
             const query: MyQuery = {
                 refId: 'A', // Explore always starts with 'A'
@@ -356,7 +355,7 @@ const PageOne = () => {
     };
 
     // Handle server selection
-    const handleServerChange = useCallback((option: SelectableValue<string>) => {
+    const handleServerChange = useCallback((option: ComboboxOption<string> ) => {
         setSelectedServer(option);
         if (option?.value) {
             setCurrentPage(1);
@@ -381,47 +380,12 @@ const PageOne = () => {
     }, [loadServers]);
 
     // Prepare server options for Select component
-    const serverOptions: Array<SelectableValue<string>> = servers.map(server => ({
+    const serverOptions: ComboboxOption[] = servers.map(server => ({
         label: `${server.name} (${server.type})`,
         value: server.name,
         description: server.host
     }));
 
-    // Prepare table columns for InteractiveTable - use the expected format
-    const tableColumns = [
-        {
-            id: 'timestamp',
-            header: 'Timestamp',
-            sortType: 'string',
-            cell: (props: any) => props.value
-        },
-        {
-            id: 'servername',
-            header: 'Server',
-            sortType: 'string',
-            cell: (props: any) => props.value
-        },
-        {
-            id: 'servertype',
-            header: 'Type',
-            sortType: 'string',
-            cell: (props: any) => props.value
-        },
-        {
-            id: 'id',
-            header: 'Snapshot ID',
-            sortType: 'string',
-            cell: (props: any) => props.value
-        }
-    ];
-
-    // Prepare table data from snapshots - flatten the structure
-    const tableData = snapshots.map(snapshot => ({
-        timestamp: new Date(snapshot.timestamp).toLocaleString(),
-        servername: snapshot.server?.name || 'Unknown',
-        servertype: snapshot.server?.type || 'Unknown',
-        id: snapshot.id
-    }));
 
 
     return (
@@ -439,14 +403,16 @@ const PageOne = () => {
                 <div className={styles.section}>
                     <h3>Server Selection</h3>
                     <div className={styles.serverSelection}>
-                        <Select
-                            placeholder="Select a server..."
+
+                        <Combobox
+                            width={"auto"}
                             options={serverOptions}
                             value={selectedServer}
                             onChange={handleServerChange}
+                            placeholder="Select a server..."
+                            minWidth={20}
                             isLoading={serversLoading}
-                            isClearable
-                        />
+                            isClearable/>
                     </div>
                 </div>
 
@@ -491,7 +457,7 @@ const PageOne = () => {
                                                 getDetailsData={
                                                     (id: string) => {
                                                         return {
-                                                            series: [], state: LoadingState.Loading,
+                                                            series: snapshots, state: LoadingState.Loading,
                                                             timeRange: {
                                                                 from: dateTime().subtract(1, 'hour'),
                                                                 to: dateTime(),

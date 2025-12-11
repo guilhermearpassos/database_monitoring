@@ -10,6 +10,9 @@ services:
       service: grafana
     depends_on:
       - grpc
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
 
   #    extra_hosts:
 #      - "host.docker.internal:host-gateway"
@@ -20,6 +23,8 @@ services:
       SA_PASSWORD: "SqlServer2019!"
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
 
   migrate:
     container_name: sqlsights-migrate
@@ -59,9 +64,6 @@ services:
   grpc:
     container_name: sqlsights-grpc
     image: guilhermearpassos/sql-sight:v1.0.7
-    ports:
-      - "8082:8082"
-      - "8083:8083"
     command:
       - "grpc"
       - "--config=/cfg/grpc.toml"
@@ -79,7 +81,7 @@ services:
     depends_on:
       - grpc
     ports:
-      - "8080:8080"
+      - "9080:8080"
   postgres:
     image: postgres:17-alpine
     ports:
