@@ -56,7 +56,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", collectorAddr, err)
 	}
-	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
+	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize), config.GRPCServerConfig.GrpcConfig.TLS.Enabled, config.GRPCServerConfig.GrpcConfig.TLS.CertFile, config.GRPCServerConfig.GrpcConfig.TLS.KeyFile)
 	db, err := config.PostgresConfig.Get(ctx)
 	if err != nil {
 		panic(err)

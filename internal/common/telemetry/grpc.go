@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
@@ -9,7 +10,9 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"log"
 	"runtime/debug"
 )
 
@@ -25,7 +28,7 @@ func OpenInstrumentedClientConn(endpoint string, maxSize int) (*grpc.ClientConn,
 
 }
 
-func NewGrpcServer(maxMessageLength int) *grpc.Server {
+func NewGrpcServer(maxMessageLength int, tlsEnabled bool, tlsCertPath string, tlsKeyPath string) *grpc.Server {
 
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		grpc_prometheus.UnaryServerInterceptor,
@@ -41,6 +44,17 @@ func NewGrpcServer(maxMessageLength int) *grpc.Server {
 		grpc.MaxSendMsgSize(maxMessageLength),
 		grpc.StatsHandler(otelgrpc.NewServerHandler(otelgrpc.WithPropagators(b3.New(b3.WithInjectEncoding(b3.B3MultipleHeader | b3.B3SingleHeader))))),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(unaryInterceptors...)),
+	}
+	if tlsEnabled {
+		serverCert, err := tls.LoadX509KeyPair(tlsCertPath, tlsKeyPath)
+		if err != nil {
+			log.Fatalf("failed to load TLS certificate and key: %s", err)
+		}
+		opts = append(opts, grpc.Creds(credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{serverCert},
+			ClientAuth:   tls.NoClientCert,
+			MinVersion:   tls.VersionTLS12,
+		})))
 	}
 	grpcServer := grpc.NewServer(opts...)
 	return grpcServer

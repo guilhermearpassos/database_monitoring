@@ -52,7 +52,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", config.GRPCServerConfig.GrpcConfig.Url, err)
 	}
-	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
+	grpcServer := telemetry.NewGrpcServer(int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize), config.GRPCServerConfig.GrpcConfig.TLS.Enabled, config.GRPCServerConfig.GrpcConfig.TLS.CertFile, config.GRPCServerConfig.GrpcConfig.TLS.KeyFile)
 	db, err := config.PostgresConfig.Get(context.Background())
 	if err != nil {
 		panic(err)

@@ -20,8 +20,15 @@ type AgentConfig struct {
 }
 
 type GrpcConfig struct {
-	Url                string `toml:"url"`
-	GrpcMessageMaxSize int64  `toml:"grpc_message_max_size"`
+	Url                string    `toml:"url"`
+	GrpcMessageMaxSize int64     `toml:"grpc_message_max_size"`
+	TLS                TLSConfig `toml:"tls"`
+}
+
+type TLSConfig struct {
+	Enabled  bool   `toml:"enabled"`
+	CertFile string `toml:"cert_file"`
+	KeyFile  string `toml:"key_file"`
 }
 
 type DBDataCollectionConfig struct {
