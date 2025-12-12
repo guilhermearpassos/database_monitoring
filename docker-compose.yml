@@ -10,9 +10,9 @@ services:
       service: grafana
     depends_on:
       - grpc
-#    environment:
-#      - GF_SECURITY_ADMIN_USER=admin
-#      - GF_SECURITY_ADMIN_PASSWORD=password
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
 
   #    extra_hosts:
 #      - "host.docker.internal:host-gateway"
@@ -26,9 +26,22 @@ services:
     ports:
       - "1433:1433"
 
+  load_gen:
+    container_name: sqlsights-grpc
+#    image: guilhermearpassos/sql-sight:v1.0.8
+    build: .
+
+    command:
+      - "load_gen"
+      - "--config=/cfg/agent.toml"
+    volumes:
+      - "./local/docker:/cfg"
+    depends_on:
+      - sqlserver
+
   migrate:
     container_name: sqlsights-migrate
-    image: guilhermearpassos/sql-sight:v1.0.7
+    image: guilhermearpassos/sql-sight:v1.0.8
     command:
       - "migrate"
       - "--pg-addr=postgres://postgres:example@postgres:5432/postgres?sslmode=disable"
@@ -38,7 +51,7 @@ services:
       - postgres
   collector:
     container_name: sqlsights-collector
-    image: guilhermearpassos/sql-sight:v1.0.7
+    image: guilhermearpassos/sql-sight:v1.0.8
     command:
       - "collector"
       - "--config=/collector.toml"
@@ -50,7 +63,7 @@ services:
 
   agent:
     container_name: sqlsights-agent
-    image: guilhermearpassos/sql-sight:v1.0.7
+    image: guilhermearpassos/sql-sight:v1.0.8
     command:
       - "agent"
       - "--config=/agent.toml"
@@ -63,7 +76,7 @@ services:
 
   grpc:
     container_name: sqlsights-grpc
-    image: guilhermearpassos/sql-sight:v1.0.7
+    image: guilhermearpassos/sql-sight:v1.0.8
     command:
       - "grpc"
       - "--config=/cfg/grpc.toml"
@@ -73,7 +86,7 @@ services:
       - migrate
 #
   ui:
-    image: guilhermearpassos/sql-sight:v1.0.7
+    image: guilhermearpassos/sql-sight:v1.0.8
     command:
       - "ui"
       - "--grpc-addr=grpc:8082"

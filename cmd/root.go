@@ -19,6 +19,7 @@ func main() {
 	c.AddCommand(GrpcCmd)
 	c.AddCommand(UiCmd)
 	c.AddCommand(MigrateCmd)
+	c.AddCommand(LoadGenCmd)
 	err := c.Execute()
 	if err != nil {
 		panic(err)
