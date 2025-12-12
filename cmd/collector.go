@@ -119,7 +119,7 @@ func StartCollector(cmd *cobra.Command, args []string) error {
 	}
 	if config.GRPCServerConfig.GrpcUiConfig.Enabled {
 
-		cc, err3 := telemetry.OpenInstrumentedClientConn(collectorAddr, int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
+		cc, err3 := telemetry.OpenInstrumentedClientConn(collectorAddr, int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize), config.GRPCServerConfig.GrpcConfig.TLS.Enabled)
 		if err3 != nil {
 			panic(err3)
 		}

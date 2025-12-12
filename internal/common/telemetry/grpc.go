@@ -16,15 +16,17 @@ import (
 	"runtime/debug"
 )
 
-func OpenInstrumentedClientConn(endpoint string, maxSize int) (*grpc.ClientConn, error) {
-
-	return grpc.NewClient(endpoint,
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+func OpenInstrumentedClientConn(endpoint string, maxSize int, tlsEnabled bool) (*grpc.ClientConn, error) {
+	opts := []grpc.DialOption{grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxSize),
 			grpc.MaxCallSendMsgSize(maxSize),
-		))
+		)}
+	if tlsEnabled {
+		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+	}
+	return grpc.NewClient(endpoint, opts...)
 
 }
 

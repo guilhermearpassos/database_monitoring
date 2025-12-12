@@ -51,7 +51,7 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(fmt.Errorf("failed to init telemetry: %v", err))
 	}
-	cc, err := telemetry.OpenInstrumentedClientConn(config.CollectorConfig.Url, int(config.CollectorConfig.GrpcMessageMaxSize))
+	cc, err := telemetry.OpenInstrumentedClientConn(config.CollectorConfig.Url, int(config.CollectorConfig.GrpcMessageMaxSize), config.CollectorConfig.TLS.Enabled)
 
 	if err != nil {
 		panic(err)

@@ -10,6 +10,7 @@ var (
 	grpcSrvr     string
 	frontendAddr string
 	otlpAddr     string
+	tlsEnabled   bool
 	UiCmd        = &cobra.Command{
 		Use:     "ui",
 		Short:   "run dbm ui",
@@ -24,6 +25,7 @@ func init() {
 	UiCmd.Flags().StringVar(&grpcSrvr, "grpc-addr", "", "")
 	UiCmd.Flags().StringVar(&frontendAddr, "frontend-addr", "", "")
 	UiCmd.Flags().StringVar(&otlpAddr, "otlp-addr", "", "")
+	UiCmd.Flags().BoolVar(&tlsEnabled, "tls-enabled", false, "")
 }
 
 func StartUI(cmd *cobra.Command, args []string) error {
@@ -41,7 +43,7 @@ func StartUI(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cc, err := telemetry.OpenInstrumentedClientConn(grpcSrvr, int(1000000))
+	cc, err := telemetry.OpenInstrumentedClientConn(grpcSrvr, int(1000000), tlsEnabled)
 	if err != nil {
 		return err
 	}

@@ -72,7 +72,7 @@ func StartGrpc(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	if config.GRPCServerConfig.GrpcUiConfig.Enabled {
 
-		cc, err := telemetry.OpenInstrumentedClientConn(config.GRPCServerConfig.GrpcConfig.Url, int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize))
+		cc, err := telemetry.OpenInstrumentedClientConn(config.GRPCServerConfig.GrpcConfig.Url, int(config.GRPCServerConfig.GrpcConfig.GrpcMessageMaxSize), config.GRPCServerConfig.GrpcConfig.TLS.Enabled)
 		if err != nil {
 			panic(err)
 		}
