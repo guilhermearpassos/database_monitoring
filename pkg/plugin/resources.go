@@ -72,7 +72,7 @@ func (a *App) handleQuery(w http.ResponseWriter, req *http.Request) {
 	// Parse the request body to match Grafana's query format
 	var queryReq struct {
 		Queries       []json.RawMessage `json:"queries"`
-		Range         interface{}       `json:"range"`
+		Range         backend.TimeRange `json:"range"`
 		IntervalMs    int64             `json:"intervalMs"`
 		MaxDataPoints int64             `json:"maxDataPoints"`
 	}
@@ -99,14 +99,13 @@ func (a *App) handleQuery(w http.ResponseWriter, req *http.Request) {
 		if refID == "" {
 			refID = fmt.Sprintf("A%d", i)
 		}
+		queryType, _ := query["queryType"].(string)
 
 		backendReq.Queries[i] = backend.DataQuery{
-			RefID: refID,
-			JSON:  rawQuery,
-			TimeRange: backend.TimeRange{
-				From: time.Now().Add(-1 * time.Hour), // Default range, adjust as needed
-				To:   time.Now(),
-			},
+			RefID:     refID,
+			JSON:      rawQuery,
+			TimeRange: queryReq.Range,
+			QueryType: queryType,
 		}
 	}
 
@@ -154,8 +153,18 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 
 	// Process each query in the request
 	for _, q := range req.Queries {
-		res := a.query(ctx, req.PluginContext, q)
-		response.Responses[q.RefID] = res
+		switch q.QueryType {
+		case "chart":
+			res := a.query(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
+		case "snapshot-list":
+			res := a.querySnapList(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
+		case "snapshot":
+
+			res := a.querySnap(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
+		}
 	}
 
 	return response, nil
@@ -230,6 +239,155 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 	for we, v := range valuesByWaitType {
 		frame.Fields = append(frame.Fields, data.NewField(we, nil, v))
 	}
+
+	// Set the RefID to match the query
+	frame.RefID = query.RefID
+
+	// Add metadata for proper visualization
+	frame.Meta = &data.FrameMeta{
+		Type: data.FrameTypeTimeSeriesWide,
+	}
+
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+// querySnapList processes individual queries
+func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	// Implement your SQL query logic here
+	response := backend.DataResponse{}
+	q := struct {
+		Database string `json:"database"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	timeRange := query.TimeRange
+	from := timeRange.From
+	to := timeRange.To
+	r, err := a.client.ListSnapshotSummaries(ctx, &dbmv1.ListSnapshotSummariesRequest{
+		Start:  timestamppb.New(from),
+		End:    timestamppb.New(to),
+		Server: q.Database,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	ids := make([]string, 0, len(r.GetSnapSummaries()))
+	times := make([]time.Time, 0, len(r.GetSnapSummaries()))
+	connections := make([]float64, 0, len(r.GetSnapSummaries()))
+	waiters := make([]float64, 0, len(r.GetSnapSummaries()))
+	blockers := make([]float64, 0, len(r.GetSnapSummaries()))
+	waitDuration := make([]float64, 0, len(r.GetSnapSummaries()))
+	avgDuration := make([]float64, 0, len(r.GetSnapSummaries()))
+	maxDuration := make([]float64, 0, len(r.GetSnapSummaries()))
+	for _, sum := range r.GetSnapSummaries() {
+		times = append(times, time.Unix(sum.Timestamp.AsTime().Unix(), 0))
+		connections = append(connections, float64(sum.GetConnections()))
+		waiters = append(waiters, float64(sum.Waiters))
+		blockers = append(blockers, float64(sum.Blockers))
+		waitDuration = append(waitDuration, sum.WaitDuration/1000)
+		avgDuration = append(avgDuration, sum.AvgDuration)
+		maxDuration = append(maxDuration, sum.MaxDuration)
+		ids = append(ids, sum.Id)
+	}
+	frame := data.NewFrame("snapshots",
+		data.NewField("time", nil, times),
+		data.NewField("id", nil, ids),
+		data.NewField("connections", nil, connections),
+		data.NewField("waiters", nil, waiters),
+		data.NewField("blockers", nil, blockers),
+		data.NewField("waitDuration", nil, waitDuration),
+		data.NewField("avgDuration", nil, avgDuration),
+		data.NewField("maxDuration", nil, maxDuration),
+	)
+
+	// Set the RefID to match the query
+	frame.RefID = query.RefID
+
+	// Add metadata for proper visualization
+	frame.Meta = &data.FrameMeta{
+		Type: data.FrameTypeTimeSeriesWide,
+	}
+
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+// querySnap processes individual queries
+func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	// Implement your SQL query logic here
+	response := backend.DataResponse{}
+	q := struct {
+		Database string `json:"database"`
+		SnapID   string `json:"snapshotID"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	//timeRange := query.TimeRange
+	//from := timeRange.From
+	//to := timeRange.To
+	r, err := a.client.GetSnapshot(ctx, &dbmv1.GetSnapshotRequest{
+		Id: q.SnapID,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	size := len(r.GetSnapshot().GetSamples())
+	ids := make([]string, 0, size)
+	sessionIDs := make([]string, 0, size)
+	statuses := make([]string, 0, size)
+	text := make([]string, 0, size)
+	users := make([]string, 0, size)
+	durations := make([]float64, 0, size)
+	blockingImpact := make([]string, 0, size)
+	waitEvents := make([]string, 0, size)
+	databases := make([]string, 0, size)
+	blockingOrSelf := make([]string, 0, size)
+	for _, sample := range r.GetSnapshot().GetSamples() {
+		ids = append(ids, sample.Id)
+		sessionIDs = append(sessionIDs, sample.Session.SessionId)
+		statuses = append(statuses, sample.Status)
+		text = append(text, sample.Text)
+		users = append(users, sample.Session.LoginName)
+		waitEvents = append(waitEvents, sample.GetWaitInfo().GetWaitType())
+		databases = append(databases, sample.Db.DatabaseName)
+		durations = append(durations, float64(sample.TimeElapsedMillis/1000))
+		bos := sample.Session.SessionId
+		if sample.Blocked {
+			bos = sample.BlockInfo.BlockedBy
+		}
+		blockingOrSelf = append(blockingOrSelf, bos)
+		impactText := ""
+		if sample.Blocked {
+			impactText += fmt.Sprintf("blocked by %s ", sample.BlockInfo.BlockedBy)
+		}
+		if sample.Blocker {
+			if impactText != "" {
+				impactText += "| "
+			}
+			impactText += fmt.Sprintf("%d waiting", len(sample.BlockInfo.BlockedSessions))
+
+		}
+		blockingImpact = append(blockingImpact, impactText)
+	}
+	frame := data.NewFrame("snapshots",
+		data.NewField("bsid", nil, blockingOrSelf),
+		data.NewField("id", nil, ids),
+		data.NewField("sessionID", nil, sessionIDs),
+		data.NewField("text", nil, text),
+		data.NewField("Elapsed", nil, durations),
+		data.NewField("Blocking Impact", nil, blockingImpact),
+		data.NewField("wait event", nil, waitEvents),
+		data.NewField("database", nil, databases),
+		data.NewField("Status", nil, statuses),
+		data.NewField("user", nil, users),
+	)
 
 	// Set the RefID to match the query
 	frame.RefID = query.RefID

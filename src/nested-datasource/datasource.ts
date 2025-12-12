@@ -1,13 +1,7 @@
-import {FetchResponse, getBackendSrv, isFetchError} from '@grafana/runtime';
-import {
-    CoreApp,
-    DataQueryRequest,
-    DataQueryResponse,
-    DataSourceApi,
-    DataSourceInstanceSettings,
-} from '@grafana/data';
+import {FetchResponse, getBackendSrv, getTemplateSrv, isFetchError} from '@grafana/runtime';
+import {CoreApp, DataQueryRequest, DataQueryResponse, DataSourceApi, DataSourceInstanceSettings,} from '@grafana/data';
 
-import { MyQuery, MyDataSourceOptions, DEFAULT_QUERY, DataSourceResponse } from './types';
+import {DataSourceResponse, DEFAULT_QUERY, MyDataSourceOptions, MyQuery} from './types';
 import {lastValueFrom, Observable} from 'rxjs';
 import {ComboboxOption} from "@grafana/ui";
 
@@ -25,22 +19,23 @@ const getOpts: (query: string) => Promise<ComboboxOption[]> = async (query: stri
         throw new Error(`Failed to fetch: ${err}`);
     }
 };
+
 export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
-  baseUrl: string;
+    baseUrl: string;
 
-  constructor(instanceSettings: DataSourceInstanceSettings<MyDataSourceOptions>) {
-    super(instanceSettings);
-    this.baseUrl = instanceSettings.url!;
-  }
+    constructor(instanceSettings: DataSourceInstanceSettings<MyDataSourceOptions>) {
+        super(instanceSettings);
+        this.baseUrl = instanceSettings.url!;
+    }
 
-  getDefaultQuery(_: CoreApp): Partial<MyQuery> {
-    return DEFAULT_QUERY;
-  }
+    getDefaultQuery(_: CoreApp): Partial<MyQuery> {
+        return DEFAULT_QUERY;
+    }
 
-  filterQuery(query: MyQuery): boolean {
-    // if no query has been provided, prevent the query from being executed
-    return !!query.database;
-  }
+    filterQuery(query: MyQuery): boolean {
+        // if no query has been provided, prevent the query from being executed
+        return !!query.database;
+    }
 
 
     async query(options: DataQueryRequest<MyQuery>): Promise<DataQueryResponse> {
@@ -49,14 +44,20 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
             url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/query',
             method: 'POST',
             data: {
-                queries: options.targets.map(target => ({
-                    ...target,
-                    // Add datasource context
-                    datasource: {
-                        type: 'guilhermearpassos-sqlsights-datasource',
-                        uid: this.uid,
-                    },
-                })),
+                queries: options.targets.map(target => {
+                    console.log(target.snapshotID)
+                    console.log(getTemplateSrv().getVariables())
+                    target.snapshotID = getTemplateSrv().replace(target.snapshotID)
+                    console.log(target.snapshotID)
+                    return {
+                        ...target,
+                        // Add datasource context
+                        datasource: {
+                            type: 'guilhermearpassos-sqlsights-datasource',
+                            uid: this.uid,
+                        },
+                    }
+                }),
                 range: options.range,
                 intervalMs: options.intervalMs,
                 maxDataPoints: options.maxDataPoints,
@@ -69,7 +70,7 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
 
     // Method to fetch dropdown options from backend
     async getDropdownOptions(type: string, params?: Record<string, string>): Promise<ComboboxOption[]> {
-        const query = new URLSearchParams({ type, ...params });
+        const query = new URLSearchParams({type, ...params});
 
         try {
             const options = await getOpts(`${query.toString()}`);
@@ -89,46 +90,46 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
         return this.getDropdownOptions('databases');
     }
 
-  async request(url: string, params?: string) {
-    const response = getBackendSrv().fetch<DataSourceResponse>({
-      url: `${this.baseUrl}${url}${params?.length ? `?${params}` : ''}`,
-    });
-    return lastValueFrom(response);
-  }
-
-  /**
-   * Checks whether we can connect to the API.
-   */
-  async testDatasource() {
-    const defaultErrorMessage = 'Cannot connect to API';
-
-    try {
-      const response = await this.request('/health');
-      if (response.status === 200) {
-        return {
-          status: 'success',
-          message: 'Success',
-        };
-      } else {
-        return {
-          status: 'error',
-          message: response.statusText ? response.statusText : defaultErrorMessage,
-        };
-      }
-    } catch (err) {
-      let message = '';
-      if (typeof err === 'string') {
-        message = err;
-      } else if (isFetchError(err)) {
-        message = 'Fetch error: ' + (err.statusText ? err.statusText : defaultErrorMessage);
-        if (err.data && err.data.error && err.data.error.code) {
-          message += ': ' + err.data.error.code + '. ' + err.data.error.message;
-        }
-      }
-      return {
-        status: 'error',
-        message,
-      };
+    async request(url: string, params?: string) {
+        const response = getBackendSrv().fetch<DataSourceResponse>({
+            url: `${this.baseUrl}${url}${params?.length ? `?${params}` : ''}`,
+        });
+        return lastValueFrom(response);
     }
-  }
+
+    /**
+     * Checks whether we can connect to the API.
+     */
+    async testDatasource() {
+        const defaultErrorMessage = 'Cannot connect to API';
+
+        try {
+            const response = await this.request('/health');
+            if (response.status === 200) {
+                return {
+                    status: 'success',
+                    message: 'Success',
+                };
+            } else {
+                return {
+                    status: 'error',
+                    message: response.statusText ? response.statusText : defaultErrorMessage,
+                };
+            }
+        } catch (err) {
+            let message = '';
+            if (typeof err === 'string') {
+                message = err;
+            } else if (isFetchError(err)) {
+                message = 'Fetch error: ' + (err.statusText ? err.statusText : defaultErrorMessage);
+                if (err.data && err.data.error && err.data.error.code) {
+                    message += ': ' + err.data.error.code + '. ' + err.data.error.message;
+                }
+            }
+            return {
+                status: 'error',
+                message,
+            };
+        }
+    }
 }

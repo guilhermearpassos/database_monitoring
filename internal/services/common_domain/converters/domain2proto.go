@@ -100,6 +100,12 @@ func SnapSummaryToProto(summary *common_domain.SnapshotSummary) *dbmv1.SnapshotS
 		Server:                 &dbmv1.ServerMetadata{Host: summary.Server.Host, Type: summary.Server.Type},
 		ConnectionsByWaitEvent: summary.ConnsByWaitType,
 		TimeMsByWaitEvent:      summary.TimeMsByWaitType,
+		Connections:            int32(summary.Connections),
+		Waiters:                int32(summary.Waiters),
+		Blockers:               int32(summary.Blockers),
+		WaitDuration:           summary.WaitDuration,
+		AvgDuration:            summary.AvgDuration,
+		MaxDuration:            summary.MaxDuration,
 	}
 }
 

@@ -6,6 +6,6 @@ apps:
     org_name: 'guilhermearpassos'
     disabled: false
     jsonData:
-      apiUrl: host.docker.internal:8082
+      apiUrl: sqlsights-grpc:8082
     secureJsonData:
       apiKey: secret-key

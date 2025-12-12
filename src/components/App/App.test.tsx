@@ -4,6 +4,7 @@ import { AppRootProps, PluginType } from '@grafana/data';
 import { render, waitFor } from '@testing-library/react';
 import App from './App';
 
+import 'jest-canvas-mock';
 describe('Components/App', () => {
   let props: AppRootProps;
 
@@ -33,6 +34,6 @@ describe('Components/App', () => {
     );
 
     // Application is lazy loaded, so we need to wait for the component and routes to be rendered
-    await waitFor(() => expect(queryByText(/Use SQL Insights panels in your dashboards/i)).toBeInTheDocument(), { timeout: 2000 });
+    await waitFor(() => expect(queryByText(/SQL Database Monitoring/i)).toBeInTheDocument(), { timeout: 2000 });
   });
 });

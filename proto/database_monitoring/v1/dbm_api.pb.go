@@ -89,6 +89,12 @@ type SnapshotSummary struct {
 	Server                 *ServerMetadata        `protobuf:"bytes,3,opt,name=server,proto3" json:"server,omitempty"`
 	ConnectionsByWaitEvent map[string]int64       `protobuf:"bytes,4,rep,name=connections_by_wait_event,json=connectionsByWaitEvent,proto3" json:"connections_by_wait_event,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	TimeMsByWaitEvent      map[string]int64       `protobuf:"bytes,5,rep,name=time_ms_by_wait_event,json=timeMsByWaitEvent,proto3" json:"time_ms_by_wait_event,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	Connections            int32                  `protobuf:"varint,6,opt,name=connections,proto3" json:"connections,omitempty"`
+	Waiters                int32                  `protobuf:"varint,7,opt,name=waiters,proto3" json:"waiters,omitempty"`
+	Blockers               int32                  `protobuf:"varint,8,opt,name=blockers,proto3" json:"blockers,omitempty"`
+	WaitDuration           float64                `protobuf:"fixed64,9,opt,name=wait_duration,json=waitDuration,proto3" json:"wait_duration,omitempty"`
+	AvgDuration            float64                `protobuf:"fixed64,10,opt,name=avg_duration,json=avgDuration,proto3" json:"avg_duration,omitempty"`
+	MaxDuration            float64                `protobuf:"fixed64,11,opt,name=max_duration,json=maxDuration,proto3" json:"max_duration,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -156,6 +162,48 @@ func (x *SnapshotSummary) GetTimeMsByWaitEvent() map[string]int64 {
 		return x.TimeMsByWaitEvent
 	}
 	return nil
+}
+
+func (x *SnapshotSummary) GetConnections() int32 {
+	if x != nil {
+		return x.Connections
+	}
+	return 0
+}
+
+func (x *SnapshotSummary) GetWaiters() int32 {
+	if x != nil {
+		return x.Waiters
+	}
+	return 0
+}
+
+func (x *SnapshotSummary) GetBlockers() int32 {
+	if x != nil {
+		return x.Blockers
+	}
+	return 0
+}
+
+func (x *SnapshotSummary) GetWaitDuration() float64 {
+	if x != nil {
+		return x.WaitDuration
+	}
+	return 0
+}
+
+func (x *SnapshotSummary) GetAvgDuration() float64 {
+	if x != nil {
+		return x.AvgDuration
+	}
+	return 0
+}
+
+func (x *SnapshotSummary) GetMaxDuration() float64 {
+	if x != nil {
+		return x.MaxDuration
+	}
+	return 0
 }
 
 type ListSnapshotSummariesResponse struct {
@@ -1486,13 +1534,20 @@ const file_database_monitoring_v1_dbm_api_proto_rawDesc = "" +
 	"\x1cListSnapshotSummariesRequest\x120\n" +
 	"\x05start\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x05start\x12,\n" +
 	"\x03end\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x03end\x12\x16\n" +
-	"\x06server\x18\x03 \x01(\tR\x06server\"\x9e\x04\n" +
+	"\x06server\x18\x03 \x01(\tR\x06server\"\xe1\x05\n" +
 	"\x0fSnapshotSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12>\n" +
 	"\x06server\x18\x03 \x01(\v2&.database_monitoring.v1.ServerMetadataR\x06server\x12~\n" +
 	"\x19connections_by_wait_event\x18\x04 \x03(\v2C.database_monitoring.v1.SnapshotSummary.ConnectionsByWaitEventEntryR\x16connectionsByWaitEvent\x12p\n" +
-	"\x15time_ms_by_wait_event\x18\x05 \x03(\v2>.database_monitoring.v1.SnapshotSummary.TimeMsByWaitEventEntryR\x11timeMsByWaitEvent\x1aI\n" +
+	"\x15time_ms_by_wait_event\x18\x05 \x03(\v2>.database_monitoring.v1.SnapshotSummary.TimeMsByWaitEventEntryR\x11timeMsByWaitEvent\x12 \n" +
+	"\vconnections\x18\x06 \x01(\x05R\vconnections\x12\x18\n" +
+	"\awaiters\x18\a \x01(\x05R\awaiters\x12\x1a\n" +
+	"\bblockers\x18\b \x01(\x05R\bblockers\x12#\n" +
+	"\rwait_duration\x18\t \x01(\x01R\fwaitDuration\x12!\n" +
+	"\favg_duration\x18\n" +
+	" \x01(\x01R\vavgDuration\x12!\n" +
+	"\fmax_duration\x18\v \x01(\x01R\vmaxDuration\x1aI\n" +
 	"\x1bConnectionsByWaitEventEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aD\n" +
