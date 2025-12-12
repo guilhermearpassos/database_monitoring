@@ -21,6 +21,7 @@ services:
     volumes:
       - ../dist:/var/lib/grafana/plugins/guilhermearpassos-sqlsights-app
       - ../provisioning:/etc/grafana/provisioning
+      - ../dashboards:/var/lib/grafana/dashboards
       - ..:/root/guilhermearpassos-sqlsights-app
 
     environment:
