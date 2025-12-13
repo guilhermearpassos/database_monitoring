@@ -34,6 +34,9 @@ export function NestedTablesWithEventBus({
   const [detailsLoading, setDetailsLoading] = useState<Set<string>>(new Set());
   const [transformedFrames, setTransformedFrames] = useState<DataFrame[]>([]);
 
+  // Track row index to snapshot ID mapping for DOM click handling
+  const rowIndexToIdRef = React.useRef<Map<number, string>>(new Map());
+
   const panelEventBus = useMemo(() => new EventBusSrv(), []);
 
   const panelContext: PanelContext = useMemo(
@@ -105,6 +108,50 @@ export function NestedTablesWithEventBus({
 
     return () => sub.unsubscribe();
   }, [panelEventBus]);
+
+  // Observe DOM for nested table expand/collapse buttons
+  useEffect(() => {
+    const handleExpandButtonClick = (event: Event) => {
+      const target = event.target as HTMLElement;
+      const button = target.closest('[role="button"]');
+
+      if (!button) return;
+
+      // Check if this is an expand/collapse button (has SVG icon)
+      const svg = button.querySelector('svg');
+      if (!svg) return;
+
+      console.log('Expand/collapse button clicked');
+
+      // Find the row element
+      const row = button.closest('[role="row"]');
+      if (!row) return;
+
+      // Get aria-rowindex to identify the row
+      const rowIndexStr = row.getAttribute('aria-rowindex');
+      if (!rowIndexStr) return;
+
+      const rowIndex = parseInt(rowIndexStr, 10);
+      console.log('Row index:', rowIndex);
+
+      // Look up snapshot ID from our mapping
+      const snapshotId = rowIndexToIdRef.current.get(rowIndex/2);
+
+      if (snapshotId) {
+        console.warn('Detected snapshot ID from row:', snapshotId, rowIndex);
+        handleRowToggle(snapshotId);
+      } else {
+        console.warn('No snapshot ID found for row index:', rowIndex);
+      }
+    };
+
+    // Use event delegation on the document to catch all button clicks
+    document.addEventListener('click', handleExpandButtonClick, true);
+
+    return () => {
+      document.removeEventListener('click', handleExpandButtonClick, true);
+    };
+  }, [handleRowToggle]);
 
   // Build combined frame with summary + detail rows
   const combinedFrame = useMemo(() => {
@@ -185,9 +232,14 @@ export function NestedTablesWithEventBus({
       });
     });
 
+    // Clear and rebuild row index mapping
+    rowIndexToIdRef.current.clear();
+
     // Add summary rows
     const summaryRowCount = summaryFrame.length ?? summaryFrame.fields[0]?.values.length ?? 0;
     for (let rowIdx = 0; rowIdx < summaryRowCount; rowIdx++) {
+      const snapId = summaryFrame.fields[idFieldIndex]?.values.get(rowIdx);
+
       const rowData: any = {};
       rowData['_rowType'] = 'summary';
       summaryFrame.fields.forEach((field) => {
@@ -197,10 +249,15 @@ export function NestedTablesWithEventBus({
       allDetailFieldNames.forEach((fieldName) => {
         rowData[fieldName] = null;
       });
+
+      // Map aria-rowindex (1-based) to snapshot ID
+      if (snapId) {
+        rowIndexToIdRef.current.set(rowIdx+1, String(snapId));
+      }
+
       combined.add(rowData);
 
       // If this row is expanded, add detail rows
-      const snapId = summaryFrame.fields[idFieldIndex]?.values.get(rowIdx);
       if (snapId && expandedRows.has(String(snapId))) {
         const details = detailsCache.get(String(snapId));
         if (details && details[0]) {
