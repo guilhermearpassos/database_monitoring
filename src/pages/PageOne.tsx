@@ -1,7 +1,16 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {FetchResponse, getBackendSrv, getDataSourceSrv, PluginPage} from '@grafana/runtime';
 import {lastValueFrom, Observable} from 'rxjs';
-import {Alert, Button, Card, Combobox, ComboboxOption, LoadingPlaceholder, useStyles2} from '@grafana/ui';
+import {
+    Alert,
+    Button,
+    Card,
+    Combobox,
+    ComboboxOption,
+    LoadingPlaceholder,
+    TimeRangePicker,
+    useStyles2
+} from '@grafana/ui';
 import {
     CoreApp,
     DataFrame,
@@ -19,13 +28,7 @@ import {MyQuery} from '../nested-datasource/types';
 import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
 import {MyGraph} from "./graph";
 import {NestedTablesWithEventBus} from "./nested_table";
-
-// Updated interfaces based on your protobuf definitions
-interface ServerMetadata {
-    name: string;
-    type: string;
-    host?: string;
-}
+// ... existing code ...
 
 const getStyles = (theme: GrafanaTheme2) => ({
     container: css`
@@ -37,6 +40,26 @@ const getStyles = (theme: GrafanaTheme2) => ({
     serverSelection: css`
         max-width: 300px;
         margin-bottom: ${theme.spacing(2)};
+    `,
+    headerRow: css`
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: ${theme.spacing(2)};
+        flex-wrap: wrap;
+        margin-bottom: ${theme.spacing(2)};
+    `,
+    headerLeft: css`
+        min-width: 280px;
+    `,
+    headerRight: css`
+        margin-left: auto;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+    `,
+    timeRangeLabel: css`
+        font-weight: ${theme.typography.fontWeightMedium};
     `,
     chartContainer: css`
         height: 400px;
@@ -64,11 +87,17 @@ const getStyles = (theme: GrafanaTheme2) => ({
     `
 });
 
+interface ServerMetadata {
+    name: string;
+    type: string;
+    host?: string;
+}
 
 const PageOne = () => {
     const styles = useStyles2(getStyles);
 
     const panelEventBus = useMemo(() => new EventBusSrv(), []);
+
     // State management
     const [servers, setServers] = useState<ServerMetadata[]>([]);
     const [selectedServer, setSelectedServer] = useState<ComboboxOption | null>(null);
@@ -78,6 +107,12 @@ const PageOne = () => {
     const [totalCount, setTotalCount] = useState(0);
     const [pageSize] = useState(10);
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
+
+    const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
+        from: dateTime().subtract(1, 'hour'),
+        to: dateTime(),
+        raw: {from: 'now-1h', to: 'now'},
+    }));
 
     // Loading states
     // const [serversLoading, setServersLoading] = useState(false);
@@ -148,7 +183,7 @@ const PageOne = () => {
     }, []);
 
     // // Load snapshots with pagination
-    const loadSnapshots = useCallback(async (serverName: string, page: number) => {
+    const loadSnapshots = useCallback(async (serverName: string, page: number, timeRange: TimeRange) => {
         if (!datasource) {
             console.warn('Datasource not available');
             setSnapshots([]);
@@ -158,13 +193,6 @@ const PageOne = () => {
             setDataLoading(true);
             setError(null);
 
-            const now = dateTime();
-            const from = now.subtract(1, 'hour');
-            const timeRange: TimeRange = {
-                from,
-                to: dateTime(),
-                raw: {from: 'now-1h', to: 'now'}
-            };
             console.log(pageSize)
             console.log(page)
             // This mirrors what Explore does - simple query structure
@@ -206,7 +234,7 @@ const PageOne = () => {
             if (resultObservable instanceof Observable) {
                 result = await lastValueFrom(resultObservable);
 
-            } else{
+            } else {
                 result = await resultObservable;
             }
             console.log('Query response (raw):', result);
@@ -223,10 +251,10 @@ const PageOne = () => {
         } finally {
             setDataLoading(false);
         }
-    }, [datasource,pageSize]);
+    }, [datasource, pageSize]);
 
     // Load chart data using the datasource
-    const loadChartData = useCallback(async (serverName: string) => {
+    const loadChartData = useCallback(async (serverName: string, timeRange: TimeRange) => {
         if (!datasource) {
             console.warn('Datasource not available');
             setChartFrames([]);
@@ -237,18 +265,8 @@ const PageOne = () => {
             setChartLoading(true);
             setError(null);
 
-            // Create the exact same query structure as Explore tab
-            const now = dateTime();
-
-            const timeRange: TimeRange = {
-                from: now.subtract(1, 'hour'),
-                to: dateTime(),
-                raw: {from: 'now-1h', to: 'now'}
-            };
-
-            // This mirrors what Explore does - simple query structure
             const query: MyQuery = {
-                refId: 'A', // Explore always starts with 'A'
+                refId: 'A',
                 database: serverName,
                 hide: false,
                 datasource: {
@@ -258,9 +276,8 @@ const PageOne = () => {
                 queryType: "chart"
             };
 
-            // Mimic Explore's query request structure exactly
             const queryRequest: DataQueryRequest<MyQuery> = {
-                app: CoreApp.Explore, // Use Explore app context
+                app: CoreApp.Explore,
                 requestId: `explore_${Date.now()}`,
                 timezone: 'browser',
                 panelId: 1,
@@ -270,32 +287,26 @@ const PageOne = () => {
                 interval: '1m',
                 intervalMs: 60000,
                 targets: [query],
-                maxDataPoints: 1000, // Explore uses higher maxDataPoints
+                maxDataPoints: 1000,
                 scopedVars: {},
                 startTime: Date.now(),
                 liveStreaming: false
             };
 
-            console.log('Query request (same as Explore):', queryRequest);
-
             const resultObservable = datasource.query(queryRequest);
-            let result: DataQueryResponse
+            let result: DataQueryResponse;
             if (resultObservable instanceof Observable) {
                 result = await lastValueFrom(resultObservable);
-
-            } else{
+            } else {
                 result = await resultObservable;
             }
-            console.log('Query response (raw):', result);
 
-            // Explore doesn't transform the data - it uses it directly
             if (result.data && Array.isArray(result.data)) {
-                const transformedFrames: DataFrame[] = processResponse(result)
+                const transformedFrames: DataFrame[] = processResponse(result);
                 setChartFrames(transformedFrames);
             } else {
                 setChartFrames([]);
             }
-
         } catch (err) {
             console.error('Query failed:', err);
             setError(err instanceof Error ? err.message : 'Query failed');
@@ -326,17 +337,33 @@ const PageOne = () => {
     };
 
     // Handle server selection
-    const handleServerChange = useCallback((option: ComboboxOption<string> | null ) => {
+    const handleServerChange = useCallback((option: ComboboxOption<string> | null) => {
         setSelectedServer(option);
-        if (option?.value) {
-            setCurrentPage(1);
-            loadSnapshots(option.value, 1);
-            loadChartData(option.value);
-        } else {
-            setSnapshots([]);
-            setChartFrames([]);
+        setCurrentPage(1);
+
+    }, []);
+
+    const handleChartTimeRangeChange = useCallback((nextRange: TimeRange) => {
+        setChartTimeRange(nextRange);
+        setCurrentPage(1);
+    }, []);
+
+    useEffect(() => {
+        const serverName = selectedServer?.value;
+        if (!serverName) {
+            return;
         }
-    }, [loadSnapshots, loadChartData]);
+        const tr: TimeRange = {from: chartTimeRange.from, to: chartTimeRange.to, raw: chartTimeRange.raw};
+        loadChartData(serverName, tr);
+        loadSnapshots(serverName, 1, tr);
+    }, [
+        selectedServer?.value,
+        chartTimeRange.from,
+        chartTimeRange.to,
+        chartTimeRange.raw,
+        loadChartData,
+        loadSnapshots
+    ]);
 
     // Handle pagination
     const handlePageChange = useCallback((page: number) => {
@@ -358,32 +385,48 @@ const PageOne = () => {
     }));
 
 
-
     return (
         <PluginPage>
-            <div className={styles.container}>
-                <h2>SQL Database Monitoring</h2>
-                <p>Monitor and analyze database performance and activity across your servers.</p>
+            <div className={styles.headerRow}>
+                <div className={styles.headerLeft}>
+                    <h2>SQL Database Monitoring</h2>
+                    <p>Monitor and analyze database performance and activity across your servers.</p>
+                </div>
 
+                <div className={styles.headerRight}>
+                    <TimeRangePicker
+                        value={chartTimeRange}
+                        onChange={handleChartTimeRangeChange}
+                        timeZone="browser"
+                        onChangeTimeZone={timeZone => {
+                        }}
+                        onZoom={() => {
+                        }}
+                        onMoveBackward={() => {
+                        }}
+                        onMoveForward={() => {
+                        }}/>
+                </div>
                 {error && (
                     <Alert title="Error" severity="error">
                         {error}
                     </Alert>
                 )}
+            </div>
 
-                <div className={styles.section}>
-                    <h3>Server Selection</h3>
-                    <div className={styles.serverSelection}>
 
-                        <Combobox
-                            width={"auto"}
-                            options={serverOptions}
-                            value={selectedServer}
-                            onChange={handleServerChange}
-                            placeholder="Select a server..."
-                            minWidth={20}
-                            isClearable/>
-                    </div>
+            <div className={styles.section}>
+                <h3>Server Selection</h3>
+                <div className={styles.serverSelection}>
+                    <Combobox
+                        width="auto"
+                        options={serverOptions}
+                        value={selectedServer}
+                        onChange={handleServerChange}
+                        placeholder="Select a server..."
+                        minWidth={20}
+                        isClearable
+                    />
                 </div>
 
                 {selectedServer && (
@@ -403,6 +446,10 @@ const PageOne = () => {
                                                     data={chartFrames}
                                                     loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
                                                     eventBus={panelEventBus}
+                                                    timeRange={chartTimeRange}
+                                                    onTimeRangeChange={handleChartTimeRangeChange}
+                                                    width={800}
+                                                    height={400}
                                                 />
                                             )}
                                         </>
@@ -444,9 +491,9 @@ const PageOne = () => {
                                                 }}/>
 
                                             <div className={styles.paginationContainer}>
-                                                <span>
-                                                    Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} entries
-                                                </span>
+                        <span>
+                          Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} entries
+                        </span>
                                                 <div>
                                                     <Button
                                                         variant="secondary"
@@ -457,8 +504,8 @@ const PageOne = () => {
                                                         Previous
                                                     </Button>
                                                     <span style={{margin: '0 16px'}}>
-                                                        Page {currentPage} of {Math.ceil(totalCount / pageSize)}
-                                                    </span>
+                            Page {currentPage} of {Math.ceil(totalCount / pageSize)}
+                          </span>
                                                     <Button
                                                         variant="secondary"
                                                         onClick={() => handlePageChange(currentPage + 1)}

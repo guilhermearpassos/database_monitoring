@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 	"net/http"
 	"os"
+	"os/signal"
 	"time"
 )
 
@@ -38,7 +39,8 @@ func init() {
 }
 
 func StartAgent(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
 	var config config2.AgentConfig
 	// Check if file exists
 	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
@@ -96,9 +98,7 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	for _, tgt := range config.TargetHosts {
 		startTarget(ctx, a, tgt, config.CollectMetrics)
 	}
-	for {
-		time.Sleep(5 * time.Second)
-	}
+	<-ctx.Done()
 	return nil
 }
 func startTarget(ctx context.Context, a *app.Application, config config2.DBDataCollectionConfig, collectMetrics bool) {

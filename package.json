@@ -71,6 +71,7 @@
     "@grafana/data": "^12.2.1",
     "@grafana/i18n": "^12.2.1",
     "@grafana/runtime": "^12.2.1",
+    "@grafana/scenes": "^6.49.0",
     "@grafana/schema": "^12.2.1",
     "@grafana/ui": "^12.2.1",
     "react": "^18.3.0",
