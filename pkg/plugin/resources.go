@@ -378,7 +378,7 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 	}
 	frame := data.NewFrame("snapshots",
 		data.NewField("bsid", nil, blockingOrSelf),
-		data.NewField("id", nil, ids),
+		data.NewField("sampleID", nil, ids),
 		data.NewField("sessionID", nil, sessionIDs),
 		data.NewField("text", nil, text),
 		data.NewField("Elapsed", nil, durations),
@@ -418,7 +418,6 @@ func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
 	optionType := req.URL.Query().Get("type")
 
 	var options []DropdownOption
-	var err error
 	// Customize this based on your needs
 	switch optionType {
 	case "databases":

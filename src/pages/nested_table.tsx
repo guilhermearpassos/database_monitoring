@@ -1,18 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { PanelRenderer } from '@grafana/runtime';
 import {
-    BusEventWithPayload,
-    DataFrame,
-    EventBusSrv, getDisplayProcessor,
-    LoadingState,
-    PanelData,
-    TimeRange,
+  BusEventWithPayload,
+  DataFrame,
+  DataTransformerConfig,
+  EventBusSrv,
+  FieldType,
+  LoadingState,
+  MutableDataFrame,
+  PanelData,
+  TimeRange,
+  transformDataFrame,
 } from '@grafana/data';
-import {PanelContext, PanelContextProvider, Table, useTheme2} from '@grafana/ui';
+import { PanelContext, PanelContextProvider } from '@grafana/ui';
+import { Observable } from 'rxjs';
 
 // Define a proper event class
 class TableRowClickEvent extends BusEventWithPayload<{ id: string; rowIndex: number }> {
-  static type = 'table-row-click'; // Must be static!
+  static type = 'table-row-click';
 }
 
 export function NestedTablesWithEventBus({
@@ -24,9 +29,10 @@ export function NestedTablesWithEventBus({
   getDetailsData: (snapshotId: string) => Promise<PanelData>;
   timeRange: TimeRange;
 }) {
-  const theme = useTheme2();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [detailsCache, setDetailsCache] = useState<Map<string, PanelData>>(new Map());
+  const [detailsCache, setDetailsCache] = useState<Map<string, DataFrame[]>>(new Map());
+  const [detailsLoading, setDetailsLoading] = useState<Set<string>>(new Set());
+  const [transformedFrames, setTransformedFrames] = useState<DataFrame[]>([]);
 
   const panelEventBus = useMemo(() => new EventBusSrv(), []);
 
@@ -51,26 +57,40 @@ export function NestedTablesWithEventBus({
     return summaryFrame.fields.findIndex((f) => f.name === 'id');
   }, [summaryFrame]);
 
+  const fetchDetailsIfNeeded = async (snapshotId: string) => {
+    if (detailsCache.has(snapshotId) || detailsLoading.has(snapshotId)) {
+      return;
+    }
+
+    setDetailsLoading((prev) => new Set(prev).add(snapshotId));
+
+    try {
+      const details = await getDetailsData(snapshotId);
+      setDetailsCache((prev) => {
+        const next = new Map(prev);
+        next.set(snapshotId, details.series);
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to fetch details:', err);
+    } finally {
+      setDetailsLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(snapshotId);
+        return next;
+      });
+    }
+  };
+
   const handleRowToggle = (snapshotId: string) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);
-
       if (next.has(snapshotId)) {
         next.delete(snapshotId);
-        return next;
+      } else {
+        next.add(snapshotId);
+        void fetchDetailsIfNeeded(snapshotId);
       }
-
-      next.add(snapshotId);
-
-      // Fetch details if not cached
-      if (!detailsCache.has(snapshotId)) {
-        setDetailsCache((prevCache) => {
-          const nextCache = new Map(prevCache);
-            getDetailsData(snapshotId).then((details) => {nextCache.set(snapshotId, details)});
-          return nextCache;
-        });
-      }
-
       return next;
     });
   };
@@ -88,126 +108,228 @@ export function NestedTablesWithEventBus({
     return () => sub.unsubscribe();
   }, [panelEventBus]);
 
+  // Build combined frame with summary + detail rows
+  const combinedFrame = useMemo(() => {
+    if (!summaryFrame) {
+      return null;
+    }
+
+    const combined = new MutableDataFrame({
+      refId: summaryFrame.refId,
+      fields: [],
+    });
+
+
+    // Add all summary fields with data links for 'id' field
+    summaryFrame.fields.forEach((field) => {
+      const fieldConfig = { ...field.config };
+
+      // Add click handler to 'id' field
+      if (field.name === 'id') {
+        fieldConfig.links = [
+          {
+            title: 'Toggle Details',
+            url: '',
+            onClick: (event: any) => {
+              const snapshotId = String(event.origin.field.values.get(event.origin.rowIndex) ?? '');
+              panelEventBus.publish(
+                new TableRowClickEvent({
+                  id: snapshotId,
+                  rowIndex: event.origin.rowIndex,
+                })
+              );
+            },
+          },
+        ];
+      }
+
+      combined.addField({
+        name: field.name,
+        type: field.type,
+        config: fieldConfig,
+        values: [],
+      });
+    });
+
+    // Add detail-only fields (if any expanded rows have details)
+    const allDetailFieldNames = new Set<string>();
+    expandedRows.forEach((snapId) => {
+      const details = detailsCache.get(snapId);
+      if (details && details[0]) {
+        details[0].fields.forEach((f) => {
+          if (!summaryFrame.fields.find((sf) => sf.name === f.name)) {
+            allDetailFieldNames.add(f.name);
+          }
+        });
+      }
+    });
+
+    allDetailFieldNames.forEach((fieldName) => {
+      // Find first detail frame that has this field to get type/config
+      let fieldType = FieldType.string;
+      let fieldConfig = {};
+      for (const snapId of expandedRows) {
+        const details = detailsCache.get(snapId);
+        if (details && details[0]) {
+          const field = details[0].fields.find((f) => f.name === fieldName);
+          if (field) {
+            fieldType = field.type;
+            fieldConfig = field.config;
+            break;
+          }
+        }
+      }
+      combined.addField({
+        name: fieldName,
+        type: fieldType,
+        config: fieldConfig,
+        values: [],
+      });
+    });
+
+    // Add summary rows
+    const summaryRowCount = summaryFrame.length ?? summaryFrame.fields[0]?.values.length ?? 0;
+    for (let rowIdx = 0; rowIdx < summaryRowCount; rowIdx++) {
+      const rowData: any = {};
+      rowData['_rowType'] = 'summary';
+      summaryFrame.fields.forEach((field) => {
+        rowData[field.name] = field.values.get(rowIdx);
+      });
+      // Fill detail fields with null for summary rows
+      allDetailFieldNames.forEach((fieldName) => {
+        rowData[fieldName] = null;
+      });
+      combined.add(rowData);
+
+      // If this row is expanded, add detail rows
+      const snapId = summaryFrame.fields[idFieldIndex]?.values.get(rowIdx);
+      if (snapId && expandedRows.has(String(snapId))) {
+        const details = detailsCache.get(String(snapId));
+        if (details && details[0]) {
+          const detailFrame = details[0];
+          const detailRowCount = detailFrame.length ?? detailFrame.fields[0]?.values.length ?? 0;
+
+          for (let detailIdx = 0; detailIdx < detailRowCount; detailIdx++) {
+            const detailRowData: any = {};
+            detailRowData['_rowType'] = 'detail';
+
+            // Copy all summary fields to detail rows (for grouping)
+            summaryFrame.fields.forEach((field) => {
+              detailRowData[field.name] = field.values.get(rowIdx);
+            });
+
+            // Add/override with detail fields
+            detailFrame.fields.forEach((field) => {
+              detailRowData[field.name] = field.values.get(detailIdx);
+            });
+
+            combined.add(detailRowData);
+          }
+        }
+      }
+    }
+
+    return combined;
+  }, [summaryFrame, expandedRows, detailsCache, idFieldIndex]);
+
+  // Apply groupToNestedTable transformation
+  useEffect(() => {
+    if (!combinedFrame) {
+      setTransformedFrames([]);
+      return;
+    }
+
+    console.log('Combined frame before transform:', combinedFrame);
+    console.log('Combined frame fields:', combinedFrame.fields.map(f => f.name));
+    console.log('Combined frame row count:', combinedFrame.length);
+
+    // Build fields config with all summary fields as groupby
+    const fieldsConfig: Record<string, any> = {};
+    summaryFrame.fields.forEach((field) => {
+      fieldsConfig[field.name] = {
+        operation: 'groupby',
+        aggregations: [],
+      };
+    });
+
+    const transformer: DataTransformerConfig = {
+      id: 'groupToNestedTable',
+      options: {
+        fields: fieldsConfig,
+        showSubframeHeaders: true,
+      },
+    };
+
+    try {
+      const result = transformDataFrame([transformer], [combinedFrame]);
+      console.log('Transform result:', result);
+      console.log('Transform result type:', typeof result);
+
+      // transformDataFrame returns Observable<DataFrame[]>
+      if (result && typeof result === 'object' && 'subscribe' in result) {
+        const subscription = (result as Observable<DataFrame[]>).subscribe({
+          next: (frames) => {
+            console.log('Transformed frames:', frames);
+            console.log('Transformed frames count:', frames.length);
+            frames.forEach((frame, i) => {
+              console.log(`Frame ${i}:`, frame);
+              console.log(`Frame ${i} meta:`, frame.meta);
+            });
+            setTransformedFrames(frames);
+          },
+          error: (err) => {
+            console.error('Transformation Observable error:', err);
+            setTransformedFrames([combinedFrame]);
+          },
+        });
+
+        return () => subscription.unsubscribe();
+      } else {
+        console.warn('Transform returned non-Observable, using combined frame');
+        setTransformedFrames([combinedFrame]);
+      }
+    } catch (err) {
+      console.error('Transformation failed:', err);
+      setTransformedFrames([combinedFrame]);
+    }
+  }, [combinedFrame]);
+
   if (!summaryFrame) {
     return <div>No summary data</div>;
   }
 
-    const displayProcessors = useMemo(() => {
-        if (!summaryFrame) {
-            return [];
-        }
-        return summaryFrame.fields.map((field) => getDisplayProcessor({ field, theme }));
-    }, [summaryFrame, theme]);
+  const panelData: PanelData = {
+    series: Array.isArray(transformedFrames) ? transformedFrames : [],
+    state: detailsLoading.size > 0 ? LoadingState.Loading : LoadingState.Done,
+    timeRange: timeRange,
+  };
 
-  const colCount = summaryFrame.fields.length;
-  const rowCount = summaryFrame.length ?? summaryFrame.fields[0]?.values.length ?? 0;
+  console.log('Rendering PanelData:', panelData);
 
   return (
-    <div>
-      <PanelContextProvider value={panelContext}>
-        <div style={{ border: '1px solid #444', borderRadius: 4, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#1f1f1f' }}>
-                {summaryFrame.fields.map((f) => (
-                  <th
-                    key={f.name}
-                    style={{
-                      textAlign: 'left',
-                      padding: '8px 10px',
-                      borderBottom: '1px solid #444',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {f.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {Array.from({ length: rowCount }).map((_, rowIndex) => {
-                const snapshotId =
-                  idFieldIndex >= 0 ? String(summaryFrame.fields[idFieldIndex].values.get(rowIndex) ?? '') : '';
-                const isExpanded = snapshotId ? expandedRows.has(snapshotId) : false;
-
-                return (
-                  <React.Fragment key={snapshotId || String(rowIndex)}>
-                    <tr
-                      onClick={() => snapshotId && handleRowToggle(snapshotId)}
-                      style={{
-                        cursor: snapshotId ? 'pointer' : 'default',
-                        background: isExpanded ? '#151515' : 'transparent',
-                      }}
-                    >
-                      {summaryFrame.fields.map((f, i) => {
-                          const raw = f.values.get(rowIndex);
-                          const disp = displayProcessors[i]?.(raw);
-                          const text = disp?.text ?? String(raw ?? '');
-
-                          return (<td
-                              key={`${f.name}-${rowIndex}`}
-                              style={{
-                                  padding: '8px 10px',
-                                  borderBottom: '1px solid #2b2b2b',
-                                  verticalAlign: 'top',
-                                  whiteSpace: 'nowrap',
-                              }}
-                          >
-                              {text}
-                          </td>)
-                      })}
-                    </tr>
-
-                    {isExpanded && (
-                      <tr>
-                        <td
-                          colSpan={colCount}
-                          style={{
-                            padding: 0,
-                            borderBottom: '1px solid #2b2b2b',
-                          }}
-                        >
-                          <div
-                            style={{
-                              marginLeft: 24,
-                              marginTop: 10,
-                              marginBottom: 14,
-                              marginRight: 10,
-                              border: '1px solid #444',
-                              padding: 10,
-                              borderRadius: 4,
-                            }}
-                          >
-                            <div style={{ marginBottom: 8, fontWeight: 600 }}>Details for Snapshot: {snapshotId}</div>
-
-                            {(() => {
-                              const detailData = detailsCache.get(snapshotId);
-                              if (!detailData) {
-                                return <div>Loading…</div>;
-                              }
-
-                              return (
-                                <PanelRenderer
-                                  title="detailsnestedtable"
-                                  pluginId="table"
-                                  width={1100}
-                                  height={300}
-                                  data={detailData}
-                                />
-                              );
-                            })()}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </PanelContextProvider>
-    </div>
+    <PanelContextProvider value={panelContext}>
+      <div>
+        <PanelRenderer
+          title="Nested Snapshots Table"
+          pluginId="table"
+          width={1200}
+          height={600}
+          data={panelData}
+          options={{
+            showHeader: true,
+            cellHeight: 'sm',
+            footer: {
+              show: false,
+              countRows: false,
+            },
+            frameIndex: 0,
+          }}
+          fieldConfig={{
+            defaults: {},
+            overrides: [],
+          }}
+        />
+      </div>
+    </PanelContextProvider>
   );
 }
