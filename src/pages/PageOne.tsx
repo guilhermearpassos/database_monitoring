@@ -155,17 +155,14 @@ const PageOne = () => {
     };
 
     // Load available servers from backend
-    const loadServers = useCallback(async () => {
+    const loadServers = async (timeRange: TimeRange) => {
         try {
             // setServersLoading(true);
             setError(null);
 
-            const now = new Date();
-            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
             const params = {
-                start: oneHourAgo.toISOString(),
-                end: now.toISOString(),
+                start: timeRange.from.toISOString(),
+                end: timeRange.to.toISOString(),
                 type: "databases"
             };
 
@@ -180,7 +177,11 @@ const PageOne = () => {
         } finally {
             // setServersLoading(false);
         }
-    }, []);
+    };
+    // Load servers on component mount
+    useEffect(() => {
+        loadServers(chartTimeRange);
+    }, [chartTimeRange]);
 
     // // Load snapshots with pagination
     const loadSnapshots = useCallback(async (serverName: string, page: number, timeRange: TimeRange) => {
@@ -372,10 +373,6 @@ const PageOne = () => {
         }
     }, [selectedServer/*, loadSnapshots*/]);
 
-    // Load servers on component mount
-    useEffect(() => {
-        loadServers();
-    }, [loadServers]);
 
     // Prepare server options for Select component
     const serverOptions: ComboboxOption[] = servers.map(server => ({

@@ -422,7 +422,27 @@ func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
 	// Customize this based on your needs
 	switch optionType {
 	case "databases":
-		options, err = a.getDatabaseOptions(req.Context())
+		start := req.URL.Query().Get("start")
+		end := req.URL.Query().Get("end")
+		if start == "" {
+			http.Error(w, "start and parameter is required", http.StatusBadRequest)
+			return
+		}
+		if end == "" {
+			http.Error(w, "end and parameter is required", http.StatusBadRequest)
+			return
+		}
+		startTimestamp, err := time.Parse(time.RFC3339, start)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		endTimestamp, err := time.Parse(time.RFC3339, end)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		options, err = a.getDatabaseOptions(req.Context(), startTimestamp, endTimestamp)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -447,10 +467,10 @@ func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
 }
 
 // getDatabaseOptions fetches available databases
-func (a *App) getDatabaseOptions(ctx context.Context) ([]DropdownOption, error) {
+func (a *App) getDatabaseOptions(ctx context.Context, startTimestamp time.Time, endTimestamp time.Time) ([]DropdownOption, error) {
 	resp, err := a.client.ListServerSummary(ctx, &dbmv1.ListServerSummaryRequest{
-		Start: timestamppb.New(time.Now().Add(-15 * time.Minute)),
-		End:   timestamppb.New(time.Now()),
+		Start: timestamppb.New(startTimestamp),
+		End:   timestamppb.New(endTimestamp),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list databases: %w", err)
