@@ -85,9 +85,7 @@ export function NestedTablesWithEventBus({
   const handleRowToggle = (snapshotId: string) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);
-      if (next.has(snapshotId)) {
-        next.delete(snapshotId);
-      } else {
+      if (!next.has(snapshotId)) {
         next.add(snapshotId);
         void fetchDetailsIfNeeded(snapshotId);
       }
