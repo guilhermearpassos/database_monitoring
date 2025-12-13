@@ -20,7 +20,7 @@ import {
     dateTime,
     EventBusSrv,
     GrafanaTheme2,
-    LoadingState,
+    LoadingState, PanelData,
     TimeRange
 } from '@grafana/data';
 import {css} from '@emotion/css';
@@ -451,19 +451,66 @@ const PageOne = () => {
     }));
 
 
-    let getDetailsData = (id: string) => {
-        setSnapshotID(id)
-        loadSamplesData(snapshotID, selectedServer?.value?selectedServer.value:"", chartTimeRange)
+    const loadSamplesPanelData = useCallback(async (snapID: string): Promise<DataFrame[]> => {
+        if (!datasource) {
+            throw new Error('Datasource not available');
+        }
+        const serverName = selectedServer?.value;
+        if (!serverName) {
+            return [];
+        }
+        if (!snapID) {
+            return [];
+        }
+
+        const query: MyQuery = {
+            refId: 'A',
+            database: serverName,
+            hide: false,
+            datasource: {
+                type: datasource.type,
+                uid: datasource.uid
+            },
+            queryType: "snapshot",
+            snapshotID: snapID
+        };
+
+        const queryRequest: DataQueryRequest<MyQuery> = {
+            app: CoreApp.Explore,
+            requestId: `explore_${Date.now()}`,
+            timezone: 'browser',
+            panelId: 1,
+            dashboardUID: '',
+            range: chartTimeRange,
+            timeInfo: '',
+            interval: '1m',
+            intervalMs: 60000,
+            targets: [query],
+            maxDataPoints: 1000,
+            scopedVars: {},
+            startTime: Date.now(),
+            liveStreaming: false
+        };
+
+        const resultObservable = datasource.query(queryRequest);
+        const result: DataQueryResponse =
+            resultObservable instanceof Observable ? await lastValueFrom(resultObservable) : await resultObservable;
+
+        return processResponse(result);
+    }, [datasource, selectedServer?.value, chartTimeRange]);
+
+    const getDetailsData = useCallback(async (id: string): Promise<PanelData> => {
+        let frames = await loadSamplesPanelData(id);
         return {
 
-            series: samplesFrames, state: LoadingState.Loading,
+            series: frames, state: LoadingState.Loading,
             timeRange: {
                 from: dateTime().subtract(1, 'hour'),
                 to: dateTime(),
                 raw: {from: 'now-1h', to: 'now'}
             }
-        }
-    };
+        };
+    }, [loadSamplesPanelData]);
     return (
         <PluginPage>
             <div className={styles.headerRow}>

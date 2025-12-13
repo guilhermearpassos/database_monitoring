@@ -1,165 +1,213 @@
-import React, {useEffect, useMemo, useState} from 'react';
-import {PanelRenderer} from '@grafana/runtime';
+import React, { useEffect, useMemo, useState } from 'react';
+import { PanelRenderer } from '@grafana/runtime';
 import {
     BusEventWithPayload,
     DataFrame,
-    EventBusSrv,
+    EventBusSrv, getDisplayProcessor,
     LoadingState,
     PanelData,
     TimeRange,
 } from '@grafana/data';
-import {PanelContext, PanelContextProvider,} from '@grafana/ui';
+import {PanelContext, PanelContextProvider, Table, useTheme2} from '@grafana/ui';
 
 // Define a proper event class
 class TableRowClickEvent extends BusEventWithPayload<{ id: string; rowIndex: number }> {
-    static type = 'table-row-click';  // Must be static!
+  static type = 'table-row-click'; // Must be static!
 }
 
-
 export function NestedTablesWithEventBus({
-                                             summaryData,
-                                             getDetailsData,
-                                             timeRange
-                                         }: {
-    summaryData: DataFrame[];
-    getDetailsData: (snapshotId: string) => PanelData;
-    timeRange: TimeRange;
+  summaryData,
+  getDetailsData,
+  timeRange,
+}: {
+  summaryData: DataFrame[];
+  getDetailsData: (snapshotId: string) => Promise<PanelData>;
+  timeRange: TimeRange;
 }) {
-    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-    const [detailsCache, setDetailsCache] = useState<Map<string, PanelData>>(new Map());
+  const theme = useTheme2();
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [detailsCache, setDetailsCache] = useState<Map<string, PanelData>>(new Map());
 
-    const panelEventBus = useMemo(() => new EventBusSrv(), []);
-    const panelData: PanelData = {
-        series: summaryData,
-        timeRange: timeRange, state: LoadingState.Loading
+  const panelEventBus = useMemo(() => new EventBusSrv(), []);
+
+  const panelContext: PanelContext = useMemo(
+    () => ({
+      eventBus: panelEventBus,
+      eventsScope: 'sqlsights-one',
+      onInstanceStateChange: () => {},
+      canAddAnnotations: () => false,
+      canEditAnnotations: () => false,
+      canDeleteAnnotations: () => false,
+    }),
+    [panelEventBus]
+  );
+
+  const summaryFrame = summaryData?.[0];
+
+  const idFieldIndex = useMemo(() => {
+    if (!summaryFrame) {
+      return -1;
     }
+    return summaryFrame.fields.findIndex((f) => f.name === 'id');
+  }, [summaryFrame]);
 
-    const handleRowToggle = (snapshotId: string) => {
-        setExpandedRows(prev => {
-            const next = new Set(prev);
-            if (next.has(snapshotId)) {
-                next.delete(snapshotId);
-            } else {
-                next.add(snapshotId);
-                // Fetch details if not cached
-                if (!detailsCache.has(snapshotId)) {
-                    const details = getDetailsData(snapshotId);
-                    setDetailsCache(new Map(detailsCache).set(snapshotId, details));
-                }
-            }
-            return next;
+  const handleRowToggle = (snapshotId: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(snapshotId)) {
+        next.delete(snapshotId);
+        return next;
+      }
+
+      next.add(snapshotId);
+
+      // Fetch details if not cached
+      if (!detailsCache.has(snapshotId)) {
+        setDetailsCache((prevCache) => {
+          const nextCache = new Map(prevCache);
+            getDetailsData(snapshotId).then((details) => {nextCache.set(snapshotId, details)});
+          return nextCache;
         });
-    };
+      }
 
-    useEffect(() => {
+      return next;
+    });
+  };
 
-        // Better: Listen for data selection events
-        const dataSubscription = panelEventBus.getStream(TableRowClickEvent).subscribe({
-            next: (event: any) => {
-                const rowID = event.payload?.id;
-
-                if (rowID) {
-                    handleRowToggle(rowID);
-                }
-            }
-        });
-
-        return () => {
-            dataSubscription.unsubscribe();
-        };
+  useEffect(() => {
+    const sub = panelEventBus.getStream(TableRowClickEvent).subscribe({
+      next: (event: any) => {
+        const rowID = event.payload?.id;
+        if (rowID) {
+          handleRowToggle(rowID);
+        }
+      },
     });
 
-    const panelContext: PanelContext = useMemo(() => ({
-        eventBus: panelEventBus,
-        eventsScope: "sqlsights-one",
-        onInstanceStateChange: () => {
-        },
-        canAddAnnotations: () => false,
-        canEditAnnotations: () => false,
-        canDeleteAnnotations: () => false,
-    }), [panelEventBus]);
-    const summaryDataWithLinks: PanelData = {
-        ...panelData,
-        series: panelData.series.map(series => ({
-            ...series,
-            fields: series.fields.map(field => {
-                if (field.name === 'id' || field.name === 'Database') {
-                    return {
-                        ...field,
-                        config: {
-                            ...field.config,
-                            links: [{
-                                title: 'View Details',
-                                url: 'app://expand-row?id=${__data.fields.id}', // Custom scheme
-                                targetBlank: false,
-                                onClick: event => {
-                                    const snapID: string = event.origin.field.values[event.origin.rowIndex];
-                                    panelEventBus.publish(
-                                        new TableRowClickEvent({
-                                            id: snapID,
-                                            rowIndex: event.origin.rowIndex
-                                        }));
+    return () => sub.unsubscribe();
+  }, [panelEventBus]);
 
-                                }
-                            }]
-                        }
-                    };
-                }
-                return field;
-            })
-        }))
-    };
+  if (!summaryFrame) {
+    return <div>No summary data</div>;
+  }
 
-    return (
-        <div>
-            {/*<DataLinksContext value={{dataLinkPostProcessor}}>*/}
-            <PanelContextProvider value={panelContext}>
-                <PanelRenderer
-                    title="nestedtable"
-                    pluginId="table"
-                    width={1200}
-                    height={400}
-                    data={summaryDataWithLinks}
-                    // options={{
-                    //     showHeader: true,
-                    //     cellHeight: 'md',
-                    //     footer: {
-                    //         show: false,
-                    //     },
-                    // }}
-                />
-            </PanelContextProvider>
-            {/*</DataLinksContext>*/}
-            Detail Tables
-            {Array.from(expandedRows).map(snapshotId => {
-                const detailData = detailsCache.get(snapshotId);
-                if (!detailData) {
-                    return null;
-                }
+    const displayProcessors = useMemo(() => {
+        if (!summaryFrame) {
+            return [];
+        }
+        return summaryFrame.fields.map((field) => getDisplayProcessor({ field, theme }));
+    }, [summaryFrame, theme]);
+
+  const colCount = summaryFrame.fields.length;
+  const rowCount = summaryFrame.length ?? summaryFrame.fields[0]?.values.length ?? 0;
+    Table
+  return (
+    <div>
+      <PanelContextProvider value={panelContext}>
+        <div style={{ border: '1px solid #444', borderRadius: 4, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#1f1f1f' }}>
+                {summaryFrame.fields.map((f) => (
+                  <th
+                    key={f.name}
+                    style={{
+                      textAlign: 'left',
+                      padding: '8px 10px',
+                      borderBottom: '1px solid #444',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {f.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {Array.from({ length: rowCount }).map((_, rowIndex) => {
+                const snapshotId =
+                  idFieldIndex >= 0 ? String(summaryFrame.fields[idFieldIndex].values.get(rowIndex) ?? '') : '';
+                const isExpanded = snapshotId ? expandedRows.has(snapshotId) : false;
 
                 return (
-                    <div
-                        key={snapshotId}
-                        style={{
-                            marginLeft: 40,
-                            marginTop: 10,
-                            marginBottom: 20,
-                            border: '1px solid #444',
-                            padding: 10,
-                            borderRadius: 4
-                        }}
+                  <React.Fragment key={snapshotId || String(rowIndex)}>
+                    <tr
+                      onClick={() => snapshotId && handleRowToggle(snapshotId)}
+                      style={{
+                        cursor: snapshotId ? 'pointer' : 'default',
+                        background: isExpanded ? '#151515' : 'transparent',
+                      }}
                     >
-                        <h4>Details for Snapshot: {snapshotId}</h4>
-                        <PanelRenderer
-                            title="detailsnestedtable"
-                            pluginId="table"
-                            width={1100}
-                            height={300}
-                            data={detailData}
-                        />
-                    </div>
+                      {summaryFrame.fields.map((f, i) => {
+                          const raw = f.values.get(rowIndex);
+                          const disp = displayProcessors[i]?.(raw);
+                          const text = disp?.text ?? String(raw ?? '');
+
+                          return (<td
+                              key={`${f.name}-${rowIndex}`}
+                              style={{
+                                  padding: '8px 10px',
+                                  borderBottom: '1px solid #2b2b2b',
+                                  verticalAlign: 'top',
+                                  whiteSpace: 'nowrap',
+                              }}
+                          >
+                              {text}
+                          </td>)
+                      })}
+                    </tr>
+
+                    {isExpanded && (
+                      <tr>
+                        <td
+                          colSpan={colCount}
+                          style={{
+                            padding: 0,
+                            borderBottom: '1px solid #2b2b2b',
+                          }}
+                        >
+                          <div
+                            style={{
+                              marginLeft: 24,
+                              marginTop: 10,
+                              marginBottom: 14,
+                              marginRight: 10,
+                              border: '1px solid #444',
+                              padding: 10,
+                              borderRadius: 4,
+                            }}
+                          >
+                            <div style={{ marginBottom: 8, fontWeight: 600 }}>Details for Snapshot: {snapshotId}</div>
+
+                            {(() => {
+                              const detailData = detailsCache.get(snapshotId);
+                              if (!detailData) {
+                                return <div>Loading…</div>;
+                              }
+
+                              return (
+                                <PanelRenderer
+                                  title="detailsnestedtable"
+                                  pluginId="table"
+                                  width={1100}
+                                  height={300}
+                                  data={detailData}
+                                />
+                              );
+                            })()}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
-            })}
+              })}
+            </tbody>
+          </table>
         </div>
-    )
+      </PanelContextProvider>
+    </div>
+  );
 }
