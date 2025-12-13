@@ -101,7 +101,7 @@ export function NestedTablesWithEventBus({
 
   const colCount = summaryFrame.fields.length;
   const rowCount = summaryFrame.length ?? summaryFrame.fields[0]?.values.length ?? 0;
-    Table
+
   return (
     <div>
       <PanelContextProvider value={panelContext}>
