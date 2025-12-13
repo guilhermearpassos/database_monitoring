@@ -102,11 +102,13 @@ const PageOne = () => {
     const [servers, setServers] = useState<ServerMetadata[]>([]);
     const [selectedServer, setSelectedServer] = useState<ComboboxOption | null>(null);
     const [snapshots, setSnapshots] = useState<DataFrame[]>([]);
+    const [samplesFrames, setSamplesFrames] = useState<DataFrame[]>([]);
     const [chartFrames, setChartFrames] = useState<DataFrame[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [pageSize] = useState(10);
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
+    const [snapshotID, setSnapshotID] = useState<string>("");
 
     const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
         from: dateTime().subtract(1, 'hour'),
@@ -254,6 +256,73 @@ const PageOne = () => {
         }
     }, [datasource, pageSize]);
 
+    // Load chart data
+    const loadSamplesData = useCallback(async (snapID: string, serverName: string, timeRange: TimeRange) => {
+        if (!datasource) {
+            console.warn('Datasource not available');
+            setSamplesFrames([]);
+            return;
+        }
+
+        try {
+            setError(null);
+            if (snapID === "") {
+                return [];
+            }
+
+            const query: MyQuery = {
+                refId: 'A',
+                database: serverName,
+                hide: false,
+                datasource: {
+                    type: datasource.type,
+                    uid: datasource.uid
+                },
+                queryType: "snapshot",
+                snapshotID: snapID
+
+            };
+
+            const queryRequest: DataQueryRequest<MyQuery> = {
+                app: CoreApp.Explore,
+                requestId: `explore_${Date.now()}`,
+                timezone: 'browser',
+                panelId: 1,
+                dashboardUID: '',
+                range: timeRange,
+                timeInfo: '',
+                interval: '1m',
+                intervalMs: 60000,
+                targets: [query],
+                maxDataPoints: 1000,
+                scopedVars: {},
+                startTime: Date.now(),
+                liveStreaming: false
+            };
+
+            const resultObservable = datasource.query(queryRequest);
+            let result: DataQueryResponse;
+            if (resultObservable instanceof Observable) {
+                result = await lastValueFrom(resultObservable);
+            } else {
+                result = await resultObservable;
+            }
+
+            if (result.data && Array.isArray(result.data)) {
+                const transformedFrames: DataFrame[] = processResponse(result);
+                setSamplesFrames(transformedFrames);
+            } else {
+                setSamplesFrames([]);
+            }
+        } catch (err) {
+            console.error('Query failed:', err);
+            setError(err instanceof Error ? err.message : 'Query failed');
+            setSamplesFrames([]);
+        } finally {
+        }
+    }, [datasource]);
+
+
     // Load chart data using the datasource
     const loadChartData = useCallback(async (serverName: string, timeRange: TimeRange) => {
         if (!datasource) {
@@ -382,6 +451,19 @@ const PageOne = () => {
     }));
 
 
+    let getDetailsData = (id: string) => {
+        setSnapshotID(id)
+        loadSamplesData(snapshotID, selectedServer?.value?selectedServer.value:"", chartTimeRange)
+        return {
+
+            series: samplesFrames, state: LoadingState.Loading,
+            timeRange: {
+                from: dateTime().subtract(1, 'hour'),
+                to: dateTime(),
+                raw: {from: 'now-1h', to: 'now'}
+            }
+        }
+    };
     return (
         <PluginPage>
             <div className={styles.headerRow}>
@@ -469,16 +551,7 @@ const PageOne = () => {
                                         <>
                                             <NestedTablesWithEventBus
                                                 getDetailsData={
-                                                    (id: string) => {
-                                                        return {
-                                                            series: snapshots, state: LoadingState.Loading,
-                                                            timeRange: {
-                                                                from: dateTime().subtract(1, 'hour'),
-                                                                to: dateTime(),
-                                                                raw: {from: 'now-1h', to: 'now'}
-                                                            }
-                                                        }
-                                                    }
+                                                    getDetailsData
                                                 }
                                                 summaryData={snapshots}
                                                 timeRange={{
