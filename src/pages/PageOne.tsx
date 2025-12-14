@@ -28,6 +28,7 @@ import {MyQuery} from '../nested-datasource/types';
 import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
 import {MyGraph} from "./graph";
 import {NestedTablesWithEventBus} from "./nested_table";
+import {addWaitTypeHTMLColumn} from "./barchartcell";
 // ... existing code ...
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -243,7 +244,7 @@ const PageOne = () => {
             // Explore doesn't transform the data - it uses it directly
             if (result.data && Array.isArray(result.data)) {
                 const transformedFrames: DataFrame[] = processResponse(result)
-                setSnapshots(transformedFrames);
+                setSnapshots(transformedFrames.map((f) => addWaitTypeHTMLColumn(f, "waitsByType", "Waits")));
             } else {
                 setSnapshots([]);
             }

@@ -267,14 +267,16 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 		response.Error = err
 		return response
 	}
-	ids := make([]string, 0, len(r.GetSnapSummaries()))
-	times := make([]time.Time, 0, len(r.GetSnapSummaries()))
-	connections := make([]float64, 0, len(r.GetSnapSummaries()))
-	waiters := make([]float64, 0, len(r.GetSnapSummaries()))
-	blockers := make([]float64, 0, len(r.GetSnapSummaries()))
-	waitDuration := make([]float64, 0, len(r.GetSnapSummaries()))
-	avgDuration := make([]float64, 0, len(r.GetSnapSummaries()))
-	maxDuration := make([]float64, 0, len(r.GetSnapSummaries()))
+	size := len(r.GetSnapSummaries())
+	ids := make([]string, 0, size)
+	times := make([]time.Time, 0, size)
+	connections := make([]float64, 0, size)
+	waiters := make([]float64, 0, size)
+	blockers := make([]float64, 0, size)
+	waitDuration := make([]float64, 0, size)
+	avgDuration := make([]float64, 0, size)
+	maxDuration := make([]float64, 0, size)
+	waitsByType := make([]string, 0, size)
 	for _, sum := range r.GetSnapSummaries() {
 		times = append(times, time.Unix(sum.Timestamp.AsTime().Unix(), 0))
 		connections = append(connections, float64(sum.GetConnections()))
@@ -284,6 +286,12 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 		avgDuration = append(avgDuration, sum.AvgDuration)
 		maxDuration = append(maxDuration, sum.MaxDuration)
 		ids = append(ids, sum.Id)
+		cwe, err := json.Marshal(sum.ConnectionsByWaitEvent)
+		if err != nil {
+			response.Error = err
+			return response
+		}
+		waitsByType = append(waitsByType, string(cwe)) //"["+strings.Join(wbt, ",")+"]")
 	}
 	frame := data.NewFrame("snapshots",
 		data.NewField("time", nil, times),
@@ -294,6 +302,7 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 		data.NewField("waitDuration", nil, waitDuration),
 		data.NewField("avgDuration", nil, avgDuration),
 		data.NewField("maxDuration", nil, maxDuration),
+		data.NewField("waitsByType", nil, waitsByType),
 	)
 
 	// Set the RefID to match the query
