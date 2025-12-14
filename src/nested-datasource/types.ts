@@ -8,7 +8,7 @@ export interface MyQuery extends DataQuery {
 }
 
 export const DEFAULT_QUERY: Partial<MyQuery> = {
-    database: 'default',
+    database: '',
 };
 
 export interface DataPoint {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import { PanelRenderer } from '@grafana/runtime';
 import {
   BusEventWithPayload,
@@ -51,7 +51,7 @@ export function NestedTablesWithEventBus({
     [panelEventBus]
   );
 
-  const summaryFrame = summaryData?.[0];
+  const summaryFrame: DataFrame = useMemo(() => {return summaryData? summaryData[0] : {fields: [], length: 0}}, [summaryData]);
 
   const idFieldIndex = useMemo(() => {
     if (!summaryFrame) {
@@ -60,41 +60,41 @@ export function NestedTablesWithEventBus({
     return summaryFrame.fields.findIndex((f) => f.name === 'id');
   }, [summaryFrame]);
 
-  const fetchDetailsIfNeeded = async (snapshotId: string) => {
-    if (detailsCache.has(snapshotId) || detailsLoading.has(snapshotId)) {
-      return;
-    }
-
-    setDetailsLoading((prev) => new Set(prev).add(snapshotId));
-
-    try {
-      const details = await getDetailsData(snapshotId);
-      setDetailsCache((prev) => {
-        const next = new Map(prev);
-        next.set(snapshotId, details.series);
-        return next;
-      });
-    } catch (err) {
-      console.error('Failed to fetch details:', err);
-    } finally {
-      setDetailsLoading((prev) => {
-        const next = new Set(prev);
-        next.delete(snapshotId);
-        return next;
-      });
-    }
-  };
-
-  const handleRowToggle = (snapshotId: string) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (!next.has(snapshotId)) {
-        next.add(snapshotId);
-        void fetchDetailsIfNeeded(snapshotId);
+  const fetchDetailsIfNeeded = useCallback(async (snapshotId: string) => {
+      if (detailsCache.has(snapshotId) || detailsLoading.has(snapshotId)) {
+          return;
       }
-      return next;
-    });
-  };
+
+      setDetailsLoading((prev) => new Set(prev).add(snapshotId));
+
+      try {
+          const details = await getDetailsData(snapshotId);
+          setDetailsCache((prev) => {
+              const next = new Map(prev);
+              next.set(snapshotId, details.series);
+              return next;
+          });
+      } catch (err) {
+          console.error('Failed to fetch details:', err);
+      } finally {
+          setDetailsLoading((prev) => {
+              const next = new Set(prev);
+              next.delete(snapshotId);
+              return next;
+          });
+      }
+  }, [detailsCache, detailsLoading, getDetailsData]);
+
+  const handleRowToggle = useCallback( (snapshotId: string) => {
+      setExpandedRows((prev) => {
+          const next = new Set(prev);
+          if (!next.has(snapshotId)) {
+              next.add(snapshotId);
+              void fetchDetailsIfNeeded(snapshotId);
+          }
+          return next;
+      });
+  }, [setExpandedRows, fetchDetailsIfNeeded])
 
   useEffect(() => {
     const sub = panelEventBus.getStream(TableRowClickEvent).subscribe({
@@ -107,7 +107,7 @@ export function NestedTablesWithEventBus({
     });
 
     return () => sub.unsubscribe();
-  }, [panelEventBus]);
+  }, [panelEventBus, handleRowToggle]);
 
   // Observe DOM for nested table expand/collapse buttons
   useEffect(() => {
@@ -115,21 +115,29 @@ export function NestedTablesWithEventBus({
       const target = event.target as HTMLElement;
       const button = target.closest('[role="button"]');
 
-      if (!button) return;
+      if (!button) {
+          return;
+      }
 
       // Check if this is an expand/collapse button (has SVG icon)
       const svg = button.querySelector('svg');
-      if (!svg) return;
+      if (!svg) {
+          return;
+      }
 
       console.log('Expand/collapse button clicked');
 
       // Find the row element
       const row = button.closest('[role="row"]');
-      if (!row) return;
+      if (!row) {
+          return;
+      }
 
       // Get aria-rowindex to identify the row
       const rowIndexStr = row.getAttribute('aria-rowindex');
-      if (!rowIndexStr) return;
+      if (!rowIndexStr) {
+          return;
+      }
 
       const rowIndex = parseInt(rowIndexStr, 10);
       console.log('Row index:', rowIndex);
@@ -285,7 +293,7 @@ export function NestedTablesWithEventBus({
     }
 
     return combined;
-  }, [summaryFrame, expandedRows, detailsCache, idFieldIndex]);
+  }, [summaryFrame, expandedRows, detailsCache, idFieldIndex, panelEventBus]);
 
   // Apply groupToNestedTable transformation
   useEffect(() => {
@@ -347,7 +355,8 @@ export function NestedTablesWithEventBus({
       console.error('Transformation failed:', err);
       setTransformedFrames([combinedFrame]);
     }
-  }, [combinedFrame]);
+    return ;
+  }, [combinedFrame, summaryFrame?.fields]);
 
   if (!summaryFrame) {
     return <div>No summary data</div>;

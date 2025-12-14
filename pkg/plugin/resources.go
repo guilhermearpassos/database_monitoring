@@ -45,18 +45,10 @@ func (a *App) handleEcho(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (a *App) handleMyCustomEndpoint(w http.ResponseWriter, r *http.Request) {
-	// handle the request
-	// e.g. call a third-party API
-	w.Write([]byte("<div>my custom response</div>"))
-	w.WriteHeader(http.StatusOK)
-}
-
 // registerRoutes takes a *http.ServeMux and registers some HTTP handlers.
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ping", a.handlePing)
 	mux.HandleFunc("/", a.handlePing)
-	mux.HandleFunc("/myCustomEndpoint", a.handleMyCustomEndpoint)
 	mux.HandleFunc("/echo", a.handleEcho)
 	mux.HandleFunc("/datasource-options", a.handleDropdownOptions)
 	mux.HandleFunc("/query", a.handleQuery)
@@ -423,36 +415,36 @@ func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
 	case "databases":
 		start := req.URL.Query().Get("start")
 		end := req.URL.Query().Get("end")
+		var startTimestamp, endTimestamp time.Time
+		var err error
 		if start == "" {
-			http.Error(w, "start and parameter is required", http.StatusBadRequest)
-			return
+			startTimestamp = time.Now().Add(-1 * time.Hour)
+			//http.Error(w, "start and parameter is required", http.StatusBadRequest)
+			//return
+		} else {
+
+			startTimestamp, err = time.Parse(time.RFC3339, start)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 		if end == "" {
-			http.Error(w, "end and parameter is required", http.StatusBadRequest)
-			return
-		}
-		startTimestamp, err := time.Parse(time.RFC3339, start)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		endTimestamp, err := time.Parse(time.RFC3339, end)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			endTimestamp = time.Now()
+			//http.Error(w, "end and parameter is required", http.StatusBadRequest)
+			//return
+		} else {
+			endTimestamp, err = time.Parse(time.RFC3339, end)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 		options, err = a.getDatabaseOptions(req.Context(), startTimestamp, endTimestamp)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-	case "tables":
-		database := req.URL.Query().Get("database")
-		options = a.getTableOptions(database)
-	case "columns":
-		database := req.URL.Query().Get("database")
-		table := req.URL.Query().Get("table")
-		options = a.getColumnOptions(database, table)
 	default:
 		http.Error(w, "invalid option type", http.StatusBadRequest)
 		return
@@ -482,24 +474,4 @@ func (a *App) getDatabaseOptions(ctx context.Context, startTimestamp time.Time, 
 		}
 	}
 	return ret, nil
-}
-
-// getTableOptions fetches tables for a given database
-func (a *App) getTableOptions(database string) []DropdownOption {
-	// Replace with your actual table query logic
-	return []DropdownOption{
-		{Label: "Users", Value: "users"},
-		{Label: "Orders", Value: "orders"},
-		{Label: "Products", Value: "products"},
-	}
-}
-
-// getColumnOptions fetches columns for a given database and table
-func (a *App) getColumnOptions(database, table string) []DropdownOption {
-	// Replace with your actual column query logic
-	return []DropdownOption{
-		{Label: "ID", Value: "id"},
-		{Label: "Name", Value: "name"},
-		{Label: "Created At", Value: "created_at"},
-	}
 }

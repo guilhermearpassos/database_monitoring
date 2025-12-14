@@ -102,13 +102,11 @@ const PageOne = () => {
     const [servers, setServers] = useState<ServerMetadata[]>([]);
     const [selectedServer, setSelectedServer] = useState<ComboboxOption | null>(null);
     const [snapshots, setSnapshots] = useState<DataFrame[]>([]);
-    const [samplesFrames, setSamplesFrames] = useState<DataFrame[]>([]);
     const [chartFrames, setChartFrames] = useState<DataFrame[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [pageSize] = useState(10);
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
-    const [snapshotID, setSnapshotID] = useState<string>("");
 
     const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
         from: dateTime().subtract(1, 'hour'),
@@ -157,7 +155,7 @@ const PageOne = () => {
     };
 
     // Load available servers from backend
-    const loadServers = async (timeRange: TimeRange) => {
+    const loadServers = useCallback(async (timeRange: TimeRange) => {
         try {
             // setServersLoading(true);
             setError(null);
@@ -179,11 +177,11 @@ const PageOne = () => {
         } finally {
             // setServersLoading(false);
         }
-    };
+    }, []);
     // Load servers on component mount
     useEffect(() => {
         loadServers(chartTimeRange);
-    }, [chartTimeRange]);
+    }, [chartTimeRange, loadServers]);
 
     // // Load snapshots with pagination
     const loadSnapshots = useCallback(async (serverName: string, page: number, timeRange: TimeRange) => {
@@ -255,72 +253,6 @@ const PageOne = () => {
             setDataLoading(false);
         }
     }, [datasource, pageSize]);
-
-    // Load chart data
-    const loadSamplesData = useCallback(async (snapID: string, serverName: string, timeRange: TimeRange) => {
-        if (!datasource) {
-            console.warn('Datasource not available');
-            setSamplesFrames([]);
-            return;
-        }
-
-        try {
-            setError(null);
-            if (snapID === "") {
-                return [];
-            }
-
-            const query: MyQuery = {
-                refId: 'A',
-                database: serverName,
-                hide: false,
-                datasource: {
-                    type: datasource.type,
-                    uid: datasource.uid
-                },
-                queryType: "snapshot",
-                snapshotID: snapID
-
-            };
-
-            const queryRequest: DataQueryRequest<MyQuery> = {
-                app: CoreApp.Explore,
-                requestId: `explore_${Date.now()}`,
-                timezone: 'browser',
-                panelId: 1,
-                dashboardUID: '',
-                range: timeRange,
-                timeInfo: '',
-                interval: '1m',
-                intervalMs: 60000,
-                targets: [query],
-                maxDataPoints: 1000,
-                scopedVars: {},
-                startTime: Date.now(),
-                liveStreaming: false
-            };
-
-            const resultObservable = datasource.query(queryRequest);
-            let result: DataQueryResponse;
-            if (resultObservable instanceof Observable) {
-                result = await lastValueFrom(resultObservable);
-            } else {
-                result = await resultObservable;
-            }
-
-            if (result.data && Array.isArray(result.data)) {
-                const transformedFrames: DataFrame[] = processResponse(result);
-                setSamplesFrames(transformedFrames);
-            } else {
-                setSamplesFrames([]);
-            }
-        } catch (err) {
-            console.error('Query failed:', err);
-            setError(err instanceof Error ? err.message : 'Query failed');
-            setSamplesFrames([]);
-        } finally {
-        }
-    }, [datasource]);
 
 
     // Load chart data using the datasource
@@ -591,6 +523,8 @@ const PageOne = () => {
                         <div className={styles.section}>
                             <Card>
                                 <Card.Heading>Database Snapshots</Card.Heading>
+                                <Card.Description>
+
                                 <div className={styles.tableContainer}>
                                     {dataLoading ? (
                                         <LoadingPlaceholder text="Loading snapshots..."/>
@@ -635,6 +569,7 @@ const PageOne = () => {
                                         </>
                                     )}
                                 </div>
+                                </Card.Description>
                             </Card>
                         </div>
                     </>
