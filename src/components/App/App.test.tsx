@@ -5,6 +5,11 @@ import { render, waitFor } from '@testing-library/react';
 import App from './App';
 
 import 'jest-canvas-mock';
+// At the top of App.test.tsx
+jest.mock('@grafana/ui', () => ({
+    ...jest.requireActual('@grafana/ui'),
+    TimeRangePicker: () => <div data-testid="time-range-picker">Mocked TimeRangePicker</div>,
+}));
 describe('Components/App', () => {
   let props: AppRootProps;
 
