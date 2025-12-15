@@ -10,26 +10,64 @@ import (
 
 // ParsedExecutionPlan represents the root of the execution plan XML
 type ParsedExecutionPlan struct {
-	XMLName    xml.Name    `xml:"ShowPlanXML"`
-	Version    string      `xml:"Version,attr"`
-	Statements []Statement `xml:"BatchSequence>Batch>Statements>StmtSimple"`
-	Raw        string
+	XMLName xml.Name `xml:"ShowPlanXML"`
+	Version string   `xml:"Version,attr"`
+	Batches []Batch  `xml:"BatchSequence>Batch"`
+	Raw     string
 }
 
-// Statement represents a SQL statement and its plan
-type Statement struct {
-	StatementText        string    `xml:"StatementText,attr"`
-	StatementId          string    `xml:"StatementId,attr"`
-	StatementType        string    `xml:"StatementType,attr"`
-	StatementSubTreeCost float64   `xml:"StatementSubTreeCost,attr"`
-	StatementEstRows     float64   `xml:"StatementEstRows,attr"`
-	QueryPlan            QueryPlan `xml:"QueryPlan"`
+// Batch represents a batch of statements
+type Batch struct {
+	Statements Statements `xml:"Statements"`
+}
+
+// Statements can contain both simple statements and conditional statements (like while loops)
+type Statements struct {
+	StmtSimple []StmtSimple `xml:"StmtSimple"`
+	StmtCond   []StmtCond   `xml:"StmtCond"`
+}
+
+// StmtSimple represents a simple SQL statement
+type StmtSimple struct {
+	StatementText        string     `xml:"StatementText,attr"`
+	StatementId          string     `xml:"StatementId,attr"`
+	StatementType        string     `xml:"StatementType,attr"`
+	StatementSubTreeCost float64    `xml:"StatementSubTreeCost,attr"`
+	StatementEstRows     float64    `xml:"StatementEstRows,attr"`
+	QueryPlan            *QueryPlan `xml:"QueryPlan"` // Pointer because not all statements have query plans
+}
+
+// StmtCond represents a conditional statement (like while loops, if statements)
+type StmtCond struct {
+	StatementText string     `xml:"StatementText,attr"`
+	StatementId   string     `xml:"StatementId,attr"`
+	StatementType string     `xml:"StatementType,attr"`
+	Condition     *Condition `xml:"Condition"`
+	Then          *Then      `xml:"Then"`
+	Else          *Else      `xml:"Else"` // For if/else statements
+}
+
+// Condition represents the condition part of a conditional statement
+type Condition struct {
+	// The condition might have a query plan if it's complex
+	QueryPlan *QueryPlan `xml:"QueryPlan"`
+}
+
+// Then represents the "then" branch of a conditional statement
+type Then struct {
+	Statements Statements `xml:"Statements"`
+}
+
+// Else represents the "else" branch of a conditional statement
+type Else struct {
+	Statements Statements `xml:"Statements"`
 }
 
 // QueryPlan contains the actual execution plan
 type QueryPlan struct {
 	RelOp                RelOp                  `xml:"RelOp"`
 	PlanAffectingConvert []PlanAffectingConvert `xml:"Warnings>PlanAffectingConvert"`
+	MissingIndexes       *MissingIndexes        `xml:"MissingIndexes"`
 	OptimizerStatsUsage  struct {
 		StatisticsInfo []StatisticsInfo `xml:"StatisticsInfo"`
 	} `xml:"OptimizerStatsUsage"`
@@ -39,6 +77,37 @@ type PlanAffectingConvert struct {
 	XMLName      xml.Name `xml:"PlanAffectingConvert"`
 	ConvertIssue string   `xml:"ConvertIssue,attr"`
 	Expression   string   `xml:"Expression,attr"`
+}
+
+// MissingIndexes contains information about indexes that could improve performance
+type MissingIndexes struct {
+	MissingIndexGroups []MissingIndexGroup `xml:"MissingIndexGroup"`
+}
+
+// MissingIndexGroup represents a group of missing indexes with their impact
+type MissingIndexGroup struct {
+	Impact       float64      `xml:"Impact,attr"`
+	MissingIndex MissingIndex `xml:"MissingIndex"`
+}
+
+// MissingIndex contains details about a specific missing index
+type MissingIndex struct {
+	Database     string        `xml:"Database,attr"`
+	Schema       string        `xml:"Schema,attr"`
+	Table        string        `xml:"Table,attr"`
+	ColumnGroups []ColumnGroup `xml:"ColumnGroup"`
+}
+
+// ColumnGroup represents a group of columns (EQUALITY, INEQUALITY, or INCLUDE)
+type ColumnGroup struct {
+	Usage   string   `xml:"Usage,attr"`
+	Columns []Column `xml:"Column"`
+}
+
+// Column represents a column in a missing index
+type Column struct {
+	Name     string `xml:"Name,attr"`
+	ColumnId string `xml:"ColumnId,attr"`
 }
 
 type StatisticsInfo struct {
@@ -317,38 +386,107 @@ func ParseExecutionPlan(data string) (*ParsedExecutionPlan, error) {
 	return &plan, nil
 }
 
+// Helper function to recursively collect all statements (including those in loops)
+func collectAllStatements(statements Statements) []StmtSimple {
+	var result []StmtSimple
+
+	// Add simple statements
+	result = append(result, statements.StmtSimple...)
+
+	// Recursively process conditional statements
+	for _, cond := range statements.StmtCond {
+		if cond.Then != nil {
+			result = append(result, collectAllStatements(cond.Then.Statements)...)
+		}
+		if cond.Else != nil {
+			result = append(result, collectAllStatements(cond.Else.Statements)...)
+		}
+	}
+
+	return result
+}
+
 func PlanToProto(handle string, server common_domain.ServerMeta, plan *ParsedExecutionPlan) (*dbmv1.ParsedExecutionPlan, error) {
 	stats := make([]*dbmv1.StatisticsInfo, 0)
 	warnings := make([]*dbmv1.PlanWarning, 0)
 	nodes := make([]*dbmv1.PlanNode, 0)
-	for _, stmt := range plan.Statements {
-		for _, stat := range stmt.QueryPlan.OptimizerStatsUsage.StatisticsInfo {
-			stats = append(stats, &dbmv1.StatisticsInfo{
-				LastUpdate:        stat.LastUpdate,
-				ModificationCount: int64(stat.ModificationCount),
-				SamplingPercent:   stat.SamplingPercent,
-				Statistics:        stat.Statistics,
-				Table:             stat.Table,
-			})
-		}
-		for _, warning := range stmt.QueryPlan.PlanAffectingConvert {
-			warnings = append(warnings, &dbmv1.PlanWarning{
-				Warning: &dbmv1.PlanWarning_Convert{Convert: &dbmv1.PlanWarning_PlanAffectingConvert{
-					ConvertIssue: warning.ConvertIssue,
-					Expression:   warning.Expression,
-				}},
-			})
-		}
-		baseNode := dbmv1.PlanNode{
-			Name:          stmt.StatementType,
-			EstimatedRows: stmt.StatementEstRows,
-			SubtreeCost:   stmt.StatementSubTreeCost,
-			NodeCost:      stmt.StatementSubTreeCost,
-			Header:        &dbmv1.PlanNode_Header{},
-			Nodes:         []*dbmv1.PlanNode{relOpToProtoNode(stmt.QueryPlan.RelOp)},
-		}
-		nodes = append(nodes, &baseNode)
 
+	// Process all batches
+	for _, batch := range plan.Batches {
+		// Collect all statements, including those nested in loops
+		allStatements := collectAllStatements(batch.Statements)
+
+		for _, stmt := range allStatements {
+			// Skip statements without query plans (like ASSIGN, WAITFOR, etc.)
+			if stmt.QueryPlan == nil {
+				continue
+			}
+
+			// Collect statistics
+			for _, stat := range stmt.QueryPlan.OptimizerStatsUsage.StatisticsInfo {
+				stats = append(stats, &dbmv1.StatisticsInfo{
+					LastUpdate:        stat.LastUpdate,
+					ModificationCount: int64(stat.ModificationCount),
+					SamplingPercent:   stat.SamplingPercent,
+					Statistics:        stat.Statistics,
+					Table:             stat.Table,
+				})
+			}
+
+			// Collect warnings
+			for _, warning := range stmt.QueryPlan.PlanAffectingConvert {
+				warnings = append(warnings, &dbmv1.PlanWarning{
+					Warning: &dbmv1.PlanWarning_Convert{Convert: &dbmv1.PlanWarning_PlanAffectingConvert{
+						ConvertIssue: warning.ConvertIssue,
+						Expression:   warning.Expression,
+					}},
+				})
+			}
+
+			// Collect Missing Index warnings
+			if stmt.QueryPlan.MissingIndexes != nil {
+				for _, missingIndexGroup := range stmt.QueryPlan.MissingIndexes.MissingIndexGroups {
+					// Build column group information
+					var equalityColumns, inequalityColumns, includeColumns []string
+
+					for _, colGroup := range missingIndexGroup.MissingIndex.ColumnGroups {
+						for _, col := range colGroup.Columns {
+							switch colGroup.Usage {
+							case "EQUALITY":
+								equalityColumns = append(equalityColumns, col.Name)
+							case "INEQUALITY":
+								inequalityColumns = append(inequalityColumns, col.Name)
+							case "INCLUDE":
+								includeColumns = append(includeColumns, col.Name)
+							}
+						}
+					}
+
+					warnings = append(warnings, &dbmv1.PlanWarning{
+						Warning: &dbmv1.PlanWarning_MissingIndex{MissingIndex: &dbmv1.PlanWarning_MissingIndexWarning{
+							Database:          missingIndexGroup.MissingIndex.Database,
+							Schema:            missingIndexGroup.MissingIndex.Schema,
+							Table:             missingIndexGroup.MissingIndex.Table,
+							Impact:            missingIndexGroup.Impact,
+							EqualityColumns:   equalityColumns,
+							InequalityColumns: inequalityColumns,
+							IncludeColumns:    includeColumns,
+						}},
+					})
+				}
+			}
+			// Build node tree
+			baseNode := dbmv1.PlanNode{
+				Name:          stmt.StatementType,
+				EstimatedRows: stmt.StatementEstRows,
+				SubtreeCost:   stmt.StatementSubTreeCost,
+				NodeCost:      stmt.StatementSubTreeCost,
+				Header:        &dbmv1.PlanNode_Header{},
+				Nodes:         []*dbmv1.PlanNode{relOpToProtoNode(stmt.QueryPlan.RelOp)},
+			}
+			nodes = append(nodes, &baseNode)
+
+		}
 	}
 	return &dbmv1.ParsedExecutionPlan{
 		Plan: &dbmv1.ExecutionPlan{
@@ -364,7 +502,6 @@ func PlanToProto(handle string, server common_domain.ServerMeta, plan *ParsedExe
 		Nodes:      nodes,
 	}, nil
 }
-
 func relOpToProtoNode(n RelOp) *dbmv1.PlanNode {
 	baseNode := &dbmv1.PlanNode{
 		Name:          n.PhysicalOp,

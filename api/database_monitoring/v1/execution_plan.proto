@@ -43,12 +43,24 @@ message StatisticsInfo{
   string table = 5;
 }
 
-message PlanWarning{
-  message PlanAffectingConvert{
+message PlanWarning {
+  oneof warning {
+    PlanAffectingConvert convert = 1;
+    MissingIndexWarning missing_index = 2;
+  }
+
+  message PlanAffectingConvert {
     string convert_issue = 1;
     string expression = 2;
   }
-  oneof warning {
-    PlanAffectingConvert convert = 1;
+
+  message MissingIndexWarning {
+    string database = 1;
+    string schema = 2;
+    string table = 3;
+    double impact = 4;
+    repeated string equality_columns = 5;
+    repeated string inequality_columns = 6;
+    repeated string include_columns = 7;
   }
 }

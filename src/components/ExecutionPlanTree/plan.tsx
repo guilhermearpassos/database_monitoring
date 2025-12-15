@@ -11,14 +11,24 @@ export interface ParsedExecutionPlan {
 }
 
 export interface PlanAffectingConvert {
-    ConvertIssue: string;
-    Expression: string;
+    convert_issue: string;
+    expression: string;
 }
 
 export interface PlanWarning {
-    Convert?: PlanAffectingConvert;
+    convert?: PlanAffectingConvert;
+    missing_index?: MissingIndexWarning;
 }
 
+export class MissingIndexWarning {
+    database: string
+    schema: string
+    table: string
+    impact: number
+    equality_columns?: string[] = []
+    inequality_columns?: string[] = []
+    include_columns?: string[] = []
+}
 export interface StatisticsInfo {
     last_update: string;
     modification_count: number;
@@ -53,7 +63,7 @@ const StatisticsInfoComponent: React.FC<{ stats: StatisticsInfo }> = ({stats}) =
 // Warning Component
 const WarningComponent: React.FC<{ warning: PlanWarning }> = ({warning}) => {
     const styles = useStyles2(getStyles);
-    if (!warning.Convert) {
+    if ((!warning.convert) && !warning.missing_index) {
         return null;
     }
 
@@ -62,10 +72,17 @@ const WarningComponent: React.FC<{ warning: PlanWarning }> = ({warning}) => {
             <div className={styles.warningIcon}>
                 <AlertTriangle size={20}/>
             </div>
-            <div className={styles.warningContent}>
-                <div className={styles.warningTitle}>Convert Issue: {warning.Convert.ConvertIssue}</div>
-                <div className={styles.warningDetail}>Expression: {warning.Convert.Expression}</div>
-            </div>
+            {warning.convert &&
+                <div className={styles.warningContent}>
+                    <div className={styles.warningTitle}>Convert Issue: {warning.convert.convert_issue}</div>
+                    <div className={styles.warningDetail}>Expression: {warning.convert.expression}</div>
+                </div>}
+            {warning.missing_index &&
+                <div className={styles.warningContent}>
+                    <div className={styles.warningTitle}>Missing index: {warning.missing_index.table}</div>
+                    <div className={styles.warningDetail}>Expression: create index idx01 on {warning.missing_index.database}.{warning.missing_index.schema}.{warning.missing_index.table}({((warning.missing_index.equality_columns??[]).concat(warning.missing_index.inequality_columns??[])).join(",")}) include ({warning.missing_index.include_columns.join(",")})</div>
+                </div>
+            }
         </div>
     );
 };

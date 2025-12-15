@@ -314,6 +314,7 @@ type PlanWarning struct {
 	// Types that are valid to be assigned to Warning:
 	//
 	//	*PlanWarning_Convert
+	//	*PlanWarning_MissingIndex
 	Warning       isPlanWarning_Warning `protobuf_oneof:"warning"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -365,6 +366,15 @@ func (x *PlanWarning) GetConvert() *PlanWarning_PlanAffectingConvert {
 	return nil
 }
 
+func (x *PlanWarning) GetMissingIndex() *PlanWarning_MissingIndexWarning {
+	if x != nil {
+		if x, ok := x.Warning.(*PlanWarning_MissingIndex); ok {
+			return x.MissingIndex
+		}
+	}
+	return nil
+}
+
 type isPlanWarning_Warning interface {
 	isPlanWarning_Warning()
 }
@@ -373,7 +383,13 @@ type PlanWarning_Convert struct {
 	Convert *PlanWarning_PlanAffectingConvert `protobuf:"bytes,1,opt,name=convert,proto3,oneof"`
 }
 
+type PlanWarning_MissingIndex struct {
+	MissingIndex *PlanWarning_MissingIndexWarning `protobuf:"bytes,2,opt,name=missing_index,json=missingIndex,proto3,oneof"`
+}
+
 func (*PlanWarning_Convert) isPlanWarning_Warning() {}
+
+func (*PlanWarning_MissingIndex) isPlanWarning_Warning() {}
 
 type PlanNode_Header struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -519,6 +535,98 @@ func (x *PlanWarning_PlanAffectingConvert) GetExpression() string {
 	return ""
 }
 
+type PlanWarning_MissingIndexWarning struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Database          string                 `protobuf:"bytes,1,opt,name=database,proto3" json:"database,omitempty"`
+	Schema            string                 `protobuf:"bytes,2,opt,name=schema,proto3" json:"schema,omitempty"`
+	Table             string                 `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
+	Impact            float64                `protobuf:"fixed64,4,opt,name=impact,proto3" json:"impact,omitempty"`
+	EqualityColumns   []string               `protobuf:"bytes,5,rep,name=equality_columns,json=equalityColumns,proto3" json:"equality_columns,omitempty"`
+	InequalityColumns []string               `protobuf:"bytes,6,rep,name=inequality_columns,json=inequalityColumns,proto3" json:"inequality_columns,omitempty"`
+	IncludeColumns    []string               `protobuf:"bytes,7,rep,name=include_columns,json=includeColumns,proto3" json:"include_columns,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PlanWarning_MissingIndexWarning) Reset() {
+	*x = PlanWarning_MissingIndexWarning{}
+	mi := &file_database_monitoring_v1_execution_plan_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlanWarning_MissingIndexWarning) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlanWarning_MissingIndexWarning) ProtoMessage() {}
+
+func (x *PlanWarning_MissingIndexWarning) ProtoReflect() protoreflect.Message {
+	mi := &file_database_monitoring_v1_execution_plan_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlanWarning_MissingIndexWarning.ProtoReflect.Descriptor instead.
+func (*PlanWarning_MissingIndexWarning) Descriptor() ([]byte, []int) {
+	return file_database_monitoring_v1_execution_plan_proto_rawDescGZIP(), []int{4, 1}
+}
+
+func (x *PlanWarning_MissingIndexWarning) GetDatabase() string {
+	if x != nil {
+		return x.Database
+	}
+	return ""
+}
+
+func (x *PlanWarning_MissingIndexWarning) GetSchema() string {
+	if x != nil {
+		return x.Schema
+	}
+	return ""
+}
+
+func (x *PlanWarning_MissingIndexWarning) GetTable() string {
+	if x != nil {
+		return x.Table
+	}
+	return ""
+}
+
+func (x *PlanWarning_MissingIndexWarning) GetImpact() float64 {
+	if x != nil {
+		return x.Impact
+	}
+	return 0
+}
+
+func (x *PlanWarning_MissingIndexWarning) GetEqualityColumns() []string {
+	if x != nil {
+		return x.EqualityColumns
+	}
+	return nil
+}
+
+func (x *PlanWarning_MissingIndexWarning) GetInequalityColumns() []string {
+	if x != nil {
+		return x.InequalityColumns
+	}
+	return nil
+}
+
+func (x *PlanWarning_MissingIndexWarning) GetIncludeColumns() []string {
+	if x != nil {
+		return x.IncludeColumns
+	}
+	return nil
+}
+
 var File_database_monitoring_v1_execution_plan_proto protoreflect.FileDescriptor
 
 const file_database_monitoring_v1_execution_plan_proto_rawDesc = "" +
@@ -561,14 +669,23 @@ const file_database_monitoring_v1_execution_plan_proto_rawDesc = "" +
 	"\n" +
 	"statistics\x18\x04 \x01(\tR\n" +
 	"statistics\x12\x14\n" +
-	"\x05table\x18\x05 \x01(\tR\x05table\"\xcb\x01\n" +
+	"\x05table\x18\x05 \x01(\tR\x05table\"\xa8\x04\n" +
 	"\vPlanWarning\x12T\n" +
-	"\aconvert\x18\x01 \x01(\v28.database_monitoring.v1.PlanWarning.PlanAffectingConvertH\x00R\aconvert\x1a[\n" +
+	"\aconvert\x18\x01 \x01(\v28.database_monitoring.v1.PlanWarning.PlanAffectingConvertH\x00R\aconvert\x12^\n" +
+	"\rmissing_index\x18\x02 \x01(\v27.database_monitoring.v1.PlanWarning.MissingIndexWarningH\x00R\fmissingIndex\x1a[\n" +
 	"\x14PlanAffectingConvert\x12#\n" +
 	"\rconvert_issue\x18\x01 \x01(\tR\fconvertIssue\x12\x1e\n" +
 	"\n" +
 	"expression\x18\x02 \x01(\tR\n" +
-	"expressionB\t\n" +
+	"expression\x1a\xfa\x01\n" +
+	"\x13MissingIndexWarning\x12\x1a\n" +
+	"\bdatabase\x18\x01 \x01(\tR\bdatabase\x12\x16\n" +
+	"\x06schema\x18\x02 \x01(\tR\x06schema\x12\x14\n" +
+	"\x05table\x18\x03 \x01(\tR\x05table\x12\x16\n" +
+	"\x06impact\x18\x04 \x01(\x01R\x06impact\x12)\n" +
+	"\x10equality_columns\x18\x05 \x03(\tR\x0fequalityColumns\x12-\n" +
+	"\x12inequality_columns\x18\x06 \x03(\tR\x11inequalityColumns\x12'\n" +
+	"\x0finclude_columns\x18\a \x03(\tR\x0eincludeColumnsB\t\n" +
 	"\awarningBUZSgithub.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1;dbmv1b\x06proto3"
 
 var (
@@ -583,7 +700,7 @@ func file_database_monitoring_v1_execution_plan_proto_rawDescGZIP() []byte {
 	return file_database_monitoring_v1_execution_plan_proto_rawDescData
 }
 
-var file_database_monitoring_v1_execution_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_database_monitoring_v1_execution_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_database_monitoring_v1_execution_plan_proto_goTypes = []any{
 	(*ExecutionPlan)(nil),                    // 0: database_monitoring.v1.ExecutionPlan
 	(*ParsedExecutionPlan)(nil),              // 1: database_monitoring.v1.ParsedExecutionPlan
@@ -592,10 +709,11 @@ var file_database_monitoring_v1_execution_plan_proto_goTypes = []any{
 	(*PlanWarning)(nil),                      // 4: database_monitoring.v1.PlanWarning
 	(*PlanNode_Header)(nil),                  // 5: database_monitoring.v1.PlanNode.Header
 	(*PlanWarning_PlanAffectingConvert)(nil), // 6: database_monitoring.v1.PlanWarning.PlanAffectingConvert
-	(*ServerMetadata)(nil),                   // 7: database_monitoring.v1.ServerMetadata
+	(*PlanWarning_MissingIndexWarning)(nil),  // 7: database_monitoring.v1.PlanWarning.MissingIndexWarning
+	(*ServerMetadata)(nil),                   // 8: database_monitoring.v1.ServerMetadata
 }
 var file_database_monitoring_v1_execution_plan_proto_depIdxs = []int32{
-	7, // 0: database_monitoring.v1.ExecutionPlan.server:type_name -> database_monitoring.v1.ServerMetadata
+	8, // 0: database_monitoring.v1.ExecutionPlan.server:type_name -> database_monitoring.v1.ServerMetadata
 	0, // 1: database_monitoring.v1.ParsedExecutionPlan.plan:type_name -> database_monitoring.v1.ExecutionPlan
 	3, // 2: database_monitoring.v1.ParsedExecutionPlan.stats_usage:type_name -> database_monitoring.v1.StatisticsInfo
 	4, // 3: database_monitoring.v1.ParsedExecutionPlan.warnings:type_name -> database_monitoring.v1.PlanWarning
@@ -603,11 +721,12 @@ var file_database_monitoring_v1_execution_plan_proto_depIdxs = []int32{
 	5, // 5: database_monitoring.v1.PlanNode.header:type_name -> database_monitoring.v1.PlanNode.Header
 	2, // 6: database_monitoring.v1.PlanNode.nodes:type_name -> database_monitoring.v1.PlanNode
 	6, // 7: database_monitoring.v1.PlanWarning.convert:type_name -> database_monitoring.v1.PlanWarning.PlanAffectingConvert
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	7, // 8: database_monitoring.v1.PlanWarning.missing_index:type_name -> database_monitoring.v1.PlanWarning.MissingIndexWarning
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_database_monitoring_v1_execution_plan_proto_init() }
@@ -618,6 +737,7 @@ func file_database_monitoring_v1_execution_plan_proto_init() {
 	file_database_monitoring_v1_snapshot_proto_init()
 	file_database_monitoring_v1_execution_plan_proto_msgTypes[4].OneofWrappers = []any{
 		(*PlanWarning_Convert)(nil),
+		(*PlanWarning_MissingIndex)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -625,7 +745,7 @@ func file_database_monitoring_v1_execution_plan_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_database_monitoring_v1_execution_plan_proto_rawDesc), len(file_database_monitoring_v1_execution_plan_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

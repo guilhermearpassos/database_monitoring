@@ -116,6 +116,9 @@ func generateReadLoad(ctx context.Context, db *sqlx.DB, wg *sync.WaitGroup) {
 		q := `select strategy, account, asset, sum(qty) as qty from trades
 group by strategy, account, asset
 having sum(qty) <> 0`
+		if rand.Intn(10) == 2 {
+			q = `SELECT * FROM trades WHERE account in ('ACC001', 'ACC011')`
+		}
 		_ = db.QueryRowContext(ctx, q)
 	}
 }

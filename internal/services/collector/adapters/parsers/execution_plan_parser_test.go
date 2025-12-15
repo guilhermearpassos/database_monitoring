@@ -23,9 +23,10 @@ func fetchChildNodes(node *dbmv1.PlanNode) []*dbmv1.PlanNode {
 }
 func TestParseExecutionPlan(t *testing.T) {
 	tcs := []struct {
-		Name      string
-		file      string
-		nodeCount int
+		Name         string
+		file         string
+		nodeCount    int
+		warningCount int
 	}{
 		{
 			Name:      "NestedLoops",
@@ -41,6 +42,42 @@ func TestParseExecutionPlan(t *testing.T) {
 			Name:      "Select with Groupby",
 			file:      "testdata/select_groupby.xml",
 			nodeCount: 4,
+		},
+		{
+			Name:         "Implicit conv",
+			file:         "testdata/loop_with_implicit_conversion.xml",
+			nodeCount:    3,
+			warningCount: 1,
+		},
+		{
+			Name:         "Implicit conv on variable",
+			file:         "testdata/implicit_conv_non_affecting.xml",
+			nodeCount:    2,
+			warningCount: 0,
+		},
+		{
+			Name:         "Table scan",
+			file:         "testdata/table_scan.xml",
+			nodeCount:    2,
+			warningCount: 1,
+		},
+		{
+			Name:         "Missing index",
+			file:         "testdata/missing_index.xml",
+			nodeCount:    3,
+			warningCount: 1,
+		},
+		{
+			Name:         "Missing index multiple",
+			file:         "testdata/missing_index_mult.xml",
+			nodeCount:    3,
+			warningCount: 0,
+		},
+		{
+			Name:         "Nested loops self join",
+			file:         "testdata/nested_loops2.xml",
+			nodeCount:    8,
+			warningCount: 0,
 		},
 	}
 
@@ -70,6 +107,7 @@ func TestParseExecutionPlan(t *testing.T) {
 				require.NotZero(t, node.Name)
 			}
 			require.Equal(t, tc.nodeCount, len(allNodes))
+			require.Equal(t, tc.warningCount, len(protoParsed.Warnings))
 		})
 	}
 }

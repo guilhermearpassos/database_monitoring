@@ -1,8 +1,9 @@
 package domain
 
 import (
-	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"time"
+
+	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 )
 
 type ExecutionPlan struct {
@@ -47,7 +48,17 @@ type StatisticsInfo struct {
 }
 
 type PlanWarning struct {
-	Convert *PlanAffectingConvert `json:"convert"`
+	Convert      *PlanAffectingConvert `json:"convert"`
+	MissingIndex *MissingIndex         `json:"missing_index"`
+}
+type MissingIndex struct {
+	Database          string   `json:"database"`
+	Schema            string   `json:"schema"`
+	Table             string   `json:"table"`
+	Impact            float64  `json:"impact"`
+	EqualityColumns   []string `json:"equality_columns"`
+	InequalityColumns []string `json:"inequality_columns"`
+	IncludeColumns    []string `json:"include_columns"`
 }
 
 type PlanAffectingConvert struct {
@@ -70,13 +81,29 @@ func ProtoParsedPlanToDomain(p *dbmv1.ParsedExecutionPlan) ParsedExecutionPlan {
 		stats[i] = stat
 	}
 	for i, warn := range p.Warnings {
-		w := PlanWarning{
-			Convert: &PlanAffectingConvert{
-				ConvertIssue: warn.GetConvert().ConvertIssue,
-				Expression:   warn.GetConvert().Expression,
-			},
+		switch warn.Warning.(type) {
+		case *dbmv1.PlanWarning_Convert:
+			w := PlanWarning{
+				Convert: &PlanAffectingConvert{
+					ConvertIssue: warn.GetConvert().GetConvertIssue(),
+					Expression:   warn.GetConvert().GetExpression(),
+				},
+			}
+			warns[i] = w
+		case *dbmv1.PlanWarning_MissingIndex:
+			w := PlanWarning{
+				MissingIndex: &MissingIndex{
+					Database:          warn.GetMissingIndex().GetDatabase(),
+					Schema:            warn.GetMissingIndex().GetSchema(),
+					Table:             warn.GetMissingIndex().GetTable(),
+					Impact:            warn.GetMissingIndex().GetImpact(),
+					EqualityColumns:   warn.GetMissingIndex().GetEqualityColumns(),
+					InequalityColumns: warn.GetMissingIndex().GetInequalityColumns(),
+					IncludeColumns:    warn.GetMissingIndex().GetIncludeColumns(),
+				},
+			}
+			warns[i] = w
 		}
-		warns[i] = w
 	}
 	for i, node := range p.Nodes {
 		n := planNodeFromProto(node, 0)
