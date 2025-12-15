@@ -22,7 +22,7 @@ class TableRowClickEvent extends BusEventWithPayload<{ id: string; rowIndex: num
 }
 // Define a proper event class
 class SampleSelectedEvent extends BusEventWithPayload<{ sampleID: string; snapID: string }> {
-    static type = 'table-row-click';
+    static type = 'sample-selected';
 }
 
 export function NestedTablesWithEventBus({
@@ -183,7 +183,67 @@ export function NestedTablesWithEventBus({
             document.removeEventListener('click', handleExpandButtonClick, true);
         };
     }, [handleRowToggle]);
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            const target = e.target as Node;
+            const element =
+                target.nodeType === Node.TEXT_NODE
+                    ? target.parentElement
+                    : (target as HTMLElement);
 
+            if (!element) {
+                return;
+            }
+
+            const anchor = element.closest(
+                'a[title="Select Sample"]'
+            ) as HTMLAnchorElement | null;
+
+            if (!anchor) {
+                return;
+            }
+
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const sampleID = anchor.textContent?.trim();
+            if (!sampleID) {
+                return;
+            }
+
+            const detailRow = anchor.closest('[role="row"]');
+            if (!detailRow) {
+                return;
+            }
+
+            /**
+             * Locate the __snapID cell by column name
+             * We cannot rely on colindex because of organize transform
+             */
+
+            const snapCell = detailRow.querySelector(
+              `[role="gridcell"][aria-colindex="1"]`
+            );
+
+
+            const snapID = snapCell?.textContent?.trim();
+            if (!snapID) {
+                console.warn('__snapID not found in detail row');
+                return;
+            }
+
+            panelEventBus.publish(
+                new SampleSelectedEvent({
+                    snapID,
+                    sampleID,
+                })
+            );
+        };
+
+        document.addEventListener('click', handler, true);
+        return () => document.removeEventListener('click', handler, true);
+    }, [panelEventBus]);
     // Build combined frame with summary + detail rows
     const combinedFrame = useMemo(() => {
         if (!summaryFrame) {
@@ -227,6 +287,14 @@ export function NestedTablesWithEventBus({
             });
         });
 
+        // Add a hidden field to track snapID for detail rows
+        combined.addField({
+            name: '_snapID',
+            type: FieldType.string,
+            config: {},
+            values: [],
+        });
+
         // Add detail-only fields (if any expanded rows have details)
         const allDetailFieldNames = new Set<string>();
         expandedRows.forEach((snapId) => {
@@ -256,20 +324,11 @@ export function NestedTablesWithEventBus({
                                 {
                                     title: 'Select Sample',
                                     url: '',
-                                    onClick: (event: any) => {
-                                        const sampleID = String(event.origin.field.values.get(event.origin.rowIndex) ?? '');
-                                        const snapID = String(combinedFrame?.fields[idFieldIndex]?.values[event.origin.rowIndex] ?? '' );
-                                        console.warn(sampleID, snapID);
-                                        panelEventBus.publish(
-                                            new SampleSelectedEvent({
-                                                sampleID: sampleID,
-                                                snapID: snapID,
-                                            })
-                                        );
-                                    },
+                                    onClick: () => {}, // noop, we intercept DOM
                                 },
                             ];
                         }
+
                         fieldConfig = field.config;
                         break;
                     }
@@ -293,6 +352,8 @@ export function NestedTablesWithEventBus({
 
             const rowData: any = {};
             rowData['_rowType'] = 'summary';
+            rowData['_snapID'] = snapId ? String(snapId) : null;
+
             summaryFrame.fields.forEach((field) => {
                 rowData[field.name] = field.values.get(rowIdx);
             });
@@ -318,6 +379,7 @@ export function NestedTablesWithEventBus({
                     for (let detailIdx = 0; detailIdx < detailRowCount; detailIdx++) {
                         const detailRowData: any = {};
                         detailRowData['_rowType'] = 'detail';
+                        detailRowData['_snapID'] = String(snapId); // Store snapID in hidden field
 
                         // Copy all summary fields to detail rows (for grouping)
                         summaryFrame.fields.forEach((field) => {
@@ -370,7 +432,8 @@ export function NestedTablesWithEventBus({
                 id: "organize",
                 options: {
                     excludeByName: {
-                        waitsByType: true
+                        waitsByType: true,
+                        _snapID: true  // Hide the _snapID field from display
                     },
                     includeByName: {},
                     indexByName: {},

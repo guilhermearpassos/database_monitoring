@@ -72,6 +72,8 @@ const getStyles = (theme: GrafanaTheme2) => ({
     `,
     tableContainer: css`
         margin-top: ${theme.spacing(2)};
+        max-height: 400px;
+        overflow-y: auto;
     `,
     paginationContainer: css`
         display: flex;
@@ -521,6 +523,7 @@ const PageOne = () => {
                         <div className={styles.section}>
                             <Card>
                                 <Card.Heading>Database Activity Over Time</Card.Heading>
+                                <Card.Description>
                                 <div className={styles.chartContainer}>
                                     {chartLoading ? (
                                         <div className={styles.loadingContainer}>
@@ -546,6 +549,7 @@ const PageOne = () => {
                                         </div>
                                     )}
                                 </div>
+                                </Card.Description>
                             </Card>
                         </div>
 
