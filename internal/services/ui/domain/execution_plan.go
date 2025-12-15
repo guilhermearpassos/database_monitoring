@@ -6,53 +6,53 @@ import (
 )
 
 type ExecutionPlan struct {
-	PlanHandle string
+	PlanHandle string `json:"plan_handle"`
 	//Server     ServerMetadata
-	XmlPlan string
+	XmlPlan string `json:"xml_plan"`
 }
 
 type ParsedExecutionPlan struct {
-	Plan       ExecutionPlan
-	StatsUsage []StatisticsInfo
-	Warnings   []PlanWarning
-	Nodes      []PlanNode
+	Plan       ExecutionPlan    `json:"plan"`
+	StatsUsage []StatisticsInfo `json:"stats_usage"`
+	Warnings   []PlanWarning    `json:"warnings"`
+	Nodes      []PlanNode       `json:"nodes"`
 }
 
 type PlanNode struct {
-	Name          string
-	EstimatedRows float64
-	SubtreeCost   float64
-	NodeCost      float64
-	Header        PlanNodeHeader
-	Nodes         []PlanNode
-	Level         int // Added for template rendering
+	Name          string         `json:"name"`
+	EstimatedRows float64        `json:"estimated_rows"`
+	SubtreeCost   float64        `json:"subtree_cost"`
+	NodeCost      float64        `json:"node_cost"`
+	Header        PlanNodeHeader `json:"header"`
+	Nodes         []PlanNode     `json:"nodes"`
+	Level         int            `json:"level"` // Added for template rendering
 }
 
 type PlanNodeHeader struct {
-	PhysicalOp    string
-	LogicalOp     string
-	EstimateCpu   float64
-	EstimateIO    float64
-	EstimateRows  float64
-	EstimatedCost float64
-	Parallel      string
+	PhysicalOp    string  `json:"physical_op"`
+	LogicalOp     string  `json:"logical_op"`
+	EstimateCpu   float64 `json:"estimate_cpu"`
+	EstimateIO    float64 `json:"estimate_io"`
+	EstimateRows  float64 `json:"estimate_rows"`
+	EstimatedCost float64 `json:"estimated_cost"`
+	Parallel      string  `json:"parallel"`
 }
 
 type StatisticsInfo struct {
-	LastUpdate        string
-	ModificationCount int64
-	SamplingPercent   float64
-	Statistics        string
-	Table             string
+	LastUpdate        string  `json:"last_update"`
+	ModificationCount int64   `json:"modification_count"`
+	SamplingPercent   float64 `json:"sampling_percent"`
+	Statistics        string  `json:"statistics"`
+	Table             string  `json:"table"`
 }
 
 type PlanWarning struct {
-	Convert *PlanAffectingConvert
+	Convert *PlanAffectingConvert `json:"convert"`
 }
 
 type PlanAffectingConvert struct {
-	ConvertIssue string
-	Expression   string
+	ConvertIssue string `json:"convert_issue"`
+	Expression   string `json:"expression"`
 }
 
 func ProtoParsedPlanToDomain(p *dbmv1.ParsedExecutionPlan) ParsedExecutionPlan {

@@ -20,15 +20,21 @@ import {Observable} from 'rxjs';
 class TableRowClickEvent extends BusEventWithPayload<{ id: string; rowIndex: number }> {
     static type = 'table-row-click';
 }
+// Define a proper event class
+class SampleSelectedEvent extends BusEventWithPayload<{ sampleID: string; snapID: string }> {
+    static type = 'table-row-click';
+}
 
 export function NestedTablesWithEventBus({
                                              summaryData,
                                              getDetailsData,
                                              timeRange,
+                                             onSampleSelection
                                          }: {
-    summaryData: DataFrame[];
-    getDetailsData: (snapshotId: string) => Promise<PanelData>;
-    timeRange: TimeRange;
+    summaryData: DataFrame[],
+    getDetailsData: (snapshotId: string) => Promise<PanelData>,
+    timeRange: TimeRange,
+    onSampleSelection?: (snapID: string, sampleID: string) => void
 }) {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [detailsCache, setDetailsCache] = useState<Map<string, DataFrame[]>>(new Map());
@@ -112,6 +118,19 @@ export function NestedTablesWithEventBus({
 
         return () => sub.unsubscribe();
     }, [panelEventBus, handleRowToggle]);
+
+    useEffect(() => {
+        const sub = panelEventBus.getStream(SampleSelectedEvent).subscribe({
+            next: (event: any) => {
+
+                if (event.payload) {
+                    onSampleSelection(event.payload.snapID, event.payload.sampleID);
+                }
+            },
+        });
+
+        return () => sub.unsubscribe();
+    }, [panelEventBus, handleRowToggle, onSampleSelection]);
 
     // Observe DOM for nested table expand/collapse buttons
     useEffect(() => {
@@ -231,6 +250,26 @@ export function NestedTablesWithEventBus({
                     const field = details[0].fields.find((f) => f.name === fieldName);
                     if (field) {
                         fieldType = field.type;
+
+                        if (field.name === 'sampleID') {
+                            field.config.links = [
+                                {
+                                    title: 'Select Sample',
+                                    url: '',
+                                    onClick: (event: any) => {
+                                        const sampleID = String(event.origin.field.values.get(event.origin.rowIndex) ?? '');
+                                        const snapID = String(combinedFrame?.fields[idFieldIndex]?.values[event.origin.rowIndex] ?? '' );
+                                        console.warn(sampleID, snapID);
+                                        panelEventBus.publish(
+                                            new SampleSelectedEvent({
+                                                sampleID: sampleID,
+                                                snapID: snapID,
+                                            })
+                                        );
+                                    },
+                                },
+                            ];
+                        }
                         fieldConfig = field.config;
                         break;
                     }
@@ -326,7 +365,7 @@ export function NestedTablesWithEventBus({
                 showSubframeHeaders: true,
             },
         };
-        const transformer2:DataTransformerConfig =
+        const transformer2: DataTransformerConfig =
             {
                 id: "organize",
                 options: {

@@ -147,11 +147,6 @@ const waitEventToGroup: Record<string, string> = {
     "CLR_MANUAL_EVENT": "Miscellaneous",
 };
 
-/**
- * Get the color for a wait event based on its group and intensity
- * @param waitEvent The wait event name
- * @returns RGBA color string (e.g., "239, 68, 68, 0.40")
- */
 export function getWaitEventColor(waitEvent: string): string {
     // Get the group for the wait event
     const group = waitEventToGroup[waitEvent];
@@ -186,32 +181,6 @@ export function getWaitEventColor(waitEvent: string): string {
     return `${r}, ${g}, ${b}, ${alpha.toFixed(2)}`;
 }
 
-/**
- * Get the hex color for a wait event (for use in HTML/CSS)
- * @param waitEvent The wait event name
- * @returns Hex color string with alpha (e.g., "#ef4444cc")
- */
-export function getWaitEventColorHex(waitEvent: string): string {
-    const rgba = getWaitEventColor(waitEvent);
-    const parts = rgba.split(",").map(p => p.trim());
-
-    if (parts.length !== 4) {
-        return "#6b7280"; // Default gray
-    }
-
-    const r = parseInt(parts[0], 10);
-    const g = parseInt(parts[1], 10);
-    const b = parseInt(parts[2], 10);
-    const a = Math.round(parseFloat(parts[3]) * 255);
-
-    const toHex = (n: number) => n.toString(16).padStart(2, '0');
-
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}${toHex(a)}`;
-}
-
-/**
- * Generate HTML for a stacked bar chart showing wait type distribution
- */
 export function generateWaitTypeHTML(waitTypes: WaitTypeData[]): string {
     if (!waitTypes || waitTypes.length === 0) {
         return '<span style="color:#888;">No data</span>';
@@ -236,7 +205,6 @@ export function generateWaitTypeHTML(waitTypes: WaitTypeData[]): string {
                 waitEvent = "cpu"
             }
             const color = getWaitEventColor(waitEvent);
-            console.warn(color)
             return `<div style="width:${percentage}%;background-color:rgba(${color});" title="${waitEvent}: ${wt.count} (${percentage.toFixed(1)}%)"></div>`;
         })
         .join('');
@@ -252,36 +220,6 @@ export function generateWaitTypeHTML(waitTypes: WaitTypeData[]): string {
   `;
 }
 
-/**
- * Generate a simpler inline bar (no label)
- */
-export function generateSimpleWaitTypeBar(waitTypes: WaitTypeData[]): string {
-    if (!waitTypes || waitTypes.length === 0) {
-        return '';
-    }
-
-    const total = waitTypes.reduce((sum, wt) => sum + wt.count, 0);
-    if (total === 0) {
-        return '';
-    }
-
-    const sorted = [...waitTypes].sort((a, b) => b.count - a.count);
-
-    const segments = sorted
-        .filter(wt => (wt.count / total) >= 0.005)
-        .map(wt => {
-            const percentage = (wt.count / total) * 100;
-            const color = getWaitEventColorHex(wt.type);
-            return `<div style="width:${percentage}%;background:${color};" title="${wt.type}: ${wt.count}"></div>`;
-        })
-        .join('');
-
-    return `<div style="display:flex;height:20px;border-radius:4px;overflow:hidden;background:#2c2c2c;">${segments}</div>`;
-}
-
-/**
- * Transform a DataFrame to include HTML-rendered wait type bars
- */
 export function addWaitTypeHTMLColumn(
     frame: DataFrame,
     waitTypeFieldName: string,

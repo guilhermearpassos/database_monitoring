@@ -3,6 +3,7 @@ package parsers
 import (
 	"encoding/xml"
 	"fmt"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 )
@@ -64,43 +65,142 @@ type OperatorHeader struct {
 }
 
 // RelOp represents a relational operation in the execution plan
+// The RelOp tag is ALWAYS the parent, and operation-specific tags are children
 type RelOp struct {
 	OperatorHeader
 
-	// Additional details for specific operations
+	// Common elements that can appear in any RelOp
 	OutputList    []OutputColumn `xml:"OutputList>ColumnReference"`
 	DefinedValues []DefinedValue `xml:"DefinedValues>DefinedValue"`
 
-	// Handle all possible nested locations
-	RelOp  []RelOp `xml:"RelOp"`        // Direct RelOp
-	Action []RelOp `xml:"Action>RelOp"` // Action wrapper
-	Assert []struct {
-		RelOp `xml:"relOp"`
-	} `xml:"Assert"` // Action wrapper
-	Aggregate       []RelOp            `xml:"Aggregate>RelOp"`       // Aggregate wrapper
-	Compute         []RelOp            `xml:"Compute>RelOp"`         // Compute wrapper
-	Delete          []RelOp            `xml:"Delete>RelOp"`          // Delete wrapper
-	FilterWrapper   []RelOp            `xml:"Filter>RelOp"`          // Filter wrapper
-	Hash            []RelOp            `xml:"Hash>RelOp"`            // Hash wrapper
-	IndexScan       []IndexScanRelOp   `xml:"IndexScan"`             // Scan operations
-	Insert          []RelOp            `xml:"Insert>RelOp"`          // Insert wrapper
-	Merge           []RelOp            `xml:"Merge>RelOp"`           // Merge wrapper
-	NestedLoops     []NestedLoopsRelOp `xml:"NestedLoops"`           // NestedLoops wrapper
-	Parallelism     []RelOp            `xml:"Parallelism>RelOp"`     // Parallelism wrapper
-	Remote          []RelOp            `xml:"Remote>RelOp"`          // Remote wrapper
-	RemoteQuery     []RelOp            `xml:"RemoteQuery>RelOp"`     // RemoteQuery wrapper
-	Segment         []RelOp            `xml:"Segment>RelOp"`         // Segment wrapper
-	Sequence        []RelOp            `xml:"Sequence>RelOp"`        // Sequence wrapper
-	SortWrapper     []SortRelOp        `xml:"Sort"`                  // Sort wrapper
-	Spool           []RelOp            `xml:"Spool>RelOp"`           // Spool wrapper
-	StreamAggregate []RelOp            `xml:"StreamAggregate>RelOp"` // StreamAggregate wrapper
-	TableScan       []TableScanRelOp   `xml:"TableScan"`             // Scan operations
-	Top             []RelOp            `xml:"Top>RelOp"`
-	TopSort         []RelOp            `xml:"TopSort>RelOp"` // TopSort wrapper
-	Update          []RelOp            `xml:"Update>RelOp"`  // Update wrapper
+	// Operation-specific child elements that may contain nested RelOps
+	Action          *ActionOp          `xml:"Action"`
+	Aggregate       *AggregateOp       `xml:"Aggregate"`
+	Assert          *AssertOp          `xml:"Assert"`
+	Compute         *ComputeOp         `xml:"Compute"`
+	ComputeScalar   *ComputeScalarOp   `xml:"ComputeScalar"`
+	Delete          *DeleteOp          `xml:"Delete"`
+	Filter          *FilterOp          `xml:"Filter"`
+	Hash            *HashOp            `xml:"Hash"`
+	Insert          *InsertOp          `xml:"Insert"`
+	Merge           *MergeOp           `xml:"Merge"`
+	NestedLoops     *NestedLoopsOp     `xml:"NestedLoops"`
+	Parallelism     *ParallelismOp     `xml:"Parallelism"`
+	Remote          *RemoteOp          `xml:"Remote"`
+	RemoteQuery     *RemoteQueryOp     `xml:"RemoteQuery"`
+	Segment         *SegmentOp         `xml:"Segment"`
+	Sequence        *SequenceOp        `xml:"Sequence"`
+	Sort            *SortOp            `xml:"Sort"`
+	Spool           *SpoolOp           `xml:"Spool"`
+	StreamAggregate *StreamAggregateOp `xml:"StreamAggregate"`
+	Top             *TopOp             `xml:"Top"`
+	TopSort         *TopSortOp         `xml:"TopSort"`
+	Update          *UpdateOp          `xml:"Update"`
+
+	// Leaf operations (no nested RelOps, just details)
+	IndexScan *IndexScanOp `xml:"IndexScan"`
+	TableScan *TableScanOp `xml:"TableScan"`
 }
 
-// IndexScanDetails contains details for IndexScan operations
+// Operation types that contain nested RelOps
+type ActionOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type AggregateOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type AssertOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type ComputeOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+type ComputeScalarOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type DeleteOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type FilterOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type HashOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type InsertOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type MergeOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type NestedLoopsOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type ParallelismOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type RemoteOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type RemoteQueryOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type SegmentOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type SequenceOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type SortOp struct {
+	OrderBy SortDetails `xml:"OrderBy"`
+	RelOp   []RelOp     `xml:"RelOp"`
+}
+
+type SpoolOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type StreamAggregateOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type TopOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type TopSortOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+type UpdateOp struct {
+	RelOp []RelOp `xml:"RelOp"`
+}
+
+// Leaf operations (no nested RelOps)
+type IndexScanOp struct {
+	Object IndexScanDetails `xml:"Object"`
+}
+
+type TableScanOp struct {
+	Object TableScanDetails `xml:"Object"`
+}
+
+// Details structures
 type IndexScanDetails struct {
 	Database  string `xml:"Database,attr"`
 	Schema    string `xml:"Schema,attr"`
@@ -110,127 +210,100 @@ type IndexScanDetails struct {
 	Storage   string `xml:"Storage,attr"`
 }
 
-// TableScanDetails contains details for TableScan operations
 type TableScanDetails struct {
 	Database string `xml:"Database,attr"`
 	Schema   string `xml:"Schema,attr"`
 	Table    string `xml:"Table,attr"`
 }
 
-// SortDetails contains details for Sort operations
 type SortDetails struct {
 	Columns []SortColumn `xml:"ColumnReference"`
 }
 
-// SortColumn represents a column in a Sort operation
 type SortColumn struct {
 	Column string `xml:"Column,attr"`
 }
 
-// OutputColumn represents a column in the output list
 type OutputColumn struct {
 	Column string `xml:"Column,attr"`
 }
 
-// DefinedValue represents a computed or defined value
 type DefinedValue struct {
 	Column string `xml:"ColumnReference>Column,attr"`
 }
 
-type NestedLoopsRelOp struct {
-	OuterRelOp RelOp `xml:"OuterRelOp"`
-	InnerRelOp RelOp `xml:"InnerRelOp"`
-}
-
-type SortRelOp struct {
-	RelOp   RelOp       `xml:"RelOp"`
-	Details SortDetails `xml:"OrderBy"`
-}
-
-type IndexScanRelOp struct {
-	RelOp   RelOp            `xml:"RelOp"`
-	Details IndexScanDetails `xml:"Object"`
-}
-type TableScanRelOp struct {
-	RelOp   RelOp            `xml:"RelOp"`
-	Details TableScanDetails `xml:"Object"`
-}
-
-// GetAllChildren returns all child RelOps from all possible locations
+// GetAllChildren returns all child RelOps from all possible operation types
 func (r *RelOp) GetAllChildren() []RelOp {
 	var children []RelOp
 
-	// Add direct RelOps
-	children = append(children, r.RelOp...)
+	if r.Action != nil {
+		children = append(children, r.Action.RelOp...)
+	}
+	if r.Aggregate != nil {
+		children = append(children, r.Aggregate.RelOp...)
+	}
+	if r.Assert != nil {
+		children = append(children, r.Assert.RelOp...)
+	}
+	if r.Compute != nil {
+		children = append(children, r.Compute.RelOp...)
+	}
+	if r.ComputeScalar != nil {
+		children = append(children, r.ComputeScalar.RelOp...)
+	}
+	if r.Delete != nil {
+		children = append(children, r.Delete.RelOp...)
+	}
+	if r.Filter != nil {
+		children = append(children, r.Filter.RelOp...)
+	}
+	if r.Hash != nil {
+		children = append(children, r.Hash.RelOp...)
+	}
+	if r.Insert != nil {
+		children = append(children, r.Insert.RelOp...)
+	}
+	if r.Merge != nil {
+		children = append(children, r.Merge.RelOp...)
+	}
+	if r.NestedLoops != nil {
+		children = append(children, r.NestedLoops.RelOp...)
+	}
+	if r.Parallelism != nil {
+		children = append(children, r.Parallelism.RelOp...)
+	}
+	if r.Remote != nil {
+		children = append(children, r.Remote.RelOp...)
+	}
+	if r.RemoteQuery != nil {
+		children = append(children, r.RemoteQuery.RelOp...)
+	}
+	if r.Segment != nil {
+		children = append(children, r.Segment.RelOp...)
+	}
+	if r.Sequence != nil {
+		children = append(children, r.Sequence.RelOp...)
+	}
+	if r.Sort != nil {
+		children = append(children, r.Sort.RelOp...)
+	}
+	if r.Spool != nil {
+		children = append(children, r.Spool.RelOp...)
+	}
+	if r.StreamAggregate != nil {
+		children = append(children, r.StreamAggregate.RelOp...)
+	}
+	if r.Top != nil {
+		children = append(children, r.Top.RelOp...)
+	}
+	if r.TopSort != nil {
+		children = append(children, r.TopSort.RelOp...)
+	}
+	if r.Update != nil {
+		children = append(children, r.Update.RelOp...)
+	}
 
-	// Add RelOps from wrapper types
-	for _, a := range r.Action {
-		children = append(children, a)
-	}
-	for _, t := range r.TopSort {
-		children = append(children, t)
-	}
-	for _, t := range r.Top {
-		children = append(children, t)
-	}
-	for _, n := range r.NestedLoops {
-		children = append(children, n.OuterRelOp)
-		children = append(children, n.InnerRelOp)
-	}
-	for _, h := range r.Hash {
-		children = append(children, h)
-	}
-	for _, s := range r.SortWrapper {
-		children = append(children, s.RelOp)
-	}
-	for _, s := range r.IndexScan {
-		children = append(children, s.RelOp)
-	}
-	for _, s := range r.TableScan {
-		children = append(children, s.RelOp)
-	}
-	for _, f := range r.FilterWrapper {
-		children = append(children, f)
-	}
-	for _, a := range r.Aggregate {
-		children = append(children, a)
-	}
-	for _, m := range r.Merge {
-		children = append(children, m)
-	}
-	for _, p := range r.Parallelism {
-		children = append(children, p)
-	}
-	for _, s := range r.StreamAggregate {
-		children = append(children, s)
-	}
-	for _, c := range r.Compute {
-		children = append(children, c)
-	}
-	for _, s := range r.Sequence {
-		children = append(children, s)
-	}
-	for _, s := range r.Segment {
-		children = append(children, s)
-	}
-	for _, s := range r.Spool {
-		children = append(children, s)
-	}
-	for _, r2 := range r.RemoteQuery {
-		children = append(children, r2)
-	}
-	for _, r2 := range r.Remote {
-		children = append(children, r2)
-	}
-	for _, u := range r.Update {
-		children = append(children, u)
-	}
-	for _, d := range r.Delete {
-		children = append(children, d)
-	}
-	for _, i := range r.Insert {
-		children = append(children, i)
-	}
+	// IndexScan and TableScan are leaf nodes - no children
 
 	return children
 }
@@ -272,10 +345,7 @@ func PlanToProto(handle string, server common_domain.ServerMeta, plan *ParsedExe
 			SubtreeCost:   stmt.StatementSubTreeCost,
 			NodeCost:      stmt.StatementSubTreeCost,
 			Header:        &dbmv1.PlanNode_Header{},
-			Nodes:         make([]*dbmv1.PlanNode, 0),
-		}
-		for _, c := range stmt.QueryPlan.RelOp.GetAllChildren() {
-			baseNode.Nodes = append(baseNode.Nodes, relOpToProtoNode(c))
+			Nodes:         []*dbmv1.PlanNode{relOpToProtoNode(stmt.QueryPlan.RelOp)},
 		}
 		nodes = append(nodes, &baseNode)
 
@@ -296,8 +366,7 @@ func PlanToProto(handle string, server common_domain.ServerMeta, plan *ParsedExe
 }
 
 func relOpToProtoNode(n RelOp) *dbmv1.PlanNode {
-
-	baseNode := dbmv1.PlanNode{
+	baseNode := &dbmv1.PlanNode{
 		Name:          n.PhysicalOp,
 		EstimatedRows: n.EstimateRows,
 		SubtreeCost:   n.EstimatedCost,
@@ -313,8 +382,10 @@ func relOpToProtoNode(n RelOp) *dbmv1.PlanNode {
 		},
 		Nodes: make([]*dbmv1.PlanNode, 0),
 	}
+
 	for _, c := range n.GetAllChildren() {
 		baseNode.Nodes = append(baseNode.Nodes, relOpToProtoNode(c))
 	}
-	return &baseNode
+
+	return baseNode
 }

@@ -28,7 +28,8 @@ import {MyQuery} from '../nested-datasource/types';
 import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
 import {MyGraph} from "./graph";
 import {NestedTablesWithEventBus} from "./nested_table";
-import {addWaitTypeHTMLColumn} from "./barchartcell";
+import {addWaitTypeHTMLColumn} from "./waitTypeField";
+import {ExecutionPlanViewer, ParsedExecutionPlan} from "../components/ExecutionPlanTree/plan";
 // ... existing code ...
 
 const getStyles = (theme: GrafanaTheme2) => ({
@@ -93,6 +94,10 @@ interface ServerMetadata {
     type: string;
     host?: string;
 }
+interface sampleID {
+    sampleID: string;
+    snapId: string;
+}
 
 const PageOne = () => {
     const styles = useStyles2(getStyles);
@@ -108,7 +113,8 @@ const PageOne = () => {
     const [totalCount, setTotalCount] = useState(0);
     const [pageSize] = useState(10);
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
-
+    const [sampleID, setSampleID] = useState<sampleID | null>(null);
+    const [executionPlan, setExecutionPlan] = useState<ParsedExecutionPlan | null>(null);
     const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
         from: dateTime().subtract(1, 'hour'),
         to: dateTime(),
@@ -122,6 +128,27 @@ const PageOne = () => {
 
     // Error states
     const [error, setError] = useState<string | null>(null);
+
+    // Function to fetch HTML content from backend
+    useEffect(() => {
+        const fetchPlan = async () => {
+            if (!sampleID){
+                return;
+            }
+            try {
+                let response: Observable<FetchResponse<string>>;
+                response = await getBackendSrv().fetch({
+                    url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/getExecPlan?sampleId='+sampleID?.sampleID+'&snapId='+sampleID?.snapId,
+                });
+                // Get the response as text since it's HTML
+                const textResponse: { data: string } = await lastValueFrom(response);
+                setExecutionPlan(textResponse.data);
+            } catch (err) {
+                throw new Error(`Failed to fetch: ${err}`);
+            }
+        };
+        fetchPlan()
+    }, [sampleID]);
 
     // Initialize datasource
     useEffect(() => {
@@ -432,6 +459,7 @@ const PageOne = () => {
         return processResponse(result);
     }, [datasource, selectedServer?.value, chartTimeRange]);
 
+    const onSampleSelection = useCallback((snapID: string, sampleID: string) => {setSampleID({sampleID: sampleID, snapId: snapID})}, [])
     const getDetailsData = useCallback(async (id: string): Promise<PanelData> => {
         let frames = await loadSamplesPanelData(id);
         return {
@@ -540,7 +568,9 @@ const PageOne = () => {
                                                     from: dateTime().subtract(1, 'hour'),
                                                     to: dateTime(),
                                                     raw: {from: 'now-1h', to: 'now'}
-                                                }}/>
+                                                }}
+                                                onSampleSelection={onSampleSelection}
+                                            />
 
                                             <div className={styles.paginationContainer}>
                         <span>
@@ -573,6 +603,17 @@ const PageOne = () => {
                                 </Card.Description>
                             </Card>
                         </div>
+                        {executionPlan && (
+                            <div className={styles.section}>
+
+                                <Card>
+                                    <Card.Heading>Database Snapshots</Card.Heading>
+                                    <Card.Description>
+                                        <ExecutionPlanViewer executionPlan={executionPlan}/>
+                                    </Card.Description>
+                                </Card>
+                            </div>
+                        )}
                     </>
                 )}
             </div>

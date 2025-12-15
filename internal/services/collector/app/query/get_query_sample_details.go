@@ -39,7 +39,7 @@ func (h *GetQuerySampleDetailsHandler) Handle(ctx context.Context, snapID string
 		}
 	}
 	if !found || baseQuery == nil {
-		return nil, custom_errors.NotFoundErr{Message: fmt.Sprintf("sample %s not found", snapID)}
+		return nil, custom_errors.NotFoundErr{Message: fmt.Sprintf("sample %s not found on %s", sampleID, snapID)}
 	}
 	roots := make([]string, 0)
 	if baseQuery.IsBlocked {

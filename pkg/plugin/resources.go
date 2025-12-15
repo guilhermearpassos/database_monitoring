@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
 	"net/http"
 	"time"
 
@@ -52,6 +53,43 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/echo", a.handleEcho)
 	mux.HandleFunc("/datasource-options", a.handleDropdownOptions)
 	mux.HandleFunc("/query", a.handleQuery)
+	mux.HandleFunc("/getExecPlan", a.handleFetchExecutionPlan)
+
+}
+
+func (a *App) handleFetchExecutionPlan(w http.ResponseWriter, r *http.Request) {
+	// handle the request
+	// e.g. call a third-party API
+	sampleID := r.URL.Query().Get("sampleId")
+	snapID := r.URL.Query().Get("snapId")
+	if sampleID == "" {
+		http.Error(w, "sampleId is required", http.StatusBadRequest)
+		return
+	}
+	if snapID == "" {
+		http.Error(w, "snapId is required", http.StatusBadRequest)
+	}
+	resp, err := a.client.GetSampleDetails(r.Context(), &dbmv1.GetSampleDetailsRequest{
+		SampleId: sampleID,
+		SnapId:   snapID,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var plan domain.ParsedExecutionPlan
+	if resp.ParsedPlan != nil {
+		plan = domain.ProtoParsedPlanToDomain(resp.ParsedPlan)
+
+	}
+	m, err := json.Marshal(plan)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(m)
+	w.WriteHeader(http.StatusOK)
 }
 
 // Add this method to handle queries from nested datasource
