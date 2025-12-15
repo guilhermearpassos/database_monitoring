@@ -29,7 +29,7 @@ import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
 import {MyGraph} from "./graph";
 import {NestedTablesWithEventBus} from "./nested_table";
 import {addWaitTypeHTMLColumn} from "./waitTypeField";
-import {ExecutionPlanViewer, ParsedExecutionPlan} from "../components/ExecutionPlanTree/plan";
+import {QueryDetails} from "../components/QueryDetails/Details";
 
 const getStyles = (theme: GrafanaTheme2) => ({
     container: css`
@@ -116,7 +116,6 @@ const PageOne = () => {
     const [pageSize] = useState(10);
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
     const [sampleID, setSampleID] = useState<SampleID | null>(null);
-    const [executionPlan, setExecutionPlan] = useState<ParsedExecutionPlan | null>(null);
     const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
         from: dateTime().subtract(1, 'hour'),
         to: dateTime(),
@@ -131,26 +130,6 @@ const PageOne = () => {
     // Error states
     const [error, setError] = useState<string | null>(null);
 
-    // Function to fetch HTML content from backend
-    useEffect(() => {
-        const fetchPlan = async () => {
-            if (!sampleID) {
-                return;
-            }
-            try {
-                let response: Observable<FetchResponse<ParsedExecutionPlan>>;
-                response = await getBackendSrv().fetch({
-                    url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/getExecPlan?sampleId=' + sampleID?.sampleID + '&snapId=' + sampleID?.snapId,
-                });
-                // Get the response as text since it's HTML
-                const textResponse: { data: ParsedExecutionPlan } = await lastValueFrom(response);
-                setExecutionPlan(textResponse.data);
-            } catch (err) {
-                throw new Error(`Failed to fetch: ${err}`);
-            }
-        };
-        fetchPlan()
-    }, [sampleID]);
 
     // Initialize datasource
     useEffect(() => {
@@ -507,17 +486,11 @@ const PageOne = () => {
 
 
             <div className={styles.section}>
-                <div>{executionPlan && (<Drawer onClose={() => {
-                        setExecutionPlan(null)
+                <div>{sampleID && (<Drawer onClose={() => {
+                        setSampleID(null)
                     }} size="lg">
                         <div className={styles.section}>
-
-                            <Card>
-                                <Card.Heading>Sample Details</Card.Heading>
-                                <Card.Description>
-                                    <ExecutionPlanViewer executionPlan={executionPlan}/>
-                                </Card.Description>
-                            </Card>
+                            <QueryDetails snapID={sampleID.snapId} sampleID={sampleID.sampleID}/>
                         </div>
                     </Drawer>
                 )}</div>

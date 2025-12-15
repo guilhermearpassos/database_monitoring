@@ -633,8 +633,9 @@ select handle, query_plan from #temp_plans
 		if queryPlan == nil {
 			continue
 		}
-		ret[string(handle)] = &common_domain.ExecutionPlan{
-			PlanHandle: base64.StdEncoding.EncodeToString(handle),
+		b64Handle := base64.StdEncoding.EncodeToString(handle)
+		ret[b64Handle] = &common_domain.ExecutionPlan{
+			PlanHandle: b64Handle,
 			XmlData:    *queryPlan,
 			Server:     server,
 		}

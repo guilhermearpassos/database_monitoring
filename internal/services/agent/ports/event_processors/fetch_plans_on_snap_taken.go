@@ -3,6 +3,7 @@ package event_processors
 import (
 	"context"
 	"fmt"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain/events"
 	"go.opentelemetry.io/otel"
@@ -26,7 +27,7 @@ func NewPlanFetcher(app app.Application) *PlanFetcher {
 	}
 }
 
-func (f PlanFetcher) Run(ctx context.Context) {
+func (f *PlanFetcher) Run(ctx context.Context) {
 	for ev := range f.in {
 		snapTakenEvent, ok := ev.(events.SampleSnapshotTaken)
 		if !ok {
@@ -59,6 +60,9 @@ func (f PlanFetcher) Run(ctx context.Context) {
 			span.SetStatus(otelcodes.Error, err.Error())
 			span.RecordError(err)
 		}
+		for k := range plans {
+			f.knownHandlesByServer[snapTakenEvent.Snap.SnapInfo.Server.Host][k] = struct{}{}
+		}
 		err = f.app.Commands.UploadExecPlans.Handle(ctx, plans, snapTakenEvent.Snap.SnapInfo.Server)
 		if err != nil {
 			fmt.Println(err)
@@ -72,6 +76,6 @@ func (f PlanFetcher) Run(ctx context.Context) {
 	}
 }
 
-func (f PlanFetcher) Register(router *events.EventRouter) {
+func (f *PlanFetcher) Register(router *events.EventRouter) {
 	router.Register(events.SampleSnapshotTaken{}.EventName(), f.in, "planFetcher")
 }
