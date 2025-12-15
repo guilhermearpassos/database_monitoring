@@ -6,7 +6,7 @@ import {
     Button,
     Card,
     Combobox,
-    ComboboxOption,
+    ComboboxOption, Drawer,
     LoadingPlaceholder,
     TimeRangePicker,
     useStyles2
@@ -30,7 +30,6 @@ import {MyGraph} from "./graph";
 import {NestedTablesWithEventBus} from "./nested_table";
 import {addWaitTypeHTMLColumn} from "./waitTypeField";
 import {ExecutionPlanViewer, ParsedExecutionPlan} from "../components/ExecutionPlanTree/plan";
-// ... existing code ...
 
 const getStyles = (theme: GrafanaTheme2) => ({
     container: css`
@@ -96,6 +95,7 @@ interface ServerMetadata {
     type: string;
     host?: string;
 }
+
 interface SampleID {
     sampleID: string;
     snapId: string;
@@ -134,13 +134,13 @@ const PageOne = () => {
     // Function to fetch HTML content from backend
     useEffect(() => {
         const fetchPlan = async () => {
-            if (!sampleID){
+            if (!sampleID) {
                 return;
             }
             try {
                 let response: Observable<FetchResponse<ParsedExecutionPlan>>;
                 response = await getBackendSrv().fetch({
-                    url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/getExecPlan?sampleId='+sampleID?.sampleID+'&snapId='+sampleID?.snapId,
+                    url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/getExecPlan?sampleId=' + sampleID?.sampleID + '&snapId=' + sampleID?.snapId,
                 });
                 // Get the response as text since it's HTML
                 const textResponse: { data: ParsedExecutionPlan } = await lastValueFrom(response);
@@ -461,7 +461,9 @@ const PageOne = () => {
         return processResponse(result);
     }, [datasource, selectedServer?.value, chartTimeRange]);
 
-    const onSampleSelection = useCallback((snapID: string, sampleID: string) => {setSampleID({sampleID: sampleID, snapId: snapID})}, [])
+    const onSampleSelection = useCallback((snapID: string, sampleID: string) => {
+        setSampleID({sampleID: sampleID, snapId: snapID})
+    }, [])
     const getDetailsData = useCallback(async (id: string): Promise<PanelData> => {
         let frames = await loadSamplesPanelData(id);
         return {
@@ -505,9 +507,23 @@ const PageOne = () => {
 
 
             <div className={styles.section}>
+                <div>{executionPlan && (<Drawer onClose={() => {
+                        setExecutionPlan(null)
+                    }} size="lg">
+                        <div className={styles.section}>
+
+                            <Card>
+                                <Card.Heading>Sample Details</Card.Heading>
+                                <Card.Description>
+                                    <ExecutionPlanViewer executionPlan={executionPlan}/>
+                                </Card.Description>
+                            </Card>
+                        </div>
+                    </Drawer>
+                )}</div>
                 <h3>Server Selection</h3>
                 <div className={styles.serverSelection}>
-                    <Combobox
+                    <Combobox<string>
                         width="auto"
                         options={serverOptions}
                         value={selectedServer}
@@ -524,31 +540,31 @@ const PageOne = () => {
                             <Card>
                                 <Card.Heading>Database Activity Over Time</Card.Heading>
                                 <Card.Description>
-                                <div className={styles.chartContainer}>
-                                    {chartLoading ? (
-                                        <div className={styles.loadingContainer}>
-                                            <LoadingPlaceholder text="Loading chart data..."/>
-                                        </div>
-                                    ) : chartFrames.length > 0 ? (
-                                        <>
-                                            {chartFrames.length > 0 && (
-                                                <MyGraph
-                                                    data={chartFrames}
-                                                    loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
-                                                    eventBus={panelEventBus}
-                                                    timeRange={chartTimeRange}
-                                                    onTimeRangeChange={handleChartTimeRangeChange}
-                                                    width={800}
-                                                    height={400}
-                                                />
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className={styles.loadingContainer}>
-                                            <p>No chart data available</p>
-                                        </div>
-                                    )}
-                                </div>
+                                    <div className={styles.chartContainer}>
+                                        {chartLoading ? (
+                                            <div className={styles.loadingContainer}>
+                                                <LoadingPlaceholder text="Loading chart data..."/>
+                                            </div>
+                                        ) : chartFrames.length > 0 ? (
+                                            <>
+                                                {chartFrames.length > 0 && (
+                                                    <MyGraph
+                                                        data={chartFrames}
+                                                        loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
+                                                        eventBus={panelEventBus}
+                                                        timeRange={chartTimeRange}
+                                                        onTimeRangeChange={handleChartTimeRangeChange}
+                                                        width={800}
+                                                        height={400}
+                                                    />
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className={styles.loadingContainer}>
+                                                <p>No chart data available</p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </Card.Description>
                             </Card>
                         </div>
@@ -558,66 +574,56 @@ const PageOne = () => {
                                 <Card.Heading>Database Snapshots</Card.Heading>
                                 <Card.Description>
 
-                                <div className={styles.tableContainer}>
-                                    {dataLoading ? (
-                                        <LoadingPlaceholder text="Loading snapshots..."/>
-                                    ) : (
-                                        <>
-                                            <NestedTablesWithEventBus
-                                                getDetailsData={
-                                                    getDetailsData
-                                                }
-                                                summaryData={snapshots}
-                                                timeRange={{
-                                                    from: dateTime().subtract(1, 'hour'),
-                                                    to: dateTime(),
-                                                    raw: {from: 'now-1h', to: 'now'}
-                                                }}
-                                                onSampleSelection={onSampleSelection}
-                                            />
+                                    <div className={styles.tableContainer}>
+                                        {dataLoading ? (
+                                            <LoadingPlaceholder text="Loading snapshots..."/>
+                                        ) : (
+                                            <>
+                                                <NestedTablesWithEventBus
+                                                    getDetailsData={
+                                                        getDetailsData
+                                                    }
+                                                    summaryData={snapshots}
+                                                    timeRange={{
+                                                        from: dateTime().subtract(1, 'hour'),
+                                                        to: dateTime(),
+                                                        raw: {from: 'now-1h', to: 'now'}
+                                                    }}
+                                                    onSampleSelection={onSampleSelection}
+                                                />
 
-                                            <div className={styles.paginationContainer}>
+                                                <div className={styles.paginationContainer}>
                         <span>
                           Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} entries
                         </span>
-                                                <div>
-                                                    <Button
-                                                        variant="secondary"
-                                                        onClick={() => handlePageChange(currentPage - 1)}
-                                                        disabled={currentPage <= 1}
-                                                        style={{marginRight: '8px'}}
-                                                    >
-                                                        Previous
-                                                    </Button>
-                                                    <span style={{margin: '0 16px'}}>
+                                                    <div>
+                                                        <Button
+                                                            variant="secondary"
+                                                            onClick={() => handlePageChange(currentPage - 1)}
+                                                            disabled={currentPage <= 1}
+                                                            style={{marginRight: '8px'}}
+                                                        >
+                                                            Previous
+                                                        </Button>
+                                                        <span style={{margin: '0 16px'}}>
                             Page {currentPage} of {Math.ceil(totalCount / pageSize)}
                           </span>
-                                                    <Button
-                                                        variant="secondary"
-                                                        onClick={() => handlePageChange(currentPage + 1)}
-                                                        disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                                                    >
-                                                        Next
-                                                    </Button>
+                                                        <Button
+                                                            variant="secondary"
+                                                            onClick={() => handlePageChange(currentPage + 1)}
+                                                            disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                                                        >
+                                                            Next
+                                                        </Button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </Card.Description>
                             </Card>
                         </div>
-                        {executionPlan && (
-                            <div className={styles.section}>
 
-                                <Card>
-                                    <Card.Heading>Sample Details</Card.Heading>
-                                    <Card.Description>
-                                        <ExecutionPlanViewer executionPlan={executionPlan}/>
-                                    </Card.Description>
-                                </Card>
-                            </div>
-                        )}
                     </>
                 )}
             </div>

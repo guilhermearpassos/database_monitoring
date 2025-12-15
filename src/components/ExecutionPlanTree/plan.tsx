@@ -20,14 +20,14 @@ export interface PlanWarning {
     missing_index?: MissingIndexWarning;
 }
 
-export class MissingIndexWarning {
+export interface MissingIndexWarning {
     database: string
     schema: string
     table: string
     impact: number
-    equality_columns?: string[] = []
-    inequality_columns?: string[] = []
-    include_columns?: string[] = []
+    equality_columns?: string[]
+    inequality_columns?: string[]
+    include_columns?: string[]
 }
 export interface StatisticsInfo {
     last_update: string;
@@ -80,7 +80,7 @@ const WarningComponent: React.FC<{ warning: PlanWarning }> = ({warning}) => {
             {warning.missing_index &&
                 <div className={styles.warningContent}>
                     <div className={styles.warningTitle}>Missing index: {warning.missing_index.table}</div>
-                    <div className={styles.warningDetail}>Expression: create index idx01 on {warning.missing_index.database}.{warning.missing_index.schema}.{warning.missing_index.table}({((warning.missing_index.equality_columns??[]).concat(warning.missing_index.inequality_columns??[])).join(",")}) include ({warning.missing_index.include_columns.join(",")})</div>
+                    <div className={styles.warningDetail}>Expression: create index idx01 on {warning.missing_index.database}.{warning.missing_index.schema}.{warning.missing_index.table}({((warning.missing_index.equality_columns??[]).concat(warning.missing_index.inequality_columns??[])).join(",")}) include ({(warning.missing_index.include_columns??[]).join(",")})</div>
                 </div>
             }
         </div>
