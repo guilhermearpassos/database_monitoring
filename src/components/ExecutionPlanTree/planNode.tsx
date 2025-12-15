@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
-import {ChevronDown, ChevronRight, AlertTriangle, Info} from 'lucide-react';
+import {ChevronDown, ChevronRight} from 'lucide-react';
 import {GrafanaTheme2} from "@grafana/data";
 import {css} from '@emotion/css';
-import {useStyles2, useTheme2} from "@grafana/ui";
+import {useStyles2} from "@grafana/ui";
 
 // Type definitions based on your Go structs
 export interface PlanNodeHeader {
@@ -225,7 +225,6 @@ export const PlanNodeComponent: React.FC<{ node: PlanNode, level: number }> = ({
     const [isExpanded, setIsExpanded] = useState(true);
     const styles = useStyles2(getStyles);
 
-    const theme = useTheme2();
     const hasChildren = node.nodes && node.nodes.length > 0;
     const nodeStyle = {
         marginLeft: `${level * 16}px`,
@@ -283,7 +282,7 @@ export const PlanNodeComponent: React.FC<{ node: PlanNode, level: number }> = ({
             {hasChildren && isExpanded && (
                 <div className={styles.childNodes}>
                     {node.nodes.map((childNode, idx) => (
-                        <PlanNodeComponent node={childNode} level={level + 1}/>
+                        <PlanNodeComponent key={idx} node={childNode} level={level + 1}/>
                     ))}
                 </div>
             )}

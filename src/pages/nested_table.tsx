@@ -123,7 +123,7 @@ export function NestedTablesWithEventBus({
         const sub = panelEventBus.getStream(SampleSelectedEvent).subscribe({
             next: (event: any) => {
 
-                if (event.payload) {
+                if (event.payload && onSampleSelection) {
                     onSampleSelection(event.payload.snapID, event.payload.sampleID);
                 }
             },

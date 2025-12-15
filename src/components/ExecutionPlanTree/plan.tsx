@@ -53,7 +53,9 @@ const StatisticsInfoComponent: React.FC<{ stats: StatisticsInfo }> = ({stats}) =
 // Warning Component
 const WarningComponent: React.FC<{ warning: PlanWarning }> = ({warning}) => {
     const styles = useStyles2(getStyles);
-    if (!warning.Convert) return null;
+    if (!warning.Convert) {
+        return null;
+    }
 
     return (
         <div className={styles.warningCard}>
@@ -107,7 +109,7 @@ export const ExecutionPlanViewer: React.FC<{ executionPlan: ParsedExecutionPlan 
                     </h4>
                     <div className={styles.warningsList}>
                         {executionPlan.warnings.map((warning, idx) => (
-                            <WarningComponent warning={warning}/>
+                            <WarningComponent key={idx} warning={warning}/>
                         ))}
                     </div>
                 </div>
@@ -119,7 +121,7 @@ export const ExecutionPlanViewer: React.FC<{ executionPlan: ParsedExecutionPlan 
                     <h4 className={styles.sectionTitle}>Statistics Usage</h4>
                     <div className="space-y-2">
                         {executionPlan.stats_usage.map((stats, idx) => (
-                            <StatisticsInfoComponent stats={stats}/>
+                            <StatisticsInfoComponent key={idx} stats={stats}/>
                         ))}
                     </div>
                 </div>
@@ -130,7 +132,7 @@ export const ExecutionPlanViewer: React.FC<{ executionPlan: ParsedExecutionPlan 
                 <h4 className={styles.sectionTitle}>Plan Tree</h4>
                 <div className={styles.planTree}>
                     {executionPlan.nodes && executionPlan.nodes.map((node, idx) => (
-                        <PlanNodeComponent node={node} level={1}/>
+                        <PlanNodeComponent key={idx} node={node} level={1}/>
                     ))}
                 </div>
             </div>

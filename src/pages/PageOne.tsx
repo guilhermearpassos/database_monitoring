@@ -96,7 +96,7 @@ interface ServerMetadata {
     type: string;
     host?: string;
 }
-interface sampleID {
+interface SampleID {
     sampleID: string;
     snapId: string;
 }
@@ -115,7 +115,7 @@ const PageOne = () => {
     const [totalCount, setTotalCount] = useState(0);
     const [pageSize] = useState(10);
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
-    const [sampleID, setSampleID] = useState<sampleID | null>(null);
+    const [sampleID, setSampleID] = useState<SampleID | null>(null);
     const [executionPlan, setExecutionPlan] = useState<ParsedExecutionPlan | null>(null);
     const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
         from: dateTime().subtract(1, 'hour'),
@@ -138,12 +138,12 @@ const PageOne = () => {
                 return;
             }
             try {
-                let response: Observable<FetchResponse<string>>;
+                let response: Observable<FetchResponse<ParsedExecutionPlan>>;
                 response = await getBackendSrv().fetch({
                     url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/getExecPlan?sampleId='+sampleID?.sampleID+'&snapId='+sampleID?.snapId,
                 });
                 // Get the response as text since it's HTML
-                const textResponse: { data: string } = await lastValueFrom(response);
+                const textResponse: { data: ParsedExecutionPlan } = await lastValueFrom(response);
                 setExecutionPlan(textResponse.data);
             } catch (err) {
                 throw new Error(`Failed to fetch: ${err}`);
@@ -611,7 +611,7 @@ const PageOne = () => {
                             <div className={styles.section}>
 
                                 <Card>
-                                    <Card.Heading>Database Snapshots</Card.Heading>
+                                    <Card.Heading>Sample Details</Card.Heading>
                                     <Card.Description>
                                         <ExecutionPlanViewer executionPlan={executionPlan}/>
                                     </Card.Description>
