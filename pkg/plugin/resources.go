@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
@@ -287,6 +288,9 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 
 			res := a.querySnap(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
+		case "metrics":
+			res := a.queryMetrics(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
 		}
 	}
 
@@ -520,6 +524,80 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 		data.NewField("Status", nil, statuses),
 		data.NewField("user", nil, users),
 	)
+
+	// Set the RefID to match the query
+	frame.RefID = query.RefID
+
+	// Add metadata for proper visualization
+	frame.Meta = &data.FrameMeta{
+		Type: data.FrameTypeTimeSeriesWide,
+	}
+
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+func (a *App) queryMetrics(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+
+	response := backend.DataResponse{}
+	q := struct {
+		Database string `json:"database"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	timeRange := query.TimeRange
+	from := timeRange.From
+	to := timeRange.To
+	resp, err := a.client.ListQueryMetrics(ctx, &dbmv1.ListQueryMetricsRequest{
+		Start:      timestamppb.New(from),
+		End:        timestamppb.New(to),
+		Host:       q.Database,
+		Database:   "",
+		PageSize:   0,
+		PageNumber: 0,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	text := make([]string, 0, len(resp.GetMetrics()))
+	lastExecutionTime := make([]time.Time, 0, len(resp.GetMetrics()))
+	queryHash := make([]string, 0, len(resp.GetMetrics()))
+	databaseName := make([]string, 0, len(resp.GetMetrics()))
+	executionCount := make([]float64, 0, len(resp.GetMetrics()))
+	rates := make(map[string][]float64)
+	for _, m := range resp.GetMetrics() {
+		text = append(text, m.Text)
+		lastExecutionTime = append(lastExecutionTime, m.LastExecutionTime.AsTime())
+		queryHash = append(queryHash, m.QueryHash)
+		databaseName = append(databaseName, m.Db.DatabaseName)
+
+		execCount, ok := m.Counters["executionCount"]
+		executionCount = append(executionCount, float64(execCount))
+		if ok && execCount != 0 {
+			for k, v := range m.Counters {
+				if !strings.HasPrefix(k, "total") {
+					continue
+				}
+				avgName := strings.Replace(k, "total", "avg", 1)
+				rates[avgName] = append(rates[avgName], float64(v)/float64(execCount))
+			}
+		}
+	}
+
+	frame := data.NewFrame("metrics",
+		data.NewField("text", nil, text),
+		data.NewField("lastExecutionTime", nil, lastExecutionTime),
+		data.NewField("queryHash", nil, queryHash),
+		data.NewField("databaseName", nil, databaseName),
+		data.NewField("executionCount", nil, executionCount),
+	)
+	for k, rate := range rates {
+		frame.Fields = append(frame.Fields, data.NewField(k, nil, rate))
+
+	}
 
 	// Set the RefID to match the query
 	frame.RefID = query.RefID

@@ -35,7 +35,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
                     <Combobox
                         width={"auto"}
-                        options={[{label: "chart", value: "chart"}, {label: "snapshot-list", value: "snapshot-list"}, {label: "snapshot", value: "snapshot"}]}
+                        options={[{label: "chart", value: "chart"}, {label: "snapshot-list", value: "snapshot-list"}, {label: "snapshot", value: "snapshot"}, {label: "metrics", value: "metrics"}]}
                         value={query.queryType}
                         onChange={onQueryTypeChange}
                         placeholder="Select query type"
