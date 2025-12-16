@@ -71,6 +71,9 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 }
 
 func QueryMetricToProto(metric *common_domain.QueryMetric) (*dbmv1.QueryMetric, error) {
+	if metric == nil {
+		return nil, nil
+	}
 	return &dbmv1.QueryMetric{
 		QueryHash:             metric.QueryHash,
 		Text:                  metric.Text,

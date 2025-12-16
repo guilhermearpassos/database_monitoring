@@ -3,6 +3,8 @@ package ports
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/command"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/app/query"
@@ -14,7 +16,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"time"
 )
 
 type GRPCServer struct {
@@ -263,4 +264,32 @@ func (s GRPCServer) GetSampleDetails(ctx context.Context, in *dbmv1.GetSampleDet
 		return nil, err
 	}
 	return resp, nil
+}
+
+func (s GRPCServer) GetQueryMetricsTimeSeries(ctx context.Context, in *dbmv1.GetQueryMetricsTimeSeriesRequest) (*dbmv1.GetQueryMetricsTimeSeriesResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.start", in.Start.AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", in.End.AsTime().Format(time.RFC3339)),
+		attribute.String("request.host", in.Host),
+		attribute.String("request.sql_handle", in.SqlHandle),
+		attribute.String("request.interval", in.Interval),
+	)
+	interval, err := time.ParseDuration(in.Interval)
+	if err != nil {
+		return nil, err
+	}
+	ret, err := s.app.Queries.GetQueryMetricsSlice.Handle(ctx, in.Start.AsTime(), in.End.AsTime(), in.Host, in.SqlHandle, interval)
+	if err != nil {
+		return nil, err
+	}
+
+	protoM := make([]*dbmv1.QueryMetric, len(ret))
+	for i, metric := range ret {
+		protoM[i], err = converters.QueryMetricToProto(metric)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &dbmv1.GetQueryMetricsTimeSeriesResponse{Metrics: protoM}, nil
 }

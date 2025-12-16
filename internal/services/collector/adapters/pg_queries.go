@@ -396,6 +396,7 @@ and qss.sql_handle = $4
 	if err != nil {
 		return nil, fmt.Errorf("getting query stats: %w", err)
 	}
+	defer rows.Close()
 	var queryMetric *common_domain.QueryMetric
 	for rows.Next() {
 
@@ -439,6 +440,45 @@ and qss.sql_handle = $4
 				queryMetric.Rates[strings.Replace(k, "total", "avg", 1)] = float64(v) / float64(execCount)
 			}
 		}
+	}
+	return queryMetric, nil
+}
+func (p *PostgresRepo) GetQueryMetricsSlice(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) ([]*common_domain.QueryMetric, error) {
+	q := `select data, q.collected_at from public.query_stat_snapshot q
+inner join query_stat_sample qss on q.id = qss.snap_id
+         inner join target t on q.target_id = t.id
+where q.collected_at between $1 and $2 and t.host = $3
+and qss.sql_handle = $4
+`
+	queryHash := sampleID
+	rows, err := p.db.QueryContext(ctx, q, start, end, serverID, queryHash)
+	if err != nil {
+		return nil, fmt.Errorf("getting query stats: %w", err)
+	}
+	defer rows.Close()
+	queryMetric := make([]*common_domain.QueryMetric, 0)
+	for rows.Next() {
+
+		var protoBytes []byte
+		var collectedAt time.Time
+		err = rows.Scan(&protoBytes, &collectedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scanning query stats: %w", err)
+		}
+		protoMetric := dbmv1.QueryMetric{}
+		err = proto.Unmarshal(protoBytes, &protoMetric)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal query stat: %w", err)
+		}
+		qMetric, err2 := converters.QueryMetricToDomain(&protoMetric)
+		if err2 != nil {
+			return nil, fmt.Errorf("converting query stat: %w", err)
+		}
+		qMetric.CollectionTime = collectedAt
+		queryMetric = append(queryMetric, qMetric)
+	}
+	if err2 := rows.Err(); err2 != nil {
+		return nil, fmt.Errorf("scanning query stats err: %w", err2)
 	}
 	return queryMetric, nil
 }

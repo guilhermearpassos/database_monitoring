@@ -490,6 +490,126 @@ func (x *GetQueryMetricsResponse) GetMetrics() *QueryMetric {
 	return nil
 }
 
+type GetQueryMetricsTimeSeriesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Start         *timestamp.Timestamp   `protobuf:"bytes,1,opt,name=start,proto3" json:"start,omitempty"`
+	End           *timestamp.Timestamp   `protobuf:"bytes,2,opt,name=end,proto3" json:"end,omitempty"`
+	Host          string                 `protobuf:"bytes,3,opt,name=host,proto3" json:"host,omitempty"`
+	SqlHandle     string                 `protobuf:"bytes,4,opt,name=sql_handle,json=sqlHandle,proto3" json:"sql_handle,omitempty"`
+	Interval      string                 `protobuf:"bytes,5,opt,name=interval,proto3" json:"interval,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetQueryMetricsTimeSeriesRequest) Reset() {
+	*x = GetQueryMetricsTimeSeriesRequest{}
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetQueryMetricsTimeSeriesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetQueryMetricsTimeSeriesRequest) ProtoMessage() {}
+
+func (x *GetQueryMetricsTimeSeriesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetQueryMetricsTimeSeriesRequest.ProtoReflect.Descriptor instead.
+func (*GetQueryMetricsTimeSeriesRequest) Descriptor() ([]byte, []int) {
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetQueryMetricsTimeSeriesRequest) GetStart() *timestamp.Timestamp {
+	if x != nil {
+		return x.Start
+	}
+	return nil
+}
+
+func (x *GetQueryMetricsTimeSeriesRequest) GetEnd() *timestamp.Timestamp {
+	if x != nil {
+		return x.End
+	}
+	return nil
+}
+
+func (x *GetQueryMetricsTimeSeriesRequest) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *GetQueryMetricsTimeSeriesRequest) GetSqlHandle() string {
+	if x != nil {
+		return x.SqlHandle
+	}
+	return ""
+}
+
+func (x *GetQueryMetricsTimeSeriesRequest) GetInterval() string {
+	if x != nil {
+		return x.Interval
+	}
+	return ""
+}
+
+type GetQueryMetricsTimeSeriesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Metrics       []*QueryMetric         `protobuf:"bytes,1,rep,name=metrics,proto3" json:"metrics,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetQueryMetricsTimeSeriesResponse) Reset() {
+	*x = GetQueryMetricsTimeSeriesResponse{}
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetQueryMetricsTimeSeriesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetQueryMetricsTimeSeriesResponse) ProtoMessage() {}
+
+func (x *GetQueryMetricsTimeSeriesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetQueryMetricsTimeSeriesResponse.ProtoReflect.Descriptor instead.
+func (*GetQueryMetricsTimeSeriesResponse) Descriptor() ([]byte, []int) {
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetQueryMetricsTimeSeriesResponse) GetMetrics() []*QueryMetric {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
 type GetSnapshotRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -499,7 +619,7 @@ type GetSnapshotRequest struct {
 
 func (x *GetSnapshotRequest) Reset() {
 	*x = GetSnapshotRequest{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[7]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -511,7 +631,7 @@ func (x *GetSnapshotRequest) String() string {
 func (*GetSnapshotRequest) ProtoMessage() {}
 
 func (x *GetSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[7]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -524,7 +644,7 @@ func (x *GetSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*GetSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{7}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetSnapshotRequest) GetId() string {
@@ -543,7 +663,7 @@ type GetSnapshotResponse struct {
 
 func (x *GetSnapshotResponse) Reset() {
 	*x = GetSnapshotResponse{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[8]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -555,7 +675,7 @@ func (x *GetSnapshotResponse) String() string {
 func (*GetSnapshotResponse) ProtoMessage() {}
 
 func (x *GetSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[8]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -568,7 +688,7 @@ func (x *GetSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*GetSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{8}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetSnapshotResponse) GetSnapshot() *DBSnapshot {
@@ -592,7 +712,7 @@ type ListSnapshotsRequest struct {
 
 func (x *ListSnapshotsRequest) Reset() {
 	*x = ListSnapshotsRequest{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[9]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -604,7 +724,7 @@ func (x *ListSnapshotsRequest) String() string {
 func (*ListSnapshotsRequest) ProtoMessage() {}
 
 func (x *ListSnapshotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[9]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -617,7 +737,7 @@ func (x *ListSnapshotsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotsRequest.ProtoReflect.Descriptor instead.
 func (*ListSnapshotsRequest) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{9}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListSnapshotsRequest) GetStart() *timestamp.Timestamp {
@@ -673,7 +793,7 @@ type ListSnapshotsResponse struct {
 
 func (x *ListSnapshotsResponse) Reset() {
 	*x = ListSnapshotsResponse{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[10]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -685,7 +805,7 @@ func (x *ListSnapshotsResponse) String() string {
 func (*ListSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[10]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -698,7 +818,7 @@ func (x *ListSnapshotsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{10}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListSnapshotsResponse) GetSnapshots() []*DBSnapshot {
@@ -732,7 +852,7 @@ type ListServerSummaryRequest struct {
 
 func (x *ListServerSummaryRequest) Reset() {
 	*x = ListServerSummaryRequest{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[11]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -744,7 +864,7 @@ func (x *ListServerSummaryRequest) String() string {
 func (*ListServerSummaryRequest) ProtoMessage() {}
 
 func (x *ListServerSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[11]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -757,7 +877,7 @@ func (x *ListServerSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServerSummaryRequest.ProtoReflect.Descriptor instead.
 func (*ListServerSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{11}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListServerSummaryRequest) GetStart() *timestamp.Timestamp {
@@ -783,7 +903,7 @@ type ListServerSummaryResponse struct {
 
 func (x *ListServerSummaryResponse) Reset() {
 	*x = ListServerSummaryResponse{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[12]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -795,7 +915,7 @@ func (x *ListServerSummaryResponse) String() string {
 func (*ListServerSummaryResponse) ProtoMessage() {}
 
 func (x *ListServerSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[12]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -808,7 +928,7 @@ func (x *ListServerSummaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServerSummaryResponse.ProtoReflect.Descriptor instead.
 func (*ListServerSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{12}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListServerSummaryResponse) GetServers() []*ServerSummary {
@@ -828,7 +948,7 @@ type ListServersRequest struct {
 
 func (x *ListServersRequest) Reset() {
 	*x = ListServersRequest{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[13]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -840,7 +960,7 @@ func (x *ListServersRequest) String() string {
 func (*ListServersRequest) ProtoMessage() {}
 
 func (x *ListServersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[13]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -853,7 +973,7 @@ func (x *ListServersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServersRequest.ProtoReflect.Descriptor instead.
 func (*ListServersRequest) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{13}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListServersRequest) GetStart() *timestamp.Timestamp {
@@ -879,7 +999,7 @@ type ListServersResponse struct {
 
 func (x *ListServersResponse) Reset() {
 	*x = ListServersResponse{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[14]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -891,7 +1011,7 @@ func (x *ListServersResponse) String() string {
 func (*ListServersResponse) ProtoMessage() {}
 
 func (x *ListServersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[14]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -904,7 +1024,7 @@ func (x *ListServersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListServersResponse.ProtoReflect.Descriptor instead.
 func (*ListServersResponse) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{14}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListServersResponse) GetServers() []*ServerMetadata {
@@ -927,7 +1047,7 @@ type ServerSummary struct {
 
 func (x *ServerSummary) Reset() {
 	*x = ServerSummary{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[15]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -939,7 +1059,7 @@ func (x *ServerSummary) String() string {
 func (*ServerSummary) ProtoMessage() {}
 
 func (x *ServerSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[15]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -952,7 +1072,7 @@ func (x *ServerSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerSummary.ProtoReflect.Descriptor instead.
 func (*ServerSummary) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{15}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ServerSummary) GetName() string {
@@ -1000,7 +1120,7 @@ type GetSampleDetailsRequest struct {
 
 func (x *GetSampleDetailsRequest) Reset() {
 	*x = GetSampleDetailsRequest{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[16]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1012,7 +1132,7 @@ func (x *GetSampleDetailsRequest) String() string {
 func (*GetSampleDetailsRequest) ProtoMessage() {}
 
 func (x *GetSampleDetailsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[16]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1025,7 +1145,7 @@ func (x *GetSampleDetailsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSampleDetailsRequest.ProtoReflect.Descriptor instead.
 func (*GetSampleDetailsRequest) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{16}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetSampleDetailsRequest) GetSampleId() string {
@@ -1051,7 +1171,7 @@ type BlockChain struct {
 
 func (x *BlockChain) Reset() {
 	*x = BlockChain{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[17]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1063,7 +1183,7 @@ func (x *BlockChain) String() string {
 func (*BlockChain) ProtoMessage() {}
 
 func (x *BlockChain) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[17]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1076,7 +1196,7 @@ func (x *BlockChain) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockChain.ProtoReflect.Descriptor instead.
 func (*BlockChain) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{17}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *BlockChain) GetRoots() []*BlockChain_BlockingNode {
@@ -1097,7 +1217,7 @@ type GetSampleDetailsResponse struct {
 
 func (x *GetSampleDetailsResponse) Reset() {
 	*x = GetSampleDetailsResponse{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[18]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1109,7 +1229,7 @@ func (x *GetSampleDetailsResponse) String() string {
 func (*GetSampleDetailsResponse) ProtoMessage() {}
 
 func (x *GetSampleDetailsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[18]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1122,7 +1242,7 @@ func (x *GetSampleDetailsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSampleDetailsResponse.ProtoReflect.Descriptor instead.
 func (*GetSampleDetailsResponse) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{18}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetSampleDetailsResponse) GetQuerySample() *QuerySample {
@@ -1157,7 +1277,7 @@ type GetNormalizedQueryDetailsRequest struct {
 
 func (x *GetNormalizedQueryDetailsRequest) Reset() {
 	*x = GetNormalizedQueryDetailsRequest{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[19]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1169,7 +1289,7 @@ func (x *GetNormalizedQueryDetailsRequest) String() string {
 func (*GetNormalizedQueryDetailsRequest) ProtoMessage() {}
 
 func (x *GetNormalizedQueryDetailsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[19]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1182,7 +1302,7 @@ func (x *GetNormalizedQueryDetailsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNormalizedQueryDetailsRequest.ProtoReflect.Descriptor instead.
 func (*GetNormalizedQueryDetailsRequest) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{19}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetNormalizedQueryDetailsRequest) GetQueryHash() string {
@@ -1214,7 +1334,7 @@ type GetNormalizedQueryDetailsResponse struct {
 
 func (x *GetNormalizedQueryDetailsResponse) Reset() {
 	*x = GetNormalizedQueryDetailsResponse{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[20]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1226,7 +1346,7 @@ func (x *GetNormalizedQueryDetailsResponse) String() string {
 func (*GetNormalizedQueryDetailsResponse) ProtoMessage() {}
 
 func (x *GetNormalizedQueryDetailsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[20]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1239,7 +1359,7 @@ func (x *GetNormalizedQueryDetailsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetNormalizedQueryDetailsResponse.ProtoReflect.Descriptor instead.
 func (*GetNormalizedQueryDetailsResponse) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{20}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{22}
 }
 
 type GetNormalizedQueryRequest struct {
@@ -1253,7 +1373,7 @@ type GetNormalizedQueryRequest struct {
 
 func (x *GetNormalizedQueryRequest) Reset() {
 	*x = GetNormalizedQueryRequest{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[21]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1265,7 +1385,7 @@ func (x *GetNormalizedQueryRequest) String() string {
 func (*GetNormalizedQueryRequest) ProtoMessage() {}
 
 func (x *GetNormalizedQueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[21]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1278,7 +1398,7 @@ func (x *GetNormalizedQueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNormalizedQueryRequest.ProtoReflect.Descriptor instead.
 func (*GetNormalizedQueryRequest) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{21}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetNormalizedQueryRequest) GetQueryHash() string {
@@ -1314,7 +1434,7 @@ type GetNormalizedQueryResponse struct {
 
 func (x *GetNormalizedQueryResponse) Reset() {
 	*x = GetNormalizedQueryResponse{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[22]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1326,7 +1446,7 @@ func (x *GetNormalizedQueryResponse) String() string {
 func (*GetNormalizedQueryResponse) ProtoMessage() {}
 
 func (x *GetNormalizedQueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[22]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1339,7 +1459,7 @@ func (x *GetNormalizedQueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNormalizedQueryResponse.ProtoReflect.Descriptor instead.
 func (*GetNormalizedQueryResponse) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{22}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetNormalizedQueryResponse) GetConnectionsOverTime() []*GetNormalizedQueryResponse_ConnectionsDataPoint {
@@ -1380,7 +1500,7 @@ type BlockChain_BlockingNode struct {
 
 func (x *BlockChain_BlockingNode) Reset() {
 	*x = BlockChain_BlockingNode{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[26]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1392,7 +1512,7 @@ func (x *BlockChain_BlockingNode) String() string {
 func (*BlockChain_BlockingNode) ProtoMessage() {}
 
 func (x *BlockChain_BlockingNode) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[26]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1405,7 +1525,7 @@ func (x *BlockChain_BlockingNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockChain_BlockingNode.ProtoReflect.Descriptor instead.
 func (*BlockChain_BlockingNode) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{17, 0}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{19, 0}
 }
 
 func (x *BlockChain_BlockingNode) GetQuerySample() *QuerySample {
@@ -1432,7 +1552,7 @@ type GetNormalizedQueryResponse_ConnectionsDataPoint struct {
 
 func (x *GetNormalizedQueryResponse_ConnectionsDataPoint) Reset() {
 	*x = GetNormalizedQueryResponse_ConnectionsDataPoint{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[27]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1444,7 +1564,7 @@ func (x *GetNormalizedQueryResponse_ConnectionsDataPoint) String() string {
 func (*GetNormalizedQueryResponse_ConnectionsDataPoint) ProtoMessage() {}
 
 func (x *GetNormalizedQueryResponse_ConnectionsDataPoint) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[27]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1457,7 +1577,7 @@ func (x *GetNormalizedQueryResponse_ConnectionsDataPoint) ProtoReflect() protore
 
 // Deprecated: Use GetNormalizedQueryResponse_ConnectionsDataPoint.ProtoReflect.Descriptor instead.
 func (*GetNormalizedQueryResponse_ConnectionsDataPoint) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{22, 0}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{24, 0}
 }
 
 func (x *GetNormalizedQueryResponse_ConnectionsDataPoint) GetConnectionsByWaitType() map[string]int64 {
@@ -1484,7 +1604,7 @@ type GetNormalizedQueryResponse_ExecutionPlanUsage struct {
 
 func (x *GetNormalizedQueryResponse_ExecutionPlanUsage) Reset() {
 	*x = GetNormalizedQueryResponse_ExecutionPlanUsage{}
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[28]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1496,7 +1616,7 @@ func (x *GetNormalizedQueryResponse_ExecutionPlanUsage) String() string {
 func (*GetNormalizedQueryResponse_ExecutionPlanUsage) ProtoMessage() {}
 
 func (x *GetNormalizedQueryResponse_ExecutionPlanUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[28]
+	mi := &file_database_monitoring_v1_dbm_api_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1509,7 +1629,7 @@ func (x *GetNormalizedQueryResponse_ExecutionPlanUsage) ProtoReflect() protorefl
 
 // Deprecated: Use GetNormalizedQueryResponse_ExecutionPlanUsage.ProtoReflect.Descriptor instead.
 func (*GetNormalizedQueryResponse_ExecutionPlanUsage) Descriptor() ([]byte, []int) {
-	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{22, 1}
+	return file_database_monitoring_v1_dbm_api_proto_rawDescGZIP(), []int{24, 1}
 }
 
 func (x *GetNormalizedQueryResponse_ExecutionPlanUsage) GetExecPlan() *ExecutionPlan {
@@ -1573,7 +1693,16 @@ const file_database_monitoring_v1_dbm_api_proto_rawDesc = "" +
 	"\n" +
 	"sql_handle\x18\x04 \x01(\tR\tsqlHandle\"X\n" +
 	"\x17GetQueryMetricsResponse\x12=\n" +
-	"\ametrics\x18\x01 \x01(\v2#.database_monitoring.v1.QueryMetricR\ametrics\"$\n" +
+	"\ametrics\x18\x01 \x01(\v2#.database_monitoring.v1.QueryMetricR\ametrics\"\xd1\x01\n" +
+	" GetQueryMetricsTimeSeriesRequest\x120\n" +
+	"\x05start\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x05start\x12,\n" +
+	"\x03end\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x03end\x12\x12\n" +
+	"\x04host\x18\x03 \x01(\tR\x04host\x12\x1d\n" +
+	"\n" +
+	"sql_handle\x18\x04 \x01(\tR\tsqlHandle\x12\x1a\n" +
+	"\binterval\x18\x05 \x01(\tR\binterval\"b\n" +
+	"!GetQueryMetricsTimeSeriesResponse\x12=\n" +
+	"\ametrics\x18\x01 \x03(\v2#.database_monitoring.v1.QueryMetricR\ametrics\"$\n" +
 	"\x12GetSnapshotRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"U\n" +
 	"\x13GetSnapshotResponse\x12>\n" +
@@ -1653,7 +1782,7 @@ const file_database_monitoring_v1_dbm_api_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a\x84\x01\n" +
 	"\x12ExecutionPlanUsage\x12B\n" +
 	"\texec_plan\x18\x01 \x01(\v2%.database_monitoring.v1.ExecutionPlanR\bexecPlan\x12*\n" +
-	"\x11number_of_samples\x18\x02 \x01(\x03R\x0fnumberOfSamples2\xa6\b\n" +
+	"\x11number_of_samples\x18\x02 \x01(\x03R\x0fnumberOfSamples2\xb9\t\n" +
 	"\x06DBMApi\x12l\n" +
 	"\rListSnapshots\x12,.database_monitoring.v1.ListSnapshotsRequest\x1a-.database_monitoring.v1.ListSnapshotsResponse\x12\x84\x01\n" +
 	"\x15ListSnapshotSummaries\x124.database_monitoring.v1.ListSnapshotSummariesRequest\x1a5.database_monitoring.v1.ListSnapshotSummariesResponse\x12f\n" +
@@ -1661,7 +1790,8 @@ const file_database_monitoring_v1_dbm_api_proto_rawDesc = "" +
 	"\x11ListServerSummary\x120.database_monitoring.v1.ListServerSummaryRequest\x1a1.database_monitoring.v1.ListServerSummaryResponse\x12f\n" +
 	"\vListServers\x12*.database_monitoring.v1.ListServersRequest\x1a+.database_monitoring.v1.ListServersResponse\x12u\n" +
 	"\x10ListQueryMetrics\x12/.database_monitoring.v1.ListQueryMetricsRequest\x1a0.database_monitoring.v1.ListQueryMetricsResponse\x12r\n" +
-	"\x0fGetQueryMetrics\x12..database_monitoring.v1.GetQueryMetricsRequest\x1a/.database_monitoring.v1.GetQueryMetricsResponse\x12u\n" +
+	"\x0fGetQueryMetrics\x12..database_monitoring.v1.GetQueryMetricsRequest\x1a/.database_monitoring.v1.GetQueryMetricsResponse\x12\x90\x01\n" +
+	"\x19GetQueryMetricsTimeSeries\x128.database_monitoring.v1.GetQueryMetricsTimeSeriesRequest\x1a9.database_monitoring.v1.GetQueryMetricsTimeSeriesResponse\x12u\n" +
 	"\x10GetSampleDetails\x12/.database_monitoring.v1.GetSampleDetailsRequest\x1a0.database_monitoring.v1.GetSampleDetailsResponse\x12{\n" +
 	"\x12GetNormalizedQuery\x121.database_monitoring.v1.GetNormalizedQueryRequest\x1a2.database_monitoring.v1.GetNormalizedQueryResponseBUZSgithub.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1;dbmv1b\x06proto3"
 
@@ -1677,7 +1807,7 @@ func file_database_monitoring_v1_dbm_api_proto_rawDescGZIP() []byte {
 	return file_database_monitoring_v1_dbm_api_proto_rawDescData
 }
 
-var file_database_monitoring_v1_dbm_api_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_database_monitoring_v1_dbm_api_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_database_monitoring_v1_dbm_api_proto_goTypes = []any{
 	(*ListSnapshotSummariesRequest)(nil),                    // 0: database_monitoring.v1.ListSnapshotSummariesRequest
 	(*SnapshotSummary)(nil),                                 // 1: database_monitoring.v1.SnapshotSummary
@@ -1686,102 +1816,109 @@ var file_database_monitoring_v1_dbm_api_proto_goTypes = []any{
 	(*ListQueryMetricsResponse)(nil),                        // 4: database_monitoring.v1.ListQueryMetricsResponse
 	(*GetQueryMetricsRequest)(nil),                          // 5: database_monitoring.v1.GetQueryMetricsRequest
 	(*GetQueryMetricsResponse)(nil),                         // 6: database_monitoring.v1.GetQueryMetricsResponse
-	(*GetSnapshotRequest)(nil),                              // 7: database_monitoring.v1.GetSnapshotRequest
-	(*GetSnapshotResponse)(nil),                             // 8: database_monitoring.v1.GetSnapshotResponse
-	(*ListSnapshotsRequest)(nil),                            // 9: database_monitoring.v1.ListSnapshotsRequest
-	(*ListSnapshotsResponse)(nil),                           // 10: database_monitoring.v1.ListSnapshotsResponse
-	(*ListServerSummaryRequest)(nil),                        // 11: database_monitoring.v1.ListServerSummaryRequest
-	(*ListServerSummaryResponse)(nil),                       // 12: database_monitoring.v1.ListServerSummaryResponse
-	(*ListServersRequest)(nil),                              // 13: database_monitoring.v1.ListServersRequest
-	(*ListServersResponse)(nil),                             // 14: database_monitoring.v1.ListServersResponse
-	(*ServerSummary)(nil),                                   // 15: database_monitoring.v1.ServerSummary
-	(*GetSampleDetailsRequest)(nil),                         // 16: database_monitoring.v1.GetSampleDetailsRequest
-	(*BlockChain)(nil),                                      // 17: database_monitoring.v1.BlockChain
-	(*GetSampleDetailsResponse)(nil),                        // 18: database_monitoring.v1.GetSampleDetailsResponse
-	(*GetNormalizedQueryDetailsRequest)(nil),                // 19: database_monitoring.v1.GetNormalizedQueryDetailsRequest
-	(*GetNormalizedQueryDetailsResponse)(nil),               // 20: database_monitoring.v1.GetNormalizedQueryDetailsResponse
-	(*GetNormalizedQueryRequest)(nil),                       // 21: database_monitoring.v1.GetNormalizedQueryRequest
-	(*GetNormalizedQueryResponse)(nil),                      // 22: database_monitoring.v1.GetNormalizedQueryResponse
-	nil,                                                     // 23: database_monitoring.v1.SnapshotSummary.ConnectionsByWaitEventEntry
-	nil,                                                     // 24: database_monitoring.v1.SnapshotSummary.TimeMsByWaitEventEntry
-	nil,                                                     // 25: database_monitoring.v1.ServerSummary.ConnectionsByWaitGroupEntry
-	(*BlockChain_BlockingNode)(nil),                         // 26: database_monitoring.v1.BlockChain.BlockingNode
-	(*GetNormalizedQueryResponse_ConnectionsDataPoint)(nil), // 27: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint
-	(*GetNormalizedQueryResponse_ExecutionPlanUsage)(nil),   // 28: database_monitoring.v1.GetNormalizedQueryResponse.ExecutionPlanUsage
-	nil,                         // 29: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.ConnectionsByWaitTypeEntry
-	(*timestamp.Timestamp)(nil), // 30: google.protobuf.Timestamp
-	(*ServerMetadata)(nil),      // 31: database_monitoring.v1.ServerMetadata
-	(*QueryMetric)(nil),         // 32: database_monitoring.v1.QueryMetric
-	(*DBSnapshot)(nil),          // 33: database_monitoring.v1.DBSnapshot
-	(*QuerySample)(nil),         // 34: database_monitoring.v1.QuerySample
-	(*ParsedExecutionPlan)(nil), // 35: database_monitoring.v1.ParsedExecutionPlan
-	(*ExecutionPlan)(nil),       // 36: database_monitoring.v1.ExecutionPlan
+	(*GetQueryMetricsTimeSeriesRequest)(nil),                // 7: database_monitoring.v1.GetQueryMetricsTimeSeriesRequest
+	(*GetQueryMetricsTimeSeriesResponse)(nil),               // 8: database_monitoring.v1.GetQueryMetricsTimeSeriesResponse
+	(*GetSnapshotRequest)(nil),                              // 9: database_monitoring.v1.GetSnapshotRequest
+	(*GetSnapshotResponse)(nil),                             // 10: database_monitoring.v1.GetSnapshotResponse
+	(*ListSnapshotsRequest)(nil),                            // 11: database_monitoring.v1.ListSnapshotsRequest
+	(*ListSnapshotsResponse)(nil),                           // 12: database_monitoring.v1.ListSnapshotsResponse
+	(*ListServerSummaryRequest)(nil),                        // 13: database_monitoring.v1.ListServerSummaryRequest
+	(*ListServerSummaryResponse)(nil),                       // 14: database_monitoring.v1.ListServerSummaryResponse
+	(*ListServersRequest)(nil),                              // 15: database_monitoring.v1.ListServersRequest
+	(*ListServersResponse)(nil),                             // 16: database_monitoring.v1.ListServersResponse
+	(*ServerSummary)(nil),                                   // 17: database_monitoring.v1.ServerSummary
+	(*GetSampleDetailsRequest)(nil),                         // 18: database_monitoring.v1.GetSampleDetailsRequest
+	(*BlockChain)(nil),                                      // 19: database_monitoring.v1.BlockChain
+	(*GetSampleDetailsResponse)(nil),                        // 20: database_monitoring.v1.GetSampleDetailsResponse
+	(*GetNormalizedQueryDetailsRequest)(nil),                // 21: database_monitoring.v1.GetNormalizedQueryDetailsRequest
+	(*GetNormalizedQueryDetailsResponse)(nil),               // 22: database_monitoring.v1.GetNormalizedQueryDetailsResponse
+	(*GetNormalizedQueryRequest)(nil),                       // 23: database_monitoring.v1.GetNormalizedQueryRequest
+	(*GetNormalizedQueryResponse)(nil),                      // 24: database_monitoring.v1.GetNormalizedQueryResponse
+	nil,                                                     // 25: database_monitoring.v1.SnapshotSummary.ConnectionsByWaitEventEntry
+	nil,                                                     // 26: database_monitoring.v1.SnapshotSummary.TimeMsByWaitEventEntry
+	nil,                                                     // 27: database_monitoring.v1.ServerSummary.ConnectionsByWaitGroupEntry
+	(*BlockChain_BlockingNode)(nil),                         // 28: database_monitoring.v1.BlockChain.BlockingNode
+	(*GetNormalizedQueryResponse_ConnectionsDataPoint)(nil), // 29: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint
+	(*GetNormalizedQueryResponse_ExecutionPlanUsage)(nil),   // 30: database_monitoring.v1.GetNormalizedQueryResponse.ExecutionPlanUsage
+	nil,                         // 31: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.ConnectionsByWaitTypeEntry
+	(*timestamp.Timestamp)(nil), // 32: google.protobuf.Timestamp
+	(*ServerMetadata)(nil),      // 33: database_monitoring.v1.ServerMetadata
+	(*QueryMetric)(nil),         // 34: database_monitoring.v1.QueryMetric
+	(*DBSnapshot)(nil),          // 35: database_monitoring.v1.DBSnapshot
+	(*QuerySample)(nil),         // 36: database_monitoring.v1.QuerySample
+	(*ParsedExecutionPlan)(nil), // 37: database_monitoring.v1.ParsedExecutionPlan
+	(*ExecutionPlan)(nil),       // 38: database_monitoring.v1.ExecutionPlan
 }
 var file_database_monitoring_v1_dbm_api_proto_depIdxs = []int32{
-	30, // 0: database_monitoring.v1.ListSnapshotSummariesRequest.start:type_name -> google.protobuf.Timestamp
-	30, // 1: database_monitoring.v1.ListSnapshotSummariesRequest.end:type_name -> google.protobuf.Timestamp
-	30, // 2: database_monitoring.v1.SnapshotSummary.timestamp:type_name -> google.protobuf.Timestamp
-	31, // 3: database_monitoring.v1.SnapshotSummary.server:type_name -> database_monitoring.v1.ServerMetadata
-	23, // 4: database_monitoring.v1.SnapshotSummary.connections_by_wait_event:type_name -> database_monitoring.v1.SnapshotSummary.ConnectionsByWaitEventEntry
-	24, // 5: database_monitoring.v1.SnapshotSummary.time_ms_by_wait_event:type_name -> database_monitoring.v1.SnapshotSummary.TimeMsByWaitEventEntry
+	32, // 0: database_monitoring.v1.ListSnapshotSummariesRequest.start:type_name -> google.protobuf.Timestamp
+	32, // 1: database_monitoring.v1.ListSnapshotSummariesRequest.end:type_name -> google.protobuf.Timestamp
+	32, // 2: database_monitoring.v1.SnapshotSummary.timestamp:type_name -> google.protobuf.Timestamp
+	33, // 3: database_monitoring.v1.SnapshotSummary.server:type_name -> database_monitoring.v1.ServerMetadata
+	25, // 4: database_monitoring.v1.SnapshotSummary.connections_by_wait_event:type_name -> database_monitoring.v1.SnapshotSummary.ConnectionsByWaitEventEntry
+	26, // 5: database_monitoring.v1.SnapshotSummary.time_ms_by_wait_event:type_name -> database_monitoring.v1.SnapshotSummary.TimeMsByWaitEventEntry
 	1,  // 6: database_monitoring.v1.ListSnapshotSummariesResponse.snap_summaries:type_name -> database_monitoring.v1.SnapshotSummary
-	30, // 7: database_monitoring.v1.ListQueryMetricsRequest.start:type_name -> google.protobuf.Timestamp
-	30, // 8: database_monitoring.v1.ListQueryMetricsRequest.end:type_name -> google.protobuf.Timestamp
-	32, // 9: database_monitoring.v1.ListQueryMetricsResponse.metrics:type_name -> database_monitoring.v1.QueryMetric
-	30, // 10: database_monitoring.v1.GetQueryMetricsRequest.start:type_name -> google.protobuf.Timestamp
-	30, // 11: database_monitoring.v1.GetQueryMetricsRequest.end:type_name -> google.protobuf.Timestamp
-	32, // 12: database_monitoring.v1.GetQueryMetricsResponse.metrics:type_name -> database_monitoring.v1.QueryMetric
-	33, // 13: database_monitoring.v1.GetSnapshotResponse.snapshot:type_name -> database_monitoring.v1.DBSnapshot
-	30, // 14: database_monitoring.v1.ListSnapshotsRequest.start:type_name -> google.protobuf.Timestamp
-	30, // 15: database_monitoring.v1.ListSnapshotsRequest.end:type_name -> google.protobuf.Timestamp
-	33, // 16: database_monitoring.v1.ListSnapshotsResponse.snapshots:type_name -> database_monitoring.v1.DBSnapshot
-	30, // 17: database_monitoring.v1.ListServerSummaryRequest.start:type_name -> google.protobuf.Timestamp
-	30, // 18: database_monitoring.v1.ListServerSummaryRequest.end:type_name -> google.protobuf.Timestamp
-	15, // 19: database_monitoring.v1.ListServerSummaryResponse.servers:type_name -> database_monitoring.v1.ServerSummary
-	30, // 20: database_monitoring.v1.ListServersRequest.start:type_name -> google.protobuf.Timestamp
-	30, // 21: database_monitoring.v1.ListServersRequest.end:type_name -> google.protobuf.Timestamp
-	31, // 22: database_monitoring.v1.ListServersResponse.servers:type_name -> database_monitoring.v1.ServerMetadata
-	25, // 23: database_monitoring.v1.ServerSummary.connections_by_wait_group:type_name -> database_monitoring.v1.ServerSummary.ConnectionsByWaitGroupEntry
-	26, // 24: database_monitoring.v1.BlockChain.roots:type_name -> database_monitoring.v1.BlockChain.BlockingNode
-	34, // 25: database_monitoring.v1.GetSampleDetailsResponse.query_sample:type_name -> database_monitoring.v1.QuerySample
-	35, // 26: database_monitoring.v1.GetSampleDetailsResponse.parsed_plan:type_name -> database_monitoring.v1.ParsedExecutionPlan
-	17, // 27: database_monitoring.v1.GetSampleDetailsResponse.block_chain:type_name -> database_monitoring.v1.BlockChain
-	30, // 28: database_monitoring.v1.GetNormalizedQueryDetailsRequest.start_time:type_name -> google.protobuf.Timestamp
-	30, // 29: database_monitoring.v1.GetNormalizedQueryDetailsRequest.end_time:type_name -> google.protobuf.Timestamp
-	30, // 30: database_monitoring.v1.GetNormalizedQueryRequest.start_time:type_name -> google.protobuf.Timestamp
-	30, // 31: database_monitoring.v1.GetNormalizedQueryRequest.end_time:type_name -> google.protobuf.Timestamp
-	27, // 32: database_monitoring.v1.GetNormalizedQueryResponse.connections_over_time:type_name -> database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint
-	28, // 33: database_monitoring.v1.GetNormalizedQueryResponse.execution_plans:type_name -> database_monitoring.v1.GetNormalizedQueryResponse.ExecutionPlanUsage
-	32, // 34: database_monitoring.v1.GetNormalizedQueryResponse.query_metrics:type_name -> database_monitoring.v1.QueryMetric
-	17, // 35: database_monitoring.v1.GetNormalizedQueryResponse.blocking_activity:type_name -> database_monitoring.v1.BlockChain
-	34, // 36: database_monitoring.v1.BlockChain.BlockingNode.query_sample:type_name -> database_monitoring.v1.QuerySample
-	26, // 37: database_monitoring.v1.BlockChain.BlockingNode.child_nodes:type_name -> database_monitoring.v1.BlockChain.BlockingNode
-	29, // 38: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.connections_by_wait_type:type_name -> database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.ConnectionsByWaitTypeEntry
-	30, // 39: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.timestamp:type_name -> google.protobuf.Timestamp
-	36, // 40: database_monitoring.v1.GetNormalizedQueryResponse.ExecutionPlanUsage.exec_plan:type_name -> database_monitoring.v1.ExecutionPlan
-	9,  // 41: database_monitoring.v1.DBMApi.ListSnapshots:input_type -> database_monitoring.v1.ListSnapshotsRequest
-	0,  // 42: database_monitoring.v1.DBMApi.ListSnapshotSummaries:input_type -> database_monitoring.v1.ListSnapshotSummariesRequest
-	7,  // 43: database_monitoring.v1.DBMApi.GetSnapshot:input_type -> database_monitoring.v1.GetSnapshotRequest
-	11, // 44: database_monitoring.v1.DBMApi.ListServerSummary:input_type -> database_monitoring.v1.ListServerSummaryRequest
-	13, // 45: database_monitoring.v1.DBMApi.ListServers:input_type -> database_monitoring.v1.ListServersRequest
-	3,  // 46: database_monitoring.v1.DBMApi.ListQueryMetrics:input_type -> database_monitoring.v1.ListQueryMetricsRequest
-	5,  // 47: database_monitoring.v1.DBMApi.GetQueryMetrics:input_type -> database_monitoring.v1.GetQueryMetricsRequest
-	16, // 48: database_monitoring.v1.DBMApi.GetSampleDetails:input_type -> database_monitoring.v1.GetSampleDetailsRequest
-	21, // 49: database_monitoring.v1.DBMApi.GetNormalizedQuery:input_type -> database_monitoring.v1.GetNormalizedQueryRequest
-	10, // 50: database_monitoring.v1.DBMApi.ListSnapshots:output_type -> database_monitoring.v1.ListSnapshotsResponse
-	2,  // 51: database_monitoring.v1.DBMApi.ListSnapshotSummaries:output_type -> database_monitoring.v1.ListSnapshotSummariesResponse
-	8,  // 52: database_monitoring.v1.DBMApi.GetSnapshot:output_type -> database_monitoring.v1.GetSnapshotResponse
-	12, // 53: database_monitoring.v1.DBMApi.ListServerSummary:output_type -> database_monitoring.v1.ListServerSummaryResponse
-	14, // 54: database_monitoring.v1.DBMApi.ListServers:output_type -> database_monitoring.v1.ListServersResponse
-	4,  // 55: database_monitoring.v1.DBMApi.ListQueryMetrics:output_type -> database_monitoring.v1.ListQueryMetricsResponse
-	6,  // 56: database_monitoring.v1.DBMApi.GetQueryMetrics:output_type -> database_monitoring.v1.GetQueryMetricsResponse
-	18, // 57: database_monitoring.v1.DBMApi.GetSampleDetails:output_type -> database_monitoring.v1.GetSampleDetailsResponse
-	22, // 58: database_monitoring.v1.DBMApi.GetNormalizedQuery:output_type -> database_monitoring.v1.GetNormalizedQueryResponse
-	50, // [50:59] is the sub-list for method output_type
-	41, // [41:50] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	32, // 7: database_monitoring.v1.ListQueryMetricsRequest.start:type_name -> google.protobuf.Timestamp
+	32, // 8: database_monitoring.v1.ListQueryMetricsRequest.end:type_name -> google.protobuf.Timestamp
+	34, // 9: database_monitoring.v1.ListQueryMetricsResponse.metrics:type_name -> database_monitoring.v1.QueryMetric
+	32, // 10: database_monitoring.v1.GetQueryMetricsRequest.start:type_name -> google.protobuf.Timestamp
+	32, // 11: database_monitoring.v1.GetQueryMetricsRequest.end:type_name -> google.protobuf.Timestamp
+	34, // 12: database_monitoring.v1.GetQueryMetricsResponse.metrics:type_name -> database_monitoring.v1.QueryMetric
+	32, // 13: database_monitoring.v1.GetQueryMetricsTimeSeriesRequest.start:type_name -> google.protobuf.Timestamp
+	32, // 14: database_monitoring.v1.GetQueryMetricsTimeSeriesRequest.end:type_name -> google.protobuf.Timestamp
+	34, // 15: database_monitoring.v1.GetQueryMetricsTimeSeriesResponse.metrics:type_name -> database_monitoring.v1.QueryMetric
+	35, // 16: database_monitoring.v1.GetSnapshotResponse.snapshot:type_name -> database_monitoring.v1.DBSnapshot
+	32, // 17: database_monitoring.v1.ListSnapshotsRequest.start:type_name -> google.protobuf.Timestamp
+	32, // 18: database_monitoring.v1.ListSnapshotsRequest.end:type_name -> google.protobuf.Timestamp
+	35, // 19: database_monitoring.v1.ListSnapshotsResponse.snapshots:type_name -> database_monitoring.v1.DBSnapshot
+	32, // 20: database_monitoring.v1.ListServerSummaryRequest.start:type_name -> google.protobuf.Timestamp
+	32, // 21: database_monitoring.v1.ListServerSummaryRequest.end:type_name -> google.protobuf.Timestamp
+	17, // 22: database_monitoring.v1.ListServerSummaryResponse.servers:type_name -> database_monitoring.v1.ServerSummary
+	32, // 23: database_monitoring.v1.ListServersRequest.start:type_name -> google.protobuf.Timestamp
+	32, // 24: database_monitoring.v1.ListServersRequest.end:type_name -> google.protobuf.Timestamp
+	33, // 25: database_monitoring.v1.ListServersResponse.servers:type_name -> database_monitoring.v1.ServerMetadata
+	27, // 26: database_monitoring.v1.ServerSummary.connections_by_wait_group:type_name -> database_monitoring.v1.ServerSummary.ConnectionsByWaitGroupEntry
+	28, // 27: database_monitoring.v1.BlockChain.roots:type_name -> database_monitoring.v1.BlockChain.BlockingNode
+	36, // 28: database_monitoring.v1.GetSampleDetailsResponse.query_sample:type_name -> database_monitoring.v1.QuerySample
+	37, // 29: database_monitoring.v1.GetSampleDetailsResponse.parsed_plan:type_name -> database_monitoring.v1.ParsedExecutionPlan
+	19, // 30: database_monitoring.v1.GetSampleDetailsResponse.block_chain:type_name -> database_monitoring.v1.BlockChain
+	32, // 31: database_monitoring.v1.GetNormalizedQueryDetailsRequest.start_time:type_name -> google.protobuf.Timestamp
+	32, // 32: database_monitoring.v1.GetNormalizedQueryDetailsRequest.end_time:type_name -> google.protobuf.Timestamp
+	32, // 33: database_monitoring.v1.GetNormalizedQueryRequest.start_time:type_name -> google.protobuf.Timestamp
+	32, // 34: database_monitoring.v1.GetNormalizedQueryRequest.end_time:type_name -> google.protobuf.Timestamp
+	29, // 35: database_monitoring.v1.GetNormalizedQueryResponse.connections_over_time:type_name -> database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint
+	30, // 36: database_monitoring.v1.GetNormalizedQueryResponse.execution_plans:type_name -> database_monitoring.v1.GetNormalizedQueryResponse.ExecutionPlanUsage
+	34, // 37: database_monitoring.v1.GetNormalizedQueryResponse.query_metrics:type_name -> database_monitoring.v1.QueryMetric
+	19, // 38: database_monitoring.v1.GetNormalizedQueryResponse.blocking_activity:type_name -> database_monitoring.v1.BlockChain
+	36, // 39: database_monitoring.v1.BlockChain.BlockingNode.query_sample:type_name -> database_monitoring.v1.QuerySample
+	28, // 40: database_monitoring.v1.BlockChain.BlockingNode.child_nodes:type_name -> database_monitoring.v1.BlockChain.BlockingNode
+	31, // 41: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.connections_by_wait_type:type_name -> database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.ConnectionsByWaitTypeEntry
+	32, // 42: database_monitoring.v1.GetNormalizedQueryResponse.ConnectionsDataPoint.timestamp:type_name -> google.protobuf.Timestamp
+	38, // 43: database_monitoring.v1.GetNormalizedQueryResponse.ExecutionPlanUsage.exec_plan:type_name -> database_monitoring.v1.ExecutionPlan
+	11, // 44: database_monitoring.v1.DBMApi.ListSnapshots:input_type -> database_monitoring.v1.ListSnapshotsRequest
+	0,  // 45: database_monitoring.v1.DBMApi.ListSnapshotSummaries:input_type -> database_monitoring.v1.ListSnapshotSummariesRequest
+	9,  // 46: database_monitoring.v1.DBMApi.GetSnapshot:input_type -> database_monitoring.v1.GetSnapshotRequest
+	13, // 47: database_monitoring.v1.DBMApi.ListServerSummary:input_type -> database_monitoring.v1.ListServerSummaryRequest
+	15, // 48: database_monitoring.v1.DBMApi.ListServers:input_type -> database_monitoring.v1.ListServersRequest
+	3,  // 49: database_monitoring.v1.DBMApi.ListQueryMetrics:input_type -> database_monitoring.v1.ListQueryMetricsRequest
+	5,  // 50: database_monitoring.v1.DBMApi.GetQueryMetrics:input_type -> database_monitoring.v1.GetQueryMetricsRequest
+	7,  // 51: database_monitoring.v1.DBMApi.GetQueryMetricsTimeSeries:input_type -> database_monitoring.v1.GetQueryMetricsTimeSeriesRequest
+	18, // 52: database_monitoring.v1.DBMApi.GetSampleDetails:input_type -> database_monitoring.v1.GetSampleDetailsRequest
+	23, // 53: database_monitoring.v1.DBMApi.GetNormalizedQuery:input_type -> database_monitoring.v1.GetNormalizedQueryRequest
+	12, // 54: database_monitoring.v1.DBMApi.ListSnapshots:output_type -> database_monitoring.v1.ListSnapshotsResponse
+	2,  // 55: database_monitoring.v1.DBMApi.ListSnapshotSummaries:output_type -> database_monitoring.v1.ListSnapshotSummariesResponse
+	10, // 56: database_monitoring.v1.DBMApi.GetSnapshot:output_type -> database_monitoring.v1.GetSnapshotResponse
+	14, // 57: database_monitoring.v1.DBMApi.ListServerSummary:output_type -> database_monitoring.v1.ListServerSummaryResponse
+	16, // 58: database_monitoring.v1.DBMApi.ListServers:output_type -> database_monitoring.v1.ListServersResponse
+	4,  // 59: database_monitoring.v1.DBMApi.ListQueryMetrics:output_type -> database_monitoring.v1.ListQueryMetricsResponse
+	6,  // 60: database_monitoring.v1.DBMApi.GetQueryMetrics:output_type -> database_monitoring.v1.GetQueryMetricsResponse
+	8,  // 61: database_monitoring.v1.DBMApi.GetQueryMetricsTimeSeries:output_type -> database_monitoring.v1.GetQueryMetricsTimeSeriesResponse
+	20, // 62: database_monitoring.v1.DBMApi.GetSampleDetails:output_type -> database_monitoring.v1.GetSampleDetailsResponse
+	24, // 63: database_monitoring.v1.DBMApi.GetNormalizedQuery:output_type -> database_monitoring.v1.GetNormalizedQueryResponse
+	54, // [54:64] is the sub-list for method output_type
+	44, // [44:54] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_database_monitoring_v1_dbm_api_proto_init() }
@@ -1798,7 +1935,7 @@ func file_database_monitoring_v1_dbm_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_database_monitoring_v1_dbm_api_proto_rawDesc), len(file_database_monitoring_v1_dbm_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

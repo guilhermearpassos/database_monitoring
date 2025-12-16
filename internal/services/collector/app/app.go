@@ -21,6 +21,7 @@ type Queries struct {
 	ListSnapshotSummaries      query.ListSnapshotSummariesHandler
 	GetQueryMetrics            query.GetQueryMetricsHandler
 	GetKnownWarnings           query.GetKnownWarningsHandler
+	GetQueryMetricsSlice       query.GetQueryMetricsSliceHandler
 }
 
 type Commands struct {
@@ -55,6 +56,7 @@ func NewApplication(repo domain.SampleRepository, queryMetricsRepo domain.QueryM
 			ListSnapshotSummaries:      query.NewListSnapshotSummariesHandler(repo),
 			GetQueryMetrics:            query.NewGetQueryMetricsHandler(queryMetricsRepo),
 			GetKnownWarnings:           query.NewGetKnownWarningsHandler(warnRepo),
+			GetQueryMetricsSlice:       query.NewGetQueryMetricsSliceHandler(queryMetricsRepo),
 		},
 	}
 }

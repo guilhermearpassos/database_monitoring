@@ -28,6 +28,7 @@ type QueryMetricsRepository interface {
 	StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error
 	ListQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string) ([]*common_domain.QueryMetric, error)
 	GetQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) (*common_domain.QueryMetric, error)
+	GetQueryMetricsSlice(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) ([]*common_domain.QueryMetric, error)
 	PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error
 	PurgeAllQueryMetrics(ctx context.Context) error
 }

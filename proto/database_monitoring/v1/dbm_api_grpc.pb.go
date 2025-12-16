@@ -19,15 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DBMApi_ListSnapshots_FullMethodName         = "/database_monitoring.v1.DBMApi/ListSnapshots"
-	DBMApi_ListSnapshotSummaries_FullMethodName = "/database_monitoring.v1.DBMApi/ListSnapshotSummaries"
-	DBMApi_GetSnapshot_FullMethodName           = "/database_monitoring.v1.DBMApi/GetSnapshot"
-	DBMApi_ListServerSummary_FullMethodName     = "/database_monitoring.v1.DBMApi/ListServerSummary"
-	DBMApi_ListServers_FullMethodName           = "/database_monitoring.v1.DBMApi/ListServers"
-	DBMApi_ListQueryMetrics_FullMethodName      = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
-	DBMApi_GetQueryMetrics_FullMethodName       = "/database_monitoring.v1.DBMApi/GetQueryMetrics"
-	DBMApi_GetSampleDetails_FullMethodName      = "/database_monitoring.v1.DBMApi/GetSampleDetails"
-	DBMApi_GetNormalizedQuery_FullMethodName    = "/database_monitoring.v1.DBMApi/GetNormalizedQuery"
+	DBMApi_ListSnapshots_FullMethodName             = "/database_monitoring.v1.DBMApi/ListSnapshots"
+	DBMApi_ListSnapshotSummaries_FullMethodName     = "/database_monitoring.v1.DBMApi/ListSnapshotSummaries"
+	DBMApi_GetSnapshot_FullMethodName               = "/database_monitoring.v1.DBMApi/GetSnapshot"
+	DBMApi_ListServerSummary_FullMethodName         = "/database_monitoring.v1.DBMApi/ListServerSummary"
+	DBMApi_ListServers_FullMethodName               = "/database_monitoring.v1.DBMApi/ListServers"
+	DBMApi_ListQueryMetrics_FullMethodName          = "/database_monitoring.v1.DBMApi/ListQueryMetrics"
+	DBMApi_GetQueryMetrics_FullMethodName           = "/database_monitoring.v1.DBMApi/GetQueryMetrics"
+	DBMApi_GetQueryMetricsTimeSeries_FullMethodName = "/database_monitoring.v1.DBMApi/GetQueryMetricsTimeSeries"
+	DBMApi_GetSampleDetails_FullMethodName          = "/database_monitoring.v1.DBMApi/GetSampleDetails"
+	DBMApi_GetNormalizedQuery_FullMethodName        = "/database_monitoring.v1.DBMApi/GetNormalizedQuery"
 )
 
 // DBMApiClient is the client API for DBMApi service.
@@ -41,6 +42,7 @@ type DBMApiClient interface {
 	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
 	ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error)
 	GetQueryMetrics(ctx context.Context, in *GetQueryMetricsRequest, opts ...grpc.CallOption) (*GetQueryMetricsResponse, error)
+	GetQueryMetricsTimeSeries(ctx context.Context, in *GetQueryMetricsTimeSeriesRequest, opts ...grpc.CallOption) (*GetQueryMetricsTimeSeriesResponse, error)
 	GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error)
 	GetNormalizedQuery(ctx context.Context, in *GetNormalizedQueryRequest, opts ...grpc.CallOption) (*GetNormalizedQueryResponse, error)
 }
@@ -123,6 +125,16 @@ func (c *dBMApiClient) GetQueryMetrics(ctx context.Context, in *GetQueryMetricsR
 	return out, nil
 }
 
+func (c *dBMApiClient) GetQueryMetricsTimeSeries(ctx context.Context, in *GetQueryMetricsTimeSeriesRequest, opts ...grpc.CallOption) (*GetQueryMetricsTimeSeriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetQueryMetricsTimeSeriesResponse)
+	err := c.cc.Invoke(ctx, DBMApi_GetQueryMetricsTimeSeries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dBMApiClient) GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSampleDetailsResponse)
@@ -154,6 +166,7 @@ type DBMApiServer interface {
 	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
 	ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error)
 	GetQueryMetrics(context.Context, *GetQueryMetricsRequest) (*GetQueryMetricsResponse, error)
+	GetQueryMetricsTimeSeries(context.Context, *GetQueryMetricsTimeSeriesRequest) (*GetQueryMetricsTimeSeriesResponse, error)
 	GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error)
 	GetNormalizedQuery(context.Context, *GetNormalizedQueryRequest) (*GetNormalizedQueryResponse, error)
 	mustEmbedUnimplementedDBMApiServer()
@@ -186,6 +199,9 @@ func (UnimplementedDBMApiServer) ListQueryMetrics(context.Context, *ListQueryMet
 }
 func (UnimplementedDBMApiServer) GetQueryMetrics(context.Context, *GetQueryMetricsRequest) (*GetQueryMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetQueryMetrics not implemented")
+}
+func (UnimplementedDBMApiServer) GetQueryMetricsTimeSeries(context.Context, *GetQueryMetricsTimeSeriesRequest) (*GetQueryMetricsTimeSeriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetQueryMetricsTimeSeries not implemented")
 }
 func (UnimplementedDBMApiServer) GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSampleDetails not implemented")
@@ -340,6 +356,24 @@ func _DBMApi_GetQueryMetrics_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DBMApi_GetQueryMetricsTimeSeries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetQueryMetricsTimeSeriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DBMApiServer).GetQueryMetricsTimeSeries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DBMApi_GetQueryMetricsTimeSeries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DBMApiServer).GetQueryMetricsTimeSeries(ctx, req.(*GetQueryMetricsTimeSeriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DBMApi_GetSampleDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSampleDetailsRequest)
 	if err := dec(in); err != nil {
@@ -410,6 +444,10 @@ var DBMApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetQueryMetrics",
 			Handler:    _DBMApi_GetQueryMetrics_Handler,
+		},
+		{
+			MethodName: "GetQueryMetricsTimeSeries",
+			Handler:    _DBMApi_GetQueryMetricsTimeSeries_Handler,
 		},
 		{
 			MethodName: "GetSampleDetails",
