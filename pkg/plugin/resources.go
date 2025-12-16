@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
@@ -53,11 +55,11 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/echo", a.handleEcho)
 	mux.HandleFunc("/datasource-options", a.handleDropdownOptions)
 	mux.HandleFunc("/query", a.handleQuery)
-	mux.HandleFunc("/getExecPlan", a.handleFetchExecutionPlan)
+	mux.HandleFunc("/getQueryDetails", a.handleFetchQueryDetails)
 
 }
 
-func (a *App) handleFetchExecutionPlan(w http.ResponseWriter, r *http.Request) {
+func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 	// handle the request
 	// e.g. call a third-party API
 	sampleID := r.URL.Query().Get("sampleId")
@@ -83,13 +85,104 @@ func (a *App) handleFetchExecutionPlan(w http.ResponseWriter, r *http.Request) {
 		plan = domain.ProtoParsedPlanToDomain(resp.ParsedPlan)
 
 	}
-	m, err := json.Marshal(plan)
+	blockChain, err2 := blockChainFromProto(resp.BlockChain)
+	if err2 != nil {
+		http.Error(w, err2.Error(), http.StatusInternalServerError)
+		return
+	}
+	m, err := json.Marshal(struct {
+		Plan  domain.ParsedExecutionPlan `json:"plan"`
+		Chain domain.BlockChain          `json:"blocking_chain"`
+	}{
+		Plan:  plan,
+		Chain: blockChain,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Write(m)
 	w.WriteHeader(http.StatusOK)
+}
+
+func blockChainFromProto(chain *dbmv1.BlockChain) (domain.BlockChain, error) {
+	roots := make([]domain.BlockingNode, len(chain.Roots))
+	for i, root := range chain.Roots {
+		node, err2 := nodeFromProto(root, i)
+		if err2 != nil {
+			return domain.BlockChain{}, err2
+		}
+		roots[i] = node
+	}
+	return domain.BlockChain{
+		Roots: roots,
+	}, nil
+}
+
+func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) {
+	var blockTime, blockDetails string
+	if sample.Blocker {
+		blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
+		if sample.Blocked {
+			blockDetails += " | "
+		}
+	}
+	if sample.Blocked {
+		blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
+		blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
+	}
+	sid, err2 := strconv.Atoi(sample.Session.SessionId)
+	if err2 != nil {
+		return domain.QuerySample{}, err2
+	}
+
+	dSample := domain.QuerySample{
+		SID:                     sid,
+		Query:                   sample.Text,
+		ExecutionTime:           fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
+		User:                    sample.Session.LoginName,
+		IsBlocker:               sample.Blocker,
+		IsWaiter:                sample.Blocked,
+		BlockingTime:            blockTime,
+		BlockDetails:            blockDetails,
+		WaitEvent:               sample.WaitInfo.WaitType,
+		Database:                sample.Db.DatabaseName,
+		SampleID:                sample.Id,
+		SnapID:                  sample.SnapInfo.Id,
+		SQLHandle:               sample.SqlHandle,
+		PlanHandle:              sample.PlanHandle,
+		Status:                  sample.Status,
+		QueryHash:               sample.QueryHash,
+		SessionLoginTime:        sample.Session.LoginTime.AsTime(),
+		SessionHost:             sample.Session.Host,
+		SessionClientIp:         sample.Session.ClientIp,
+		SessionStatus:           sample.Session.Status,
+		SessionProgramName:      sample.Session.ProgramName,
+		SessionLastRequestStart: sample.Session.LastRequestStart.AsTime(),
+		SessionLastRequestEnd:   sample.Session.LastRequestEnd.AsTime(),
+	}
+	return dSample, nil
+}
+
+func nodeFromProto(root *dbmv1.BlockChain_BlockingNode, i int) (domain.BlockingNode, error) {
+	ds, err := protoSampleToDomain(root.QuerySample)
+	if err != nil {
+		return domain.BlockingNode{}, err
+	}
+	childNodes := make([]domain.BlockingNode, len(root.ChildNodes))
+	for j, child := range root.ChildNodes {
+		cn, err2 := nodeFromProto(child, i+1)
+		if err2 != nil {
+			return domain.BlockingNode{}, err2
+		}
+		childNodes[j] = cn
+	}
+	node := domain.BlockingNode{
+		QuerySample: ds,
+		ChildNodes:  childNodes,
+		Level:       i,
+	}
+	return node, nil
 }
 
 // Add this method to handle queries from nested datasource

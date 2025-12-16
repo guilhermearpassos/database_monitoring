@@ -82,38 +82,38 @@ type Snapshot struct {
 
 // QuerySample represents a query sample from a snapshot
 type QuerySample struct {
-	SID                     int
-	Query                   string
-	ExecutionTime           string
-	User                    string
-	IsBlocker               bool
-	IsWaiter                bool
-	BlockingTime            string
-	BlockDetails            string
-	WaitEvent               string
-	Database                string
-	SampleID                string
-	SnapID                  string
-	SQLHandle               string
-	PlanHandle              string
-	Status                  string
-	QueryHash               string
-	SessionLoginTime        time.Time
-	SessionHost             string
-	SessionStatus           string
-	SessionProgramName      string
-	SessionLastRequestStart time.Time
-	SessionLastRequestEnd   time.Time
-	SessionClientIp         string
+	SID                     int       `json:"sid"`
+	Query                   string    `json:"query"`
+	ExecutionTime           string    `json:"execution_time"`
+	User                    string    `json:"user"`
+	IsBlocker               bool      `json:"is_blocker"`
+	IsWaiter                bool      `json:"is_waiter"`
+	BlockingTime            string    `json:"blocking_time"`
+	BlockDetails            string    `json:"block_details"`
+	WaitEvent               string    `json:"wait_event"`
+	Database                string    `json:"database"`
+	SampleID                string    `json:"sample_id"`
+	SnapID                  string    `json:"snap_id"`
+	SQLHandle               string    `json:"sql_handle"`
+	PlanHandle              string    `json:"plan_handle"`
+	Status                  string    `json:"status"`
+	QueryHash               string    `json:"query_hash"`
+	SessionLoginTime        time.Time `json:"session_login_time"`
+	SessionHost             string    `json:"session_host"`
+	SessionStatus           string    `json:"session_status"`
+	SessionProgramName      string    `json:"session_program_name"`
+	SessionLastRequestStart time.Time `json:"session_last_request_start"`
+	SessionLastRequestEnd   time.Time `json:"session_last_request_end"`
+	SessionClientIp         string    `json:"session_client_ip"`
 }
 
 type BlockingNode struct {
-	QuerySample QuerySample
-	ChildNodes  []BlockingNode
-	Level       int // Added for template rendering
+	QuerySample QuerySample    `json:"query_sample"`
+	ChildNodes  []BlockingNode `json:"child_nodes"`
+	Level       int            `json:"level"` // Added for template rendering
 }
 type BlockChain struct {
-	Roots []BlockingNode
+	Roots []BlockingNode `json:"roots"`
 }
 
 type QueryDetailsData struct {
