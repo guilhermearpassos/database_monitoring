@@ -1,9 +1,10 @@
 package converters
 
 import (
+	"time"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
-	"time"
 )
 
 func DatabaseSnapshotToDomain(p *dbmv1.DBSnapshot) common_domain.DataBaseSnapshot {
@@ -79,6 +80,7 @@ func QueryMetricToDomain(metric *dbmv1.QueryMetric) (*common_domain.QueryMetric,
 		LastElapsedTime:   time.Duration(metric.LastElapsedTimeMicros) * time.Microsecond,
 		Counters:          metric.Counters,
 		Rates:             metric.Rates,
+		CollectionTime:    metric.GetCollectedAt().AsTime(),
 	}, nil
 }
 

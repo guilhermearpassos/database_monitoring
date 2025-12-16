@@ -4,6 +4,7 @@ import {DataQuery} from '@grafana/schema';
 export interface MyQuery extends DataQuery {
     database?: string;
     snapshotID?: string;
+    queryHash?: string;
     // Add other query parameters as needed
 }
 

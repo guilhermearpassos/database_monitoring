@@ -284,12 +284,16 @@ func (s GRPCServer) GetQueryMetricsTimeSeries(ctx context.Context, in *dbmv1.Get
 		return nil, err
 	}
 
-	protoM := make([]*dbmv1.QueryMetric, len(ret))
-	for i, metric := range ret {
-		protoM[i], err = converters.QueryMetricToProto(metric)
+	protoM := make([]*dbmv1.QueryMetric, 0, len(ret))
+	for _, metric := range ret {
+		pm, err := converters.QueryMetricToProto(metric)
 		if err != nil {
 			return nil, err
 		}
+		if pm == nil {
+			continue
+		}
+		protoM = append(protoM, pm)
 	}
 	return &dbmv1.GetQueryMetricsTimeSeriesResponse{Metrics: protoM}, nil
 }

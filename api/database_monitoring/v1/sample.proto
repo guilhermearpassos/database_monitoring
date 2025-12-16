@@ -73,4 +73,5 @@ message QueryMetric {
   int64 last_elapsed_time_micros = 5;
   map<string, int64> counters = 6;
   map<string,double> rates = 7;
+  google.protobuf.Timestamp collected_at = 8;
 }

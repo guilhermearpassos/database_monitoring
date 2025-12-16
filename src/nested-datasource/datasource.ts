@@ -48,6 +48,7 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
                     console.log(target.snapshotID)
                     console.log(getTemplateSrv().getVariables())
                     target.snapshotID = getTemplateSrv().replace(target.snapshotID)
+                    target.queryHash = getTemplateSrv().replace(target.queryHash)
                     console.log(target.snapshotID)
                     return {
                         ...target,

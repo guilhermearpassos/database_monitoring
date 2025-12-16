@@ -595,6 +595,7 @@ type QueryMetric struct {
 	LastElapsedTimeMicros int64                  `protobuf:"varint,5,opt,name=last_elapsed_time_micros,json=lastElapsedTimeMicros,proto3" json:"last_elapsed_time_micros,omitempty"`
 	Counters              map[string]int64       `protobuf:"bytes,6,rep,name=counters,proto3" json:"counters,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	Rates                 map[string]float64     `protobuf:"bytes,7,rep,name=rates,proto3" json:"rates,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	CollectedAt           *timestamp.Timestamp   `protobuf:"bytes,8,opt,name=collected_at,json=collectedAt,proto3" json:"collected_at,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -678,6 +679,13 @@ func (x *QueryMetric) GetRates() map[string]float64 {
 	return nil
 }
 
+func (x *QueryMetric) GetCollectedAt() *timestamp.Timestamp {
+	if x != nil {
+		return x.CollectedAt
+	}
+	return nil
+}
+
 var File_database_monitoring_v1_sample_proto protoreflect.FileDescriptor
 
 const file_database_monitoring_v1_sample_proto_rawDesc = "" +
@@ -741,7 +749,7 @@ const file_database_monitoring_v1_sample_proto_rawDesc = "" +
 	"\twait_type\x18\x01 \x01(\tR\bwaitType\x12\x1b\n" +
 	"\twait_time\x18\x02 \x01(\x03R\bwaitTime\x12$\n" +
 	"\x0elast_wait_type\x18\x03 \x01(\tR\flastWaitType\x12#\n" +
-	"\rwait_resource\x18\x04 \x01(\tR\fwaitResource\"\x85\x04\n" +
+	"\rwait_resource\x18\x04 \x01(\tR\fwaitResource\"\xc4\x04\n" +
 	"\vQueryMetric\x12\x1d\n" +
 	"\n" +
 	"query_hash\x18\x01 \x01(\tR\tqueryHash\x12\x12\n" +
@@ -750,7 +758,8 @@ const file_database_monitoring_v1_sample_proto_rawDesc = "" +
 	"\x13last_execution_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x11lastExecutionTime\x127\n" +
 	"\x18last_elapsed_time_micros\x18\x05 \x01(\x03R\x15lastElapsedTimeMicros\x12M\n" +
 	"\bcounters\x18\x06 \x03(\v21.database_monitoring.v1.QueryMetric.CountersEntryR\bcounters\x12D\n" +
-	"\x05rates\x18\a \x03(\v2..database_monitoring.v1.QueryMetric.RatesEntryR\x05rates\x1a;\n" +
+	"\x05rates\x18\a \x03(\v2..database_monitoring.v1.QueryMetric.RatesEntryR\x05rates\x12=\n" +
+	"\fcollected_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\vcollectedAt\x1a;\n" +
 	"\rCountersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a8\n" +
@@ -800,11 +809,12 @@ var file_database_monitoring_v1_sample_proto_depIdxs = []int32{
 	10, // 11: database_monitoring.v1.QueryMetric.last_execution_time:type_name -> google.protobuf.Timestamp
 	8,  // 12: database_monitoring.v1.QueryMetric.counters:type_name -> database_monitoring.v1.QueryMetric.CountersEntry
 	9,  // 13: database_monitoring.v1.QueryMetric.rates:type_name -> database_monitoring.v1.QueryMetric.RatesEntry
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	10, // 14: database_monitoring.v1.QueryMetric.collected_at:type_name -> google.protobuf.Timestamp
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_database_monitoring_v1_sample_proto_init() }

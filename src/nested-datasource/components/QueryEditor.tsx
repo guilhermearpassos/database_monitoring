@@ -35,7 +35,13 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
 
                     <Combobox
                         width={"auto"}
-                        options={[{label: "chart", value: "chart"}, {label: "snapshot-list", value: "snapshot-list"}, {label: "snapshot", value: "snapshot"}, {label: "metrics", value: "metrics"}]}
+                        options={[
+                            {label: "chart", value: "chart"},
+                            {label: "snapshot-list", value: "snapshot-list"},
+                            {label: "snapshot", value: "snapshot"},
+                            {label: "metrics", value: "metrics"},
+                            {label: "metrics_series", value: "metrics_series"}
+                        ]}
                         value={query.queryType}
                         onChange={onQueryTypeChange}
                         placeholder="Select query type"
@@ -58,6 +64,15 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                             value={query.snapshotID}
                             onChange={event => {onChange({...query, snapshotID: event.currentTarget.value || ''})}}
                             placeholder="Select snapshot"/>
+                    </InlineField>
+                )}
+
+                {(query.queryType==="metrics_series") && (
+                    <InlineField label="Query Hash">
+                        <Input
+                            value={query.queryHash}
+                            onChange={event => {onChange({...query, queryHash: event.currentTarget.value || ''})}}
+                            placeholder=""/>
                     </InlineField>
                 )}
 

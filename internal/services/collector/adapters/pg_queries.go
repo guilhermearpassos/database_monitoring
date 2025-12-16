@@ -474,7 +474,9 @@ and qss.sql_handle = $4
 		if err2 != nil {
 			return nil, fmt.Errorf("converting query stat: %w", err)
 		}
-		qMetric.CollectionTime = collectedAt
+		if qMetric.CollectionTime.IsZero() || qMetric.CollectionTime.Year() == 1970 {
+			qMetric.CollectionTime = collectedAt
+		}
 		queryMetric = append(queryMetric, qMetric)
 	}
 	if err2 := rows.Err(); err2 != nil {

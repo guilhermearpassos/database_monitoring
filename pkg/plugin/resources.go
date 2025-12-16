@@ -291,6 +291,9 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 		case "metrics":
 			res := a.queryMetrics(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
+		case "metrics_series":
+			res := a.queryMetricsTimeSeries(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
 		}
 	}
 
@@ -485,6 +488,7 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 	waitEvents := make([]string, 0, size)
 	databases := make([]string, 0, size)
 	blockingOrSelf := make([]string, 0, size)
+	lockStatus := make([]string, 0, size)
 	for _, sample := range r.GetSnapshot().GetSamples() {
 		ids = append(ids, sample.Id)
 		sessionIDs = append(sessionIDs, sample.Session.SessionId)
@@ -500,22 +504,37 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 		}
 		blockingOrSelf = append(blockingOrSelf, bos)
 		impactText := ""
+		ls := ""
 		if sample.Blocked {
 			impactText += fmt.Sprintf("blocked by %s ", sample.BlockInfo.BlockedBy)
+			ls = `<span style="color:#CCCCCC">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+  <circle cx="12" cy="12" r="10"></circle>
+  <polyline points="12 6 12 12 16 14"></polyline>
+</svg>
+</span>`
 		}
 		if sample.Blocker {
 			if impactText != "" {
 				impactText += "| "
 			}
 			impactText += fmt.Sprintf("%d waiting", len(sample.BlockInfo.BlockedSessions))
+			ls = `
+<span style="color:#FF0000">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+  <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+</svg>
 
+</span>`
 		}
 		blockingImpact = append(blockingImpact, impactText)
+		lockStatus = append(lockStatus, ls)
 	}
 	frame := data.NewFrame("snapshots",
-		data.NewField("bsid", nil, blockingOrSelf),
-		data.NewField("sampleID", nil, ids),
+		data.NewField("", nil, lockStatus),
 		data.NewField("sessionID", nil, sessionIDs),
+		data.NewField("sampleID", nil, ids),
 		data.NewField("text", nil, text),
 		data.NewField("Elapsed", nil, durations),
 		data.NewField("Blocking Impact", nil, blockingImpact),
@@ -592,6 +611,71 @@ func (a *App) queryMetrics(ctx context.Context, pCtx backend.PluginContext, quer
 		data.NewField("lastExecutionTime", nil, lastExecutionTime),
 		data.NewField("queryHash", nil, queryHash),
 		data.NewField("databaseName", nil, databaseName),
+		data.NewField("executionCount", nil, executionCount),
+	)
+	for k, rate := range rates {
+		frame.Fields = append(frame.Fields, data.NewField(k, nil, rate))
+
+	}
+
+	// Set the RefID to match the query
+	frame.RefID = query.RefID
+
+	// Add metadata for proper visualization
+	frame.Meta = &data.FrameMeta{
+		Type: data.FrameTypeTimeSeriesWide,
+	}
+
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+
+	response := backend.DataResponse{}
+	q := struct {
+		Database string `json:"database"`
+		Handle   string `json:"queryHash"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	timeRange := query.TimeRange
+	from := timeRange.From
+	to := timeRange.To
+	resp, err := a.client.GetQueryMetricsTimeSeries(ctx, &dbmv1.GetQueryMetricsTimeSeriesRequest{
+		Start:     timestamppb.New(from),
+		End:       timestamppb.New(to),
+		Host:      q.Database,
+		SqlHandle: q.Handle,
+		Interval:  "5m",
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	collectedAt := make([]time.Time, 0, len(resp.GetMetrics()))
+	executionCount := make([]float64, 0, len(resp.GetMetrics()))
+	rates := make(map[string][]float64)
+	for _, m := range resp.GetMetrics() {
+		collectedAt = append(collectedAt, m.GetCollectedAt().AsTime())
+
+		execCount, ok := m.Counters["executionCount"]
+		executionCount = append(executionCount, float64(execCount))
+		if ok && execCount != 0 {
+			for k, v := range m.Counters {
+				if !strings.HasPrefix(k, "total") {
+					continue
+				}
+				avgName := strings.Replace(k, "total", "avg", 1)
+				rates[avgName] = append(rates[avgName], float64(v)/float64(execCount))
+			}
+		}
+	}
+
+	frame := data.NewFrame("metrics",
+		data.NewField("time", nil, collectedAt),
 		data.NewField("executionCount", nil, executionCount),
 	)
 	for k, rate := range rates {

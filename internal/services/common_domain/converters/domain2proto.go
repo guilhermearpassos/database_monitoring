@@ -82,6 +82,7 @@ func QueryMetricToProto(metric *common_domain.QueryMetric) (*dbmv1.QueryMetric, 
 		LastElapsedTimeMicros: int64(metric.LastElapsedTime),
 		Counters:              metric.Counters,
 		Rates:                 metric.Rates,
+		CollectedAt:           timestamppb.New(metric.CollectionTime),
 	}, nil
 }
 
