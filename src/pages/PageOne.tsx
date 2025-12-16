@@ -29,7 +29,7 @@ import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
 import {MyGraph} from "./graph";
 import {NestedTablesWithEventBus} from "./nested_table";
 import {addWaitTypeHTMLColumn} from "./waitTypeField";
-import {QueryDetails} from "../components/QueryDetails/Details";
+import {QueryDetailsComponent} from "../components/QueryDetails/Details";
 
 const getStyles = (theme: GrafanaTheme2) => ({
     container: css`
@@ -490,7 +490,7 @@ const PageOne = () => {
                         setSampleID(null)
                     }} size="lg">
                         <div className={styles.section}>
-                            <QueryDetails snapID={sampleID.snapId} sampleID={sampleID.sampleID}/>
+                            <QueryDetailsComponent snapID={sampleID.snapId} sampleID={sampleID.sampleID}/>
                         </div>
                     </Drawer>
                 )}</div>

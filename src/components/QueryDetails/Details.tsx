@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from "react";
-import {ExecutionPlan, ExecutionPlanViewer, ParsedExecutionPlan} from "../ExecutionPlanTree/plan";
+import {ExecutionPlanViewer, ParsedExecutionPlan} from "../ExecutionPlanTree/plan";
 import {Card} from "@grafana/ui";
 import {lastValueFrom, Observable} from "rxjs";
 import {FetchResponse, getBackendSrv} from "@grafana/runtime";
@@ -11,7 +11,7 @@ interface QueryDetails {
 }
 
 
-export const QueryDetails: React.FC<{ sampleID: string, snapID: string }> = ({sampleID, snapID}) => {
+export const QueryDetailsComponent: React.FC<{ sampleID: string, snapID: string }> = ({sampleID, snapID}) => {
 
     const [queryDetails, setQueryDetails] = useState<QueryDetails | null>(null);
     const [sample] = useState<string>(sampleID);

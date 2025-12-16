@@ -6,7 +6,9 @@ import { format } from 'sql-formatter';
 
 // Format SQL with sql-formatter library
 const formatSQL = (sql: string): string => {
-  if (!sql) return '';
+  if (!sql) {
+      return '';
+  }
 
   try {
     return format(sql, {
