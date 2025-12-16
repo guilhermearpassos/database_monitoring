@@ -486,9 +486,13 @@ from qstats_aggr_split qas
 			"totalSpills":                  totalSpills,
 		}
 		S.qCountMu.Lock()
-		lastQueryCounters := S.lastQueryCountersByHost[server.Host]
+		lastQueryCounters, found := S.lastQueryCountersByHost[server.Host]
+		if !found {
+			lastQueryCounters = make(map[string]map[string]int64)
+		}
 		lastCounters, ok := lastQueryCounters[string(queryHash)]
 		lastQueryCounters[string(queryHash)] = counters
+		S.lastQueryCountersByHost[server.Host] = lastQueryCounters
 		S.qCountMu.Unlock()
 		digestedCounters := counters
 		if ok {

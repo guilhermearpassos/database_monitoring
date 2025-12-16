@@ -239,6 +239,7 @@ order by q.collected_at desc
 			for k1, v1 := range m.Counters {
 				rates[k1] += v1
 			}
+			base.Counters = rates
 		}
 		retList = append(retList, base)
 	}

@@ -3,6 +3,9 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
@@ -14,8 +17,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"slices"
-	"time"
 )
 
 type GRPCIngestionClient struct {
@@ -33,8 +34,10 @@ func (c GRPCIngestionClient) IngestMetrics(ctx context.Context, metrics []*commo
 	ctx, span := c.trace.Start(ctx, "GRPCIngestionClient.IngestMetrics")
 	protoMetrics := make([]*dbmv1.QueryMetric, len(metrics))
 	defer func() {
-		span.RecordError(err)
-		span.SetStatus(otelcodes.Error, err.Error())
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(otelcodes.Error, err.Error())
+		}
 		span.End()
 	}()
 	for i, m := range metrics {
