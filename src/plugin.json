@@ -15,7 +15,24 @@
       "small": "img/logo.svg",
       "large": "img/logo.svg"
     },
-    "screenshots": [],
+    "screenshots": [
+      {
+        "name": "chart and snapshots list",
+        "path": "docs/img.png"
+      },
+      {
+        "name": "query samples data",
+        "path": "docs/img_1.png"
+      },
+      {
+        "name": "query details",
+        "path": "docs/img_3.png"
+      },
+      {
+        "name": "query details with warning",
+        "path": "docs/img_2.png"
+      }
+    ],
     "version": "%VERSION%",
     "updated": "%TODAY%"
   },

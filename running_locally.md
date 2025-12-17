@@ -5,7 +5,7 @@ docker compose up
 ```
 
 this will spin up:
-1. a posgres instance to use for sqlsights storage
+1. a postgres instance to use for sqlsights storage
 2. otel-collector and jaeger for tracing (TODO: replace with tempo on grafana image, like lgtm)
 3. a grafana instance with the sqlsights plugin installed, already with datasource configured and example dashboard
 4. a sql server instance to be monitored
