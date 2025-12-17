@@ -2,7 +2,7 @@
 
 max_samples_batch_size=10000
 get_known_plan_page_size=10
-collect_metrics=false
+collect_metrics=true
 # Collector configuration section
 [collector]
 url = "localhost:7080"

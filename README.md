@@ -24,6 +24,8 @@ It includes a datasource plugin bundled and will include pre-built pages for eas
 
 # Grafana Sqlsights datasource
 ## Configuration
+for now, configure the app plugin with host:port to your sqlsights instance
+![img_4.png](docs/img_4.png)
 
 ## Query types
 
