@@ -5,6 +5,7 @@ export interface MyQuery extends DataQuery {
     database?: string;
     snapshotID?: string;
     queryHash?: string;
+    metrics?: string[];
     // Add other query parameters as needed
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -634,8 +635,9 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 
 	response := backend.DataResponse{}
 	q := struct {
-		Database string `json:"database"`
-		Handle   string `json:"queryHash"`
+		Database string   `json:"database"`
+		Handle   string   `json:"queryHash"`
+		Metrics  []string `json:"metrics"`
 	}{}
 	if err := json.Unmarshal(query.JSON, &q); err != nil {
 		response.Error = err
@@ -676,11 +678,14 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 
 	frame := data.NewFrame("metrics",
 		data.NewField("time", nil, collectedAt),
-		data.NewField("executionCount", nil, executionCount),
 	)
+	if len(q.Metrics) == 0 || slices.Contains(q.Metrics, "executionCount") {
+		frame.Fields = append(frame.Fields, data.NewField("executionCount", nil, executionCount))
+	}
 	for k, rate := range rates {
-		frame.Fields = append(frame.Fields, data.NewField(k, nil, rate))
-
+		if len(q.Metrics) == 0 || slices.Contains(q.Metrics, k) {
+			frame.Fields = append(frame.Fields, data.NewField(k, nil, rate))
+		}
 	}
 
 	// Set the RefID to match the query

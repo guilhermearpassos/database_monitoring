@@ -1,13 +1,12 @@
-
-import React, { useState, useEffect } from 'react';
-import { QueryEditorProps } from '@grafana/data';
-import {Combobox, InlineField, InlineFieldRow, ComboboxOption, Input} from '@grafana/ui';
-import { DataSource } from '../datasource';
-import { MyDataSourceOptions, MyQuery } from '../types';
+import React, {useState, useEffect} from 'react';
+import {QueryEditorProps} from '@grafana/data';
+import {Combobox, InlineField, InlineFieldRow, ComboboxOption, Input, MultiCombobox} from '@grafana/ui';
+import {DataSource} from '../datasource';
+import {MyDataSourceOptions, MyQuery} from '../types';
 
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 
-export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
+export function QueryEditor({query, onChange, onRunQuery, datasource}: Props) {
     const [databaseOptions, setDatabaseOptions] = useState<ComboboxOption[]>([]);
 
     // Load database options on component mount
@@ -16,15 +15,15 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     }, [datasource]);
 
 
-    const onDatabaseChange = (value: ComboboxOption<string|number> | null) => {
+    const onDatabaseChange = (value: ComboboxOption<string | number> | null) => {
         const databaseValue = value?.value ? String(value.value) : undefined;
 
-        onChange({ ...query, database: databaseValue });
+        onChange({...query, database: databaseValue});
     };
-    const onQueryTypeChange = (value: ComboboxOption<string|number> | null) => {
+    const onQueryTypeChange = (value: ComboboxOption<string | number> | null) => {
         const databaseValue = value?.value ? String(value.value) : undefined;
 
-        onChange({ ...query, queryType: databaseValue });
+        onChange({...query, queryType: databaseValue});
     };
 
 
@@ -58,23 +57,52 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
                         minWidth={20}
                         isClearable={true}/>
                 </InlineField>
-                {(query.queryType==="snapshot") && (
+                {(query.queryType === "snapshot") && (
                     <InlineField label="Snapshot ID">
                         <Input
                             value={query.snapshotID}
-                            onChange={event => {onChange({...query, snapshotID: event.currentTarget.value || ''})}}
+                            onChange={event => {
+                                onChange({...query, snapshotID: event.currentTarget.value || ''})
+                            }}
                             placeholder="Select snapshot"/>
                     </InlineField>
                 )}
 
-                {(query.queryType==="metrics_series") && (
+                {(query.queryType === "metrics_series") && (
                     <InlineField label="Query Hash">
                         <Input
                             value={query.queryHash}
-                            onChange={event => {onChange({...query, queryHash: event.currentTarget.value || ''})}}
+                            onChange={event => {
+                                onChange({...query, queryHash: event.currentTarget.value || ''})
+                            }}
                             placeholder=""/>
                     </InlineField>
                 )}
+                <InlineField label="Metrics">
+                    <MultiCombobox
+                        minWidth={20}
+                        onChange={option => onChange({...query, metrics: option.map(value => value.value)})}
+                        options={[
+                            {label: "executionCount", value: "executionCount"},
+                            {label: "avgElapsedTime", value: "avgElapsedTime"},
+                            {label: "avgWorkerTime", value: "avgWorkerTime"},
+                            {label: "avgRows", value: "avgRows"},
+                            {label: "avgColumnstoreSegmentSkips", value: "avgColumnstoreSegmentSkips"},
+                            {label: "avgReservedThreads", value: "avgReservedThreads"},
+                            {label: "avgSpills", value: "avgSpills"},
+                            {label: "avgGrantKb", value: "avgGrantKb"},
+                            {label: "avgDop", value: "avgDop"},
+                            {label: "avgLogicalReads", value: "avgLogicalReads"},
+                            {label: "avgUsedThreads", value: "avgUsedThreads"},
+                            {label: "avgPhysicalReads", value: "avgPhysicalReads"},
+                            {label: "avgClrTime", value: "avgClrTime"},
+                            {label: "avgUsedGrantKb", value: "avgUsedGrantKb"},
+                            {label: "avgColumnstoreSegmentReads", value: "avgColumnstoreSegmentReads"},
+                            {label: "avgLogicalWrites", value: "avgLogicalWrites"},
+                        ]}
+                        value={query.metrics}
+                    />
+                </InlineField>
 
             </InlineFieldRow>
             {/* Add other query fields as needed */}
