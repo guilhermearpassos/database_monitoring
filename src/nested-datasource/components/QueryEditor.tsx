@@ -80,6 +80,7 @@ export function QueryEditor({query, onChange, onRunQuery, datasource}: Props) {
                 )}
                 <InlineField label="Metrics">
                     <MultiCombobox
+                        width={"auto"}
                         minWidth={20}
                         onChange={option => onChange({...query, metrics: option.map(value => value.value)})}
                         options={[

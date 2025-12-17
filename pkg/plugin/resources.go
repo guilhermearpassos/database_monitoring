@@ -92,12 +92,19 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err2.Error(), http.StatusInternalServerError)
 		return
 	}
+	sample, err := protoSampleToDomain(resp.QuerySample)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	m, err := json.Marshal(struct {
-		Plan  domain.ParsedExecutionPlan `json:"plan"`
-		Chain domain.BlockChain          `json:"blocking_chain"`
+		Plan   domain.ParsedExecutionPlan `json:"plan"`
+		Chain  domain.BlockChain          `json:"blocking_chain"`
+		Sample domain.QuerySample         `json:"query_sample"`
 	}{
-		Plan:  plan,
-		Chain: blockChain,
+		Plan:   plan,
+		Chain:  blockChain,
+		Sample: sample,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -646,12 +653,19 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 	timeRange := query.TimeRange
 	from := timeRange.From
 	to := timeRange.To
+	interval := "5m"
+	if to.Sub(from) < 15*time.Minute {
+		interval = "1m"
+	}
+	if to.Sub(from) > 15*time.Hour {
+		interval = "30m"
+	}
 	resp, err := a.client.GetQueryMetricsTimeSeries(ctx, &dbmv1.GetQueryMetricsTimeSeriesRequest{
 		Start:     timestamppb.New(from),
 		End:       timestamppb.New(to),
 		Host:      q.Database,
 		SqlHandle: q.Handle,
-		Interval:  "5m",
+		Interval:  interval,
 	})
 	if err != nil {
 		response.Error = err

@@ -1,8 +1,9 @@
 import React from 'react';
-import { css } from '@emotion/css';
-import { useTheme2, Tooltip } from '@grafana/ui';
-import { GrafanaTheme2 } from '@grafana/data';
-import { format } from 'sql-formatter';
+import {css} from '@emotion/css';
+import {Tooltip, useTheme2} from '@grafana/ui';
+import {GrafanaTheme2} from '@grafana/data';
+import {format} from 'sql-formatter';
+import {QuerySample} from "./types";
 
 // Format SQL with sql-formatter library
 const formatSQL = (sql: string): string => {
@@ -23,15 +24,6 @@ const formatSQL = (sql: string): string => {
     return sql;
   }
 };
-
-interface QuerySample {
-    sid: string;
-    query: string;
-    status: string;
-    execution_time: string;
-    is_blocker: boolean;
-    sample_id?: string;
-}
 
 interface BlockingNode {
     level: number;

@@ -136,7 +136,7 @@ const PageOne = () => {
         const initDatasource = async () => {
             try {
                 // Get the first available datasource of our type
-                const ds = await getDataSourceSrv().get('guilhermearpassos-sqlsights-datasource');
+                const ds = await getDataSourceSrv().get({type:'guilhermearpassos-sqlsights-datasource'});
                 setDatasource(ds);
             } catch (err) {
                 console.error('Failed to initialize datasource:', err);
@@ -490,7 +490,12 @@ const PageOne = () => {
                         setSampleID(null)
                     }} size="lg">
                         <div className={styles.section}>
-                            <QueryDetailsComponent snapID={sampleID.snapId} sampleID={sampleID.sampleID}/>
+                            <QueryDetailsComponent
+                                snapID={sampleID.snapId}
+                                sampleID={sampleID.sampleID}
+                                timeRange={chartTimeRange}
+                                server={selectedServer?.value??''}
+                            />
                         </div>
                     </Drawer>
                 )}</div>
