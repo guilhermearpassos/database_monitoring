@@ -21,21 +21,21 @@ this will spin up:
 navigate to http://localhost:3000/a/guilhermearpassos-sqlsights-app/one
 ### chart and snapshots list
 select on the combobox a server to inspect
-![img.png](docs/img.png)
+![img.png](src/docs/img.png)
 1. dragging/boxing the chart applies/changes the timerange selection in the top right
 2. the table contains headline data line # of connections, blocking and waiting connections and wait times
 2. clicking on the expand symbol on any snapshot row will open the snapshot, fetching the query samples the were running at that moment
 
 ### query samples data
 query samples session by session at that timestamp
-![img_1.png](docs/img_1.png)
+![img_1.png](src/docs/img_1.png)
 1. basic data to find what was running on the server at that moment, which queries locked which, time elapsed, waiting reason, database, user
 2. clicking on the sampleID values will open a drawer with some more details
 
 ### query details
 more details on a query sample
-![img_2.png](docs/img_2.png)
-![img_3.png](docs/img_3.png)
+![img_2.png](src/docs/img_2.png)
+![img_3.png](src/docs/img_3.png)
 1. blocking chain, if any (if that session participates in a blocking chain, it will be rendered with all other sessions involved)
 2. execution plan, if available (if sqlsights has the execution plan for that sample, it will render it, also allowing to easily extract the raw xml plan)
 3. warnings, if any (warnings extracted from the execution plan, more to be added, like slleping sessions in blocking-chain)

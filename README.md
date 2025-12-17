@@ -25,24 +25,24 @@ It includes a datasource plugin bundled and will include pre-built pages for eas
 # Grafana Sqlsights datasource
 ## Configuration
 for now, configure the app plugin with host:port to your sqlsights instance
-![img_4.png](docs/img_4.png)
+![img_4.png](src/docs/img_4.png)
 
 ## Query types
 
 ### Block chart
 
 queries-by-wait-type chart data
-![chart.png](docs/chart.png)
+![chart.png](src/docs/chart.png)
 ### Snapshots
 lists snapshot summaries
-![snapshot-list.png](docs/snapshot-list.png)
+![snapshot-list.png](src/docs/snapshot-list.png)
 ### Snapshot Samples
 given a snapshot id, shows the query samples that were running at that time
-![snap-samples.png](docs/snap-samples.png)
+![snap-samples.png](src/docs/snap-samples.png)
 
 ## Example dashboard
 dashboard combining the queries, with a data link on snapshot id so we can navigate between the snapshots
-![dash.png](docs/dash.png)
+![dash.png](src/docs/dash.png)
 
 ## Configuration
 
