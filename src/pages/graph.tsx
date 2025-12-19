@@ -19,7 +19,8 @@ import {
     AbsoluteTimeRange, dateTime,
 } from "@grafana/data";
 import {PanelRenderer} from "@grafana/runtime";
-import React, {useMemo, useState} from "react";
+import React, {useEffect, useMemo, useState} from "react";
+import {getWaitEventColorNoDefault} from "../utils/wait_event_colors";
 
 // export const GRAPH_STYLES = ['lines', 'bars', 'points', 'stacked_lines', 'stacked_bars'] as const;
 // export type GraphStyle = (typeof GRAPH_STYLES)[number];
@@ -78,32 +79,85 @@ export function MyGraph({
                             eventBus,
                             timeRange,
                             onTimeRangeChange,
-                            width = 800,
-                            height = 400,
                         }: Props) {
     const theme = useTheme2();
 
-    const [fieldConfig, setFieldConfig] = useState<FieldConfigSource<GraphFieldConfig>>({
-        defaults: {
-            min: undefined,
-            max: undefined,
-            unit: "short",
-            color: {
-                mode: FieldColorModeId.PaletteClassic,
-            },
-            custom: {
-                pointSize: 5,
-                drawStyle: GraphDrawStyle.Bars,
-                stacking: {
-                    mode: StackingMode.Normal,
-                    group: "A",
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [dimensions, setDimensions] = useState({ width: 800, height: 400});
+
+    // Update dimensions when container resizes
+    useEffect(() => {
+        if (!containerRef.current) {
+            return;
+        }
+
+        const resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                setDimensions({ width, height });
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, []);
+    // Store visibility overrides separately
+    const [visibilityOverrides, setVisibilityOverrides] = useState<FieldConfigSource<GraphFieldConfig>['overrides']>([]);
+
+    // Compute fieldConfig with colors based on data
+    const fieldConfig = useMemo<FieldConfigSource<GraphFieldConfig>>(() => {
+        // Build color overrides from data
+        const colorOverrides = [];
+        const missing: string[] = [];
+
+        if (data[0]?.fields) {
+            for (const field of data[0].fields) {
+                const color = getWaitEventColorNoDefault(field.name);
+                if (!color) {
+                    missing.push(field.name);
+                    continue;
+                }
+                colorOverrides.push({
+                    matcher: { id: "byName", options: field.name },
+                    properties: [
+                        {
+                            id: "color",
+                            value: {
+                                mode: "fixed",
+                                fixedColor: `rgba(${color})`,
+                            }
+                        }
+                    ]
+                });
+            }
+        }
+
+        if (missing.length > 0) {
+            console.warn("Missing colors for:", missing);
+        }
+
+        return {
+            defaults: {
+                min: undefined,
+                max: undefined,
+                unit: "short",
+                color: {
+                    mode: FieldColorModeId.PaletteClassic,
                 },
-                fillOpacity: 100,
-                axisSoftMin: 0,
+                custom: {
+                    pointSize: 5,
+                    drawStyle: GraphDrawStyle.Bars,
+                    stacking: {
+                        mode: StackingMode.Normal,
+                        group: "A",
+                    },
+                    fillOpacity: 100,
+                    axisSoftMin: 0,
+                },
             },
-        },
-        overrides: [],
-    });
+            overrides: [...colorOverrides, ...visibilityOverrides],
+        };
+    }, [data, visibilityOverrides]);
 
     const panelContext: PanelContext = useMemo(
         () => ({
@@ -114,19 +168,22 @@ export function MyGraph({
             canEditAnnotations: () => false,
             canDeleteAnnotations: () => false,
             eventsScope: "sqlsights-one",
-            // Enables box-select / zoom to call back into your app
             onChangeTimeRange: (range: TimeRange) => {
                 onTimeRangeChange?.(range);
             },
-
-            // Enables legend click-to-hide behavior
             onToggleSeriesVisibility: (label: string, mode: SeriesVisibilityChangeMode) => {
-                setFieldConfig((prev) => setSeriesHiddenInConfig(prev, label, mode));
+                setVisibilityOverrides((prev) => {
+                    const updated = setSeriesHiddenInConfig(
+                        { defaults: {}, overrides: prev },
+                        label,
+                        mode
+                    );
+                    return updated.overrides ?? [];
+                });
             },
         }),
         [eventBus, onTimeRangeChange]
     );
-
 //  useEffect(() => {
 //    if (!onTimeRangeChange) {
 //      return;
@@ -174,17 +231,19 @@ export function MyGraph({
         })
     };
     return (
+        <div ref={containerRef} style={{ width: '95%', height: '40vh' }}>
         <PanelContextProvider value={panelContext}>
             <PanelRenderer
                 title="My Graph"
                 pluginId="timeseries"
-                width={width}
-                height={height}
+                width={dimensions.width}
+                height={dimensions.height}
                 data={panelData}
                 fieldConfig={fieldConfig}
                 onChangeTimeRange={handleOnChangeTimeRange}
 
             />
         </PanelContextProvider>
+        </div>
     );
 }

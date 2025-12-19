@@ -63,7 +63,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
         font-weight: ${theme.typography.fontWeightMedium};
     `,
     chartContainer: css`
-        height: 400px;
+        height: 40vh;
         margin-bottom: ${theme.spacing(3)};
         border: 1px solid ${theme.colors.border.medium};
         border-radius: ${theme.shape.borderRadius()};
@@ -532,8 +532,6 @@ const PageOne = () => {
                                                         eventBus={panelEventBus}
                                                         timeRange={chartTimeRange}
                                                         onTimeRangeChange={handleChartTimeRangeChange}
-                                                        width={800}
-                                                        height={400}
                                                     />
                                                 )}
                                             </>

@@ -279,16 +279,16 @@ export const QueryDetailsComponent: React.FC<{
             {chartFrames && chartFrames.length && chartFrames[0].length && (<Card>
                 <Card.Heading>Executions over time</Card.Heading>
                 <Card.Description>
-                    <MyGraph
-                        data={chartFrames}
-                        loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
-                        eventBus={panelEventBus}
-                        timeRange={timeRange}
-                        onTimeRangeChange={range => {
-                        }}
-                        width={800}
-                        height={400}
-                    />
+                    <div style={{maxWidth: '50vw'}}>
+                        <MyGraph
+                            data={chartFrames}
+                            loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
+                            eventBus={panelEventBus}
+                            timeRange={timeRange}
+                            onTimeRangeChange={range => {
+                            }}
+                        />
+                    </div>
                 </Card.Description>
             </Card>)}
             {queryDetails && queryDetails.blocking_chain && (queryDetails.blocking_chain.roots.length > 0) && (

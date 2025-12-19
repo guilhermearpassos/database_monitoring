@@ -502,6 +502,18 @@ export function NestedTablesWithEventBus({
                     }
                 ],
             },
+            {
+                "matcher": {
+                    "id": "byName",
+                    "options": "text"
+                },
+                "properties": [
+                    {
+                        "id": "custom.width",
+                        "value": 750
+                    }
+                ]
+            }
             // {
             //     matcher: {id: 'byName', options: 'sessionID'},
             //     "properties": [
@@ -545,6 +557,9 @@ export function NestedTablesWithEventBus({
                             show: false,
                             countRows: false,
                         },
+
+                        enablePagination: false,
+                        wrapText: true,
                         frameIndex: 0,
                     }}
                     fieldConfig={fieldConfig1}

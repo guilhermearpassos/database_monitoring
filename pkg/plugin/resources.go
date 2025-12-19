@@ -654,7 +654,7 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 	from := timeRange.From
 	to := timeRange.To
 	interval := "5m"
-	if to.Sub(from) < 15*time.Minute {
+	if to.Sub(from) < 25*time.Minute {
 		interval = "1m"
 	}
 	if to.Sub(from) > 15*time.Hour {
