@@ -36,12 +36,13 @@ func (f *PlanFetcher) Run(ctx context.Context) {
 		ctx, span := f.trace.Start(ctx, "FetchPlansOnSnapTaken")
 		handles := snapTakenEvent.Snap.GetPlanHandles()
 		newHandles := make([]string, 0, len(handles))
-		if _, found := f.knownHandlesByServer[snapTakenEvent.Snap.SnapInfo.Server.Host]; !found {
+		if m, found := f.knownHandlesByServer[snapTakenEvent.Snap.SnapInfo.Server.Host]; (!found) || (len(m) == 0) {
 			known, err := f.app.Queries.GetKnownHandles.Handle(ctx, snapTakenEvent.Snap.SnapInfo.Server)
 			if err != nil {
 				fmt.Println(err)
 				span.SetStatus(otelcodes.Error, err.Error())
 				span.RecordError(err)
+				known = make(map[string]struct{})
 			}
 			f.knownHandlesByServer[snapTakenEvent.Snap.SnapInfo.Server.Host] = known
 		}

@@ -595,7 +595,7 @@ func (S SQLServerDataReader) GetPlanHandles(ctx context.Context, handles []strin
 
 func (S SQLServerDataReader) _batch_fetch_plan_handles(ctx context.Context, db *sqlx.DB, handles2 []interface{}, server common_domain.ServerMeta) (map[string]*common_domain.ExecutionPlan, error) {
 
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadUncommitted})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}

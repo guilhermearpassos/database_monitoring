@@ -50,7 +50,10 @@ dashboard combining the queries, with a data link on snapshot id so we can navig
 ## Contributing
 
 Got ideas or feedback? Your contributions help make this plugin better. Share your thoughts and code improvements on GitHub.
-
+## create new migration
+```shell
+migrate create -ext sql -dir sql/migrations/ <filename>
+```
 ## Creating PRs
 
 1. Clone the repository

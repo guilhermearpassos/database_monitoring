@@ -3,13 +3,14 @@ package background_agent
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain/events"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"go.opentelemetry.io/otel"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"time"
 )
 
 type MetricsCollector struct {
@@ -48,7 +49,7 @@ func (m MetricsCollector) Run(ctx context.Context, server common_domain.ServerMe
 	for {
 		err := m.TakeSnapshot(ctx, server)
 		if err != nil {
-			fmt.Printf("taking snapshot %s: %s", server.Host, err.Error())
+			fmt.Printf("taking snapshot %s: %s\n", server.Host, err.Error())
 		}
 		select {
 		case <-ctx.Done():

@@ -3,6 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	config2 "github.com/guilhermearpassos/database-monitoring/internal/common/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
@@ -17,10 +22,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
-	"net/http"
-	"os"
-	"os/signal"
-	"time"
 )
 
 var (
@@ -84,18 +85,18 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 		dbByHost[tgt.Alias] = db
 	}
 	reader := adapters.NewSQLServerDataReader(dbByHost)
-	router := events.NewEventRouter()
-	go router.StartMetrics(ctx)
-	a := app.NewApplication(reader, reader, adapters.NewGRPCIngestionClient(client), router)
-	pf := event_processors.NewPlanFetcher(*a)
-	mc := event_processors.NewPrometheusMetricsCollector()
-	sp := event_processors.NewDefaultSQLParser()
-	ld := event_processors.NewMetricsDetector(a, mc, sp)
-	pf.Register(router)
-	ld.Register(router)
-	go pf.Run(ctx)
-	go ld.Run(ctx)
 	for _, tgt := range config.TargetHosts {
+		router := events.NewEventRouter(tgt.Alias)
+		go router.StartMetrics(ctx)
+		a := app.NewApplication(reader, reader, adapters.NewGRPCIngestionClient(client), router)
+		pf := event_processors.NewPlanFetcher(*a)
+		mc := event_processors.NewPrometheusMetricsCollector()
+		sp := event_processors.NewDefaultSQLParser()
+		ld := event_processors.NewMetricsDetector(a, mc, sp)
+		pf.Register(router)
+		ld.Register(router)
+		go pf.Run(ctx)
+		go ld.Run(ctx)
 		startTarget(ctx, a, tgt, config.CollectMetrics)
 	}
 	<-ctx.Done()

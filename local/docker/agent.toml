@@ -37,4 +37,4 @@ enabled = true
 otlp.endpoint = 'otel-collector:4317'
 [telemetry.metrics]
 enabled = true
-host = 'localhost:9009'
+host = '0.0.0.0:9009'

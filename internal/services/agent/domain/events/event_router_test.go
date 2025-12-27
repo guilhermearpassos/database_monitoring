@@ -74,7 +74,7 @@ func TestEventRouter_Route(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewEventRouter()
+			r := NewEventRouter("")
 			for eventType, chs := range tt.receiversByType {
 				for i := 0; i < len(chs); i++ {
 					name := tt.chNames[eventType][i]

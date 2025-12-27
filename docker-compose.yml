@@ -23,7 +23,7 @@ services:
 
   load_gen:
 #    container_name: sqlsights-grpc
-    image: guilhermearpassos/sql-sight:v1.0.23
+    image: guilhermearpassos/sql-sight:v1.0.24
     build: .
 
     command:
@@ -36,7 +36,7 @@ services:
 
   migrate:
     container_name: sqlsights-migrate
-    image: guilhermearpassos/sql-sight:v1.0.23
+    image: guilhermearpassos/sql-sight:v1.0.24
     command:
       - "migrate"
       - "--pg-addr=postgres://postgres:example@postgres:5432/postgres?sslmode=disable"
@@ -46,7 +46,7 @@ services:
       - postgres
   collector:
     container_name: sqlsights-collector
-    image: guilhermearpassos/sql-sight:v1.0.23
+    image: guilhermearpassos/sql-sight:v1.0.24
     command:
       - "collector"
       - "--config=/collector.toml"
@@ -58,12 +58,14 @@ services:
 
   agent:
     container_name: sqlsights-agent
-    image: guilhermearpassos/sql-sight:v1.0.23
+    image: guilhermearpassos/sql-sight:v1.0.24
     command:
       - "agent"
       - "--config=/agent.toml"
     volumes:
       - "./local/docker/agent.toml:/agent.toml"
+    ports:
+      - "9009:9009"
     depends_on:
       - collector
       - sqlserver
@@ -71,7 +73,7 @@ services:
 
   grpc:
     container_name: sqlsights-grpc
-    image: guilhermearpassos/sql-sight:v1.0.23
+    image: guilhermearpassos/sql-sight:v1.0.24
 #    build: .
     command:
       - "grpc"
@@ -82,7 +84,7 @@ services:
       - migrate
 #
   ui:
-    image: guilhermearpassos/sql-sight:v1.0.23
+    image: guilhermearpassos/sql-sight:v1.0.24
     command:
       - "ui"
       - "--grpc-addr=grpc:8082"
