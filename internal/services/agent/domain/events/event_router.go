@@ -16,6 +16,9 @@ var (
 		Help:        "",
 		ConstLabels: nil,
 	}, []string{"eventType", "channelName", "target"})
+	register = sync.OnceFunc(func() {
+		prometheus.MustRegister(chSizeCounter)
+	})
 )
 
 type EventRouter struct {
@@ -43,9 +46,7 @@ func (r *EventRouter) Route(event Event) {
 	}
 }
 func (r *EventRouter) StartMetrics(ctx context.Context) {
-	sync.OnceFunc(func() {
-		prometheus.MustRegister(chSizeCounter)
-	})()
+	register()
 	t := time.NewTicker(10 * time.Second)
 	for {
 		select {
