@@ -95,8 +95,8 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 		ld := event_processors.NewMetricsDetector(a, mc, sp)
 		pf.Register(router)
 		ld.Register(router)
-		go pf.Run(ctx)
-		go ld.Run(ctx)
+		go pf.Run()
+		go ld.Run()
 		startTarget(ctx, a, tgt, config.CollectMetrics)
 	}
 	<-ctx.Done()

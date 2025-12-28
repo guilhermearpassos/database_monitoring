@@ -3,6 +3,7 @@ package event_processors
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain/events"
@@ -27,13 +28,13 @@ func NewPlanFetcher(app app.Application) *PlanFetcher {
 	}
 }
 
-func (f *PlanFetcher) Run(ctx context.Context) {
+func (f *PlanFetcher) Run() {
 	for ev := range f.in {
 		snapTakenEvent, ok := ev.(events.SampleSnapshotTaken)
 		if !ok {
 			continue
 		}
-		ctx, span := f.trace.Start(ctx, "FetchPlansOnSnapTaken")
+		ctx, span := f.trace.Start(ev.Context(), "FetchPlansOnSnapTaken")
 		handles := snapTakenEvent.Snap.GetPlanHandles()
 		newHandles := make([]string, 0, len(handles))
 		if m, found := f.knownHandlesByServer[snapTakenEvent.Snap.SnapInfo.Server.Host]; (!found) || (len(m) == 0) {
@@ -55,12 +56,14 @@ func (f *PlanFetcher) Run(ctx context.Context) {
 			span.End()
 			continue
 		}
-		plans, err := f.app.Queries.GetQueryPlans.Handle(ctx, newHandles, snapTakenEvent.Snap.SnapInfo.Server)
+		ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
+		plans, err := f.app.Queries.GetQueryPlans.Handle(ctx2, newHandles, snapTakenEvent.Snap.SnapInfo.Server)
 		if err != nil {
 			fmt.Println(err)
 			span.SetStatus(otelcodes.Error, err.Error())
 			span.RecordError(err)
 		}
+		cancel()
 		for k := range plans {
 			f.knownHandlesByServer[snapTakenEvent.Snap.SnapInfo.Server.Host][k] = struct{}{}
 		}

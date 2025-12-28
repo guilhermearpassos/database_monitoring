@@ -41,7 +41,7 @@ func (m SnapshotCollector) TakeSnapshot(ctx context.Context, server common_domai
 		if err != nil {
 			return fmt.Errorf("uploading metrics: %w", err)
 		}
-		m.app.EventRouter.Route(events.SampleSnapshotTaken{Snap: snap})
+		m.app.EventRouter.Route(events.SampleSnapshotTaken{Snap: snap, Ctx: ctx})
 	}
 	return nil
 }

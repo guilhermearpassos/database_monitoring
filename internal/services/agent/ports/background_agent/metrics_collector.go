@@ -40,7 +40,7 @@ func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain
 	if err != nil {
 		return fmt.Errorf("uploading metrics: %w", err)
 	}
-	m.app.EventRouter.Route(events.MetricsSnapshotTaken{Metrics: metrics})
+	m.app.EventRouter.Route(events.MetricsSnapshotTaken{Metrics: metrics, Ctx: ctx})
 	return nil
 }
 

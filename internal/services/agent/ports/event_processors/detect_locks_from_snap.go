@@ -1,8 +1,10 @@
 package event_processors
 
 import (
-	"context"
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters/metrics"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain/events"
@@ -10,8 +12,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"regexp"
-	"strings"
 )
 
 // MetricsCollector interface for collecting metrics (makes testing easier)
@@ -46,13 +46,13 @@ func NewMetricsDetector(app *app.Application, metricsCollector MetricsCollector,
 	}
 }
 
-func (f MetricsDetector) Run(ctx context.Context) {
+func (f MetricsDetector) Run() {
 	for ev := range f.in {
 		snapTakenEvent, ok := ev.(events.SampleSnapshotTaken)
 		if !ok {
 			continue
 		}
-		_, span := f.trace.Start(ctx, "ExtractMetricsFromSnap")
+		_, span := f.trace.Start(ev.Context(), "ExtractMetricsFromSnap")
 
 		f.processSnapshot(snapTakenEvent.Snap)
 		span.End()

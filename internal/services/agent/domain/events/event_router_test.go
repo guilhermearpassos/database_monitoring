@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"testing"
 )
 
@@ -11,11 +12,18 @@ func (f FakeEvent) EventName() string {
 	return "fakeEvent"
 }
 
+func (f FakeEvent) Context() context.Context {
+	return context.Background()
+}
+
 type FakeEvent2 struct {
 }
 
 func (f FakeEvent2) EventName() string {
 	return "fakeEvent2"
+}
+func (f FakeEvent2) Context() context.Context {
+	return context.Background()
 }
 func TestEventRouter_Route(t *testing.T) {
 	tests := []struct {
