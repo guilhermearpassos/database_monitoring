@@ -97,12 +97,12 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 		ld.Register(router)
 		go pf.Run()
 		go ld.Run()
-		startTarget(ctx, a, tgt, config.CollectMetrics)
+		startTarget(ctx, a, tgt, config.CollectMetrics, config.Databases)
 	}
 	<-ctx.Done()
 	return nil
 }
-func startTarget(ctx context.Context, a *app.Application, config config2.DBDataCollectionConfig, collectMetrics bool) {
+func startTarget(ctx context.Context, a *app.Application, config config2.DBDataCollectionConfig, collectMetrics bool, databases []string) {
 
 	serverMeta := common_domain.ServerMeta{
 		Host: config.Alias,
@@ -110,8 +110,8 @@ func startTarget(ctx context.Context, a *app.Application, config config2.DBDataC
 	}
 	sc := background_agent.NewSnapshotCollector(*a)
 	mc := background_agent.NewMetricsCollector(*a)
-	go sc.Run(ctx, serverMeta, 10*time.Second)
+	go sc.Run(ctx, serverMeta, databases, 10*time.Second)
 	if collectMetrics {
-		go mc.Run(ctx, serverMeta, 1*time.Minute)
+		go mc.Run(ctx, serverMeta, databases, 1*time.Minute)
 	}
 }

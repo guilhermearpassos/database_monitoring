@@ -3,11 +3,12 @@ package config
 import (
 	"context"
 	"crypto/tls"
+	"net/http"
+	"time"
+
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/jmoiron/sqlx"
-	"net/http"
-	"time"
 )
 
 type AgentConfig struct {
@@ -15,6 +16,7 @@ type AgentConfig struct {
 	TargetHosts          []DBDataCollectionConfig  `toml:"target_hosts"`
 	MaxSamplesBatchSize  int                       `toml:"max_samples_batch_size"`
 	GetKnownPlanPageSize int                       `toml:"get_known_plan_page_size"`
+	Databases            []string                  `toml:"databases"`
 	Telemetry            telemetry.TelemetryConfig `toml:"telemetry"`
 	CollectMetrics       bool                      `toml:"collect_metrics"`
 }

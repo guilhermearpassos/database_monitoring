@@ -22,7 +22,7 @@ func NewMetricsCollector(app app.Application) *MetricsCollector {
 	return &MetricsCollector{app: app, tracer: otel.Tracer("MetricsCollector")}
 }
 
-func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain.ServerMeta) (err error) {
+func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain.ServerMeta, databases []string) (err error) {
 	ctx, span := m.tracer.Start(ctx, "MetricsSnapshot")
 	defer func() {
 		if err != nil {
@@ -32,7 +32,7 @@ func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain
 		span.End()
 	}()
 	sampleTime := time.Now()
-	metrics, err := m.app.Queries.ReadMetrics.Handle(ctx, server)
+	metrics, err := m.app.Queries.ReadMetrics.Handle(ctx, server, databases)
 	if err != nil {
 		return fmt.Errorf("reading metrics: %w", err)
 	}
@@ -44,10 +44,10 @@ func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain
 	return nil
 }
 
-func (m MetricsCollector) Run(ctx context.Context, server common_domain.ServerMeta, interval time.Duration) {
+func (m MetricsCollector) Run(ctx context.Context, server common_domain.ServerMeta, databases []string, interval time.Duration) {
 	t := time.NewTicker(interval)
 	for {
-		err := m.TakeSnapshot(ctx, server)
+		err := m.TakeSnapshot(ctx, server, databases)
 		if err != nil {
 			fmt.Printf("taking snapshot %s: %s\n", server.Host, err.Error())
 		}

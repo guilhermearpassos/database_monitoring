@@ -36,7 +36,7 @@ func NewSQLServerDataReader(dbByHost map[string]*sqlx.DB) SQLServerDataReader {
 		tracer: otel.Tracer("SQLServerDataReader")}
 }
 
-func (S SQLServerDataReader) TakeSnapshot(ctx context.Context, server common_domain.ServerMeta) ([]*common_domain.DataBaseSnapshot, error) {
+func (S SQLServerDataReader) TakeSnapshot(ctx context.Context, server common_domain.ServerMeta, databases []string) ([]*common_domain.DataBaseSnapshot, error) {
 	qDBName := `select database_id, name from sys.databases`
 	db, ok := S.dbByHost[server.Host]
 	if !ok {
@@ -181,6 +181,9 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 		if err != nil {
 			return nil, err
 		}
+		if len(databases) > 0 && !slices.Contains(databases, dbInfo[strconv.Itoa(databaseId)].DatabaseName) {
+			continue
+		}
 		var blockedBy string
 		if blockingSessionId != 0 {
 			blockedBy = strconv.Itoa(blockingSessionId)
@@ -296,7 +299,7 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 	return snapshots, nil
 }
 
-func (S SQLServerDataReader) CollectMetrics(ctx context.Context, server common_domain.ServerMeta) ([]*common_domain.QueryMetric, error) {
+func (S SQLServerDataReader) CollectMetrics(ctx context.Context, server common_domain.ServerMeta, databases []string) ([]*common_domain.QueryMetric, error) {
 	ctx, span := S.tracer.Start(ctx, "CollectMetrics")
 	defer span.End()
 	db, ok := S.dbByHost[server.Host]
@@ -465,6 +468,10 @@ from qstats_aggr_split qas
 			&text)
 		if err != nil {
 			return nil, fmt.Errorf("collecting metrics - scan: %w", err)
+		}
+
+		if len(databases) > 0 && !slices.Contains(databases, dbName) {
+			continue
 		}
 		counters := map[string]int64{
 			"executionCount":               executionCount,
