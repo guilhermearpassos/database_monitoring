@@ -40,34 +40,36 @@ func init() {
 }
 
 func StartAgent(cmd *cobra.Command, args []string) error {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	var config config2.AgentConfig
 	// Check if file exists
 	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
-		panic(fmt.Errorf("config file does not exist: %s", configFileName))
+		return fmt.Errorf("config file does not exist: %s", configFileName)
 	}
 	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
-		panic(fmt.Errorf("failed to parse config file: %s", err))
+		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 	err := telemetry.InitTelemetryFromConfig(config.Telemetry)
 	if err != nil {
-		panic(fmt.Errorf("failed to init telemetry: %v", err))
+		return fmt.Errorf("failed to init telemetry: %w", err)
 	}
+	telemetry.Info(ctx, "telemetry initialized", "otlp_endpoint", config.Telemetry.OTLP.Endpoint)
 	cc, err := telemetry.OpenInstrumentedClientConn(config.CollectorConfig.Url, int(config.CollectorConfig.GrpcMessageMaxSize), config.CollectorConfig.TLS.Enabled)
-
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("open collector client: %w", err)
 	}
+	// Prometheus server with graceful shutdown
+	var promServer *http.Server
 	if config.Telemetry.Metrics.Enabled {
+		promHost := config.Telemetry.Metrics.Host
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		promServer = &http.Server{Addr: promHost, Handler: mux}
 		go func() {
-			promHost := config.Telemetry.Metrics.Host
-			mux := http.NewServeMux()
-			mux.Handle("/metrics", promhttp.Handler())
-			fmt.Sprintf("serving metrics on %s", promHost)
-			err2 := http.ListenAndServe(promHost, mux)
-			if err2 != nil {
-				panic(err2)
+			telemetry.Info(ctx, "serving prometheus metrics", "host", promHost)
+			if err2 := promServer.ListenAndServe(); err2 != nil && err2 != http.ErrServerClosed {
+				telemetry.Error(ctx, err2, "prometheus metrics server failed", "host", promHost)
 			}
 		}()
 	}
@@ -78,10 +80,13 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	}
 	dbByHost := make(map[string]*sqlx.DB, len(config.TargetHosts))
 	for _, tgt := range config.TargetHosts {
+		telemetry.Info(ctx, "opening instrumented DB", "alias", tgt.Alias, "driver", tgt.Driver)
 		db, err := telemetry.OpenInstrumentedDB(tgt.Driver, tgt.ConnString)
 		if err != nil {
-			panic(fmt.Errorf("error connecting to %s: %w", tgt.Alias, err))
+			telemetry.Error(ctx, err, "db connect failed", "alias", tgt.Alias, "driver", tgt.Driver)
+			return fmt.Errorf("error connecting to %s: %w", tgt.Alias, err)
 		}
+		telemetry.Info(ctx, "db connected", "alias", tgt.Alias, "driver", tgt.Driver)
 		dbByHost[tgt.Alias] = db
 	}
 	reader := adapters.NewSQLServerDataReader(dbByHost)
@@ -100,6 +105,23 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 		startTarget(ctx, a, tgt, config.CollectMetrics, config.Databases)
 	}
 	<-ctx.Done()
+	// Begin graceful shutdown
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+	if promServer != nil {
+		_ = promServer.Shutdown(shutdownCtx)
+	}
+	for alias, db := range dbByHost {
+		if db != nil {
+			if err := db.Close(); err != nil {
+				telemetry.Error(shutdownCtx, err, "db close error", "alias", alias)
+			}
+		}
+	}
+	if cc != nil {
+		_ = cc.Close()
+	}
+	_ = telemetry.Shutdown(shutdownCtx)
 	return nil
 }
 func startTarget(ctx context.Context, a *app.Application, config config2.DBDataCollectionConfig, collectMetrics bool, databases []string) {

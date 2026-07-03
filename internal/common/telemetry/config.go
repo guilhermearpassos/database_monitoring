@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"context"
+	"time"
+
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -11,8 +13,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace/noop"
-	"time"
 )
+
+var tracerProvider *trace.TracerProvider
 
 type TelemetryConfig struct {
 	Enabled     bool          `toml:"enabled"`
@@ -32,6 +35,7 @@ type OTLPConfig struct {
 func InitTelemetryFromConfig(config TelemetryConfig) error {
 	if !config.Enabled {
 		otel.SetTracerProvider(noop.NewTracerProvider())
+		tracerProvider = nil
 		return nil
 	}
 	serviceName := config.ServiceName
@@ -57,10 +61,20 @@ func InitTelemetryFromConfig(config TelemetryConfig) error {
 		trace.WithBatcher(exporter, trace.WithExportTimeout(30*time.Second)),
 		trace.WithResource(r))
 	otel.SetTracerProvider(tp)
+	tracerProvider = tp
 	propagator := propagation.NewCompositeTextMapPropagator(
 		propagation.Baggage{},
 		propagation.TraceContext{},
 		b3.New(b3.WithInjectEncoding(b3.B3MultipleHeader|b3.B3SingleHeader)))
 	otel.SetTextMapPropagator(propagator)
+	
 	return nil
+}
+
+// Shutdown flushes and closes the tracer provider/exporter if telemetry is enabled.
+func Shutdown(ctx context.Context) error {
+	if tracerProvider == nil {
+		return nil
+	}
+	return tracerProvider.Shutdown(ctx)
 }

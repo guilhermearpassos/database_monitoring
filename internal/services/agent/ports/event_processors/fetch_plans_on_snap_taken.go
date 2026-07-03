@@ -2,9 +2,9 @@ package event_processors
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain/events"
 	"go.opentelemetry.io/otel"
@@ -40,7 +40,7 @@ func (f *PlanFetcher) Run() {
 		if m, found := f.knownHandlesByServer[snapTakenEvent.Snap.SnapInfo.Server.Host]; (!found) || (len(m) == 0) {
 			known, err := f.app.Queries.GetKnownHandles.Handle(ctx, snapTakenEvent.Snap.SnapInfo.Server)
 			if err != nil {
-				fmt.Println(err)
+				telemetry.Error(ctx, err, "get known handles failed", "server", snapTakenEvent.Snap.SnapInfo.Server.Host)
 				span.SetStatus(otelcodes.Error, err.Error())
 				span.RecordError(err)
 				known = make(map[string]struct{})
@@ -59,7 +59,7 @@ func (f *PlanFetcher) Run() {
 		ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 		plans, err := f.app.Queries.GetQueryPlans.Handle(ctx2, newHandles, snapTakenEvent.Snap.SnapInfo.Server)
 		if err != nil {
-			fmt.Println(err)
+			telemetry.Error(ctx, err, "get query plans failed", "server", snapTakenEvent.Snap.SnapInfo.Server.Host, "handles", len(newHandles))
 			span.SetStatus(otelcodes.Error, err.Error())
 			span.RecordError(err)
 		}
@@ -69,7 +69,7 @@ func (f *PlanFetcher) Run() {
 		}
 		err = f.app.Commands.UploadExecPlans.Handle(ctx, plans, snapTakenEvent.Snap.SnapInfo.Server)
 		if err != nil {
-			fmt.Println(err)
+			telemetry.Error(ctx, err, "upload exec plans failed", "server", snapTakenEvent.Snap.SnapInfo.Server.Host, "plans", len(plans))
 			span.SetStatus(otelcodes.Error, err.Error())
 			span.RecordError(err)
 		}

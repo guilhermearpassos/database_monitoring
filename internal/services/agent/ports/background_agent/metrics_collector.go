@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/agent/domain/events"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -24,6 +26,11 @@ func NewMetricsCollector(app app.Application) *MetricsCollector {
 
 func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain.ServerMeta, databases []string) (err error) {
 	ctx, span := m.tracer.Start(ctx, "MetricsSnapshot")
+	span.SetAttributes(
+		attribute.String("dbm.server.host", server.Host),
+		attribute.String("dbm.server.type", server.Type),
+		attribute.Int("dbm.databases.count", len(databases)),
+	)
 	defer func() {
 		if err != nil {
 			span.RecordError(err)
@@ -31,32 +38,42 @@ func (m MetricsCollector) TakeSnapshot(ctx context.Context, server common_domain
 		}
 		span.End()
 	}()
+	telemetry.Info(ctx, "starting metrics read", "server", server.Host, "type", server.Type, "dbs", databases)
 	sampleTime := time.Now()
 	metrics, err := m.app.Queries.ReadMetrics.Handle(ctx, server, databases)
 	if err != nil {
-		return fmt.Errorf("reading metrics: %w", err)
+		telemetry.Error(ctx, err, "read metrics failed", "server", server.Host)
+		return err
 	}
+	span.SetAttributes(attribute.Int("dbm.metrics.count", len(metrics)))
 	err = m.app.Commands.UploadMetrics.Handle(ctx, metrics, server, sampleTime)
 	if err != nil {
-		return fmt.Errorf("uploading metrics: %w", err)
+		telemetry.Error(ctx, err, "upload metrics failed", "server", server.Host, "metrics", len(metrics))
+		return err
 	}
 	m.app.EventRouter.Route(events.MetricsSnapshotTaken{Metrics: metrics, Ctx: ctx})
+	telemetry.Info(ctx, "metrics snapshot completed", "server", server.Host, "metrics", len(metrics))
 	return nil
 }
 
 func (m MetricsCollector) Run(ctx context.Context, server common_domain.ServerMeta, databases []string, interval time.Duration) {
 	t := time.NewTicker(interval)
+	defer t.Stop()
+	defer func() {
+		if rec := recover(); rec != nil {
+			telemetry.Error(ctx, fmt.Errorf("%v", rec), "metrics collector panic recovered", "server", server.Host)
+		}
+	}()
 	for {
 		err := m.TakeSnapshot(ctx, server, databases)
 		if err != nil {
-			fmt.Printf("taking snapshot %s: %s\n", server.Host, err.Error())
+			telemetry.Error(ctx, err, "metrics collector iteration failed", "server", server.Host)
 		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			break
-
+			// next iteration
 		}
 	}
 }
