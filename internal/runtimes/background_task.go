@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -113,7 +114,7 @@ func (b *BackGroundTaskRuntime) Stop(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		b.logger.Warn("context canceled %v", ctx.Err())
+		b.logger.Warn("context canceled", "err", ctx.Err())
 		return nil
 	}
 }
@@ -151,6 +152,7 @@ func (b *BackGroundTaskRuntime) runTask(ctx context.Context, task Task) {
 
 		if r := recover(); r != nil {
 			// log panic here
+			b.logger.Error("panic recovered", "err", r, "stack", string(debug.Stack()))
 			success = false
 		}
 
@@ -233,51 +235,73 @@ func (b *BackGroundTaskRuntime) runDropOnOverlapLoop(ctx context.Context, task T
 
 }
 func (b *BackGroundTaskRuntime) runCancelOnOverlapLoop(ctx context.Context, task Task) {
+	// On each tick, cancel the current run (if any) and start a fresh one.
 	ticker := time.NewTicker(task.Interval())
 	defer ticker.Stop()
-	running := false
-	var mu sync.Mutex
-	var cancel context.CancelFunc
+
+	var (
+		mu      sync.Mutex
+		running bool
+		cancel  context.CancelFunc
+		done    chan struct{}
+	)
+
 	start := func() {
 		mu.Lock()
+		// If there's a run in progress, cancel it and wait for it to finish to avoid overlap.
 		if running {
 			if cancel != nil {
 				cancel()
-				cancel = nil
 			}
+			c := done
 			mu.Unlock()
-		}
-		var runCtx context.Context
-		runCtx, cancel = context.WithCancel(ctx)
-		running = true
-		mu.Unlock()
-		done := make(chan struct{}, 1)
-		go func() {
-			b.runTaskLoop(runCtx, task)
-			done <- struct{}{}
-		}()
-		select {
-		case <-done:
-			return
-		case <-done:
+			if c != nil {
+				select {
+				case <-c:
+				case <-ctx.Done():
+					return
+				}
+			}
 			mu.Lock()
-			if running {
-				running = false
-			}
-			if cancel != nil {
-				cancel()
-				cancel = nil
-			}
-			mu.Unlock()
+			running = false
+			cancel = nil
+			done = nil
 		}
+		// Start a new run with its own cancelable context
+		runCtx, cn := context.WithCancel(ctx)
+		cancel = cn
+		running = true
+		done = make(chan struct{})
+		mu.Unlock()
+
+		go func(doneCh chan struct{}) {
+			defer close(doneCh)
+			b.runTask(runCtx, task)
+		}(done)
 	}
 
 	start()
-	select {
-	case <-ticker.C:
-		start()
-	case <-ctx.Done():
-		return
+	for {
+		select {
+		case <-ticker.C:
+			start()
+		case <-ctx.Done():
+			// Try to cancel any running task and wait for it to exit
+			mu.Lock()
+			cn := cancel
+			d := done
+			mu.Unlock()
+			if cn != nil {
+				cn()
+			}
+			if d != nil {
+				select {
+				case <-d:
+				case <-time.After(100 * time.Millisecond):
+				}
+			}
+			return
+		}
 	}
 }
 func (b *BackGroundTaskRuntime) runAllowOverlapLoop(ctx context.Context, task Task) {
