@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/runtimes"
 	"log/slog"
@@ -21,16 +22,24 @@ type RuntimeCfg struct {
 }
 type ServiceCfg struct {
 }
+type InfraConfig struct {
+	Telemetry telemetry.TelemetryConfig `toml:"telemetry" yaml:"telemetry"`
+}
 type AppInstanceConfig struct {
-	Runtimes RuntimeCfg `toml:"runtimes" yaml:"runtimes"`
-	Services ServiceCfg `toml:"services" yaml:"services"`
+	Infra    InfraConfig `toml:"infra" yaml:"infra"`
+	Runtimes RuntimeCfg  `toml:"runtimes" yaml:"runtimes"`
+	Services ServiceCfg  `toml:"services" yaml:"services"`
 }
 
 func NewApplicationInstance(cfg AppInstanceConfig) ApplicationInstance {
+
+	err := telemetry.InitTelemetryFromConfig(cfg.Infra.Telemetry)
+	if err != nil {
+		panic(err)
+	}
 	var grpcRuntime *runtimes.GRPCServerRuntime
 	var taskRuntime *runtimes.BackGroundTaskRuntime
 	var grpcUIRuntime *runtimes.GRPCUiRuntime
-	var err error
 	grpcRuntime, err = runtimes.NewGRPCServerRuntime(cfg.Runtimes.GRPCCfg)
 	if err != nil {
 		panic(err)
