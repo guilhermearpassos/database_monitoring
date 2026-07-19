@@ -1,0 +1,69 @@
+syntax = "proto3";
+package database_monitoring.v2;
+option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v2/ingestor;ingestorv2";
+
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/sample.proto";        // QuerySample
+import "database_monitoring/v1/snapshot.proto";      // ServerMetadata
+
+service IngestionService {
+  // One snapshot per stream: HEADER -> CHUNK{1..N} -> FINALIZE
+  rpc IngestSnapshotStream(stream SnapshotUploadRequest) returns (SnapshotUploadResult);
+
+  // For resuming after a broken stream.
+  rpc GetMissingChunks(GetMissingChunksRequest) returns (GetMissingChunksResponse);
+}
+
+message SnapshotUploadRequest {
+  string snapshot_id = 1; // idempotency key (agent-generated UUID)
+  oneof payload {
+    SnapshotHeader header = 2;
+    SampleChunk chunk = 3;
+    Finalize finalize = 4;
+  }
+}
+
+message SnapshotHeader {
+  google.protobuf.Timestamp timestamp = 1;
+  database_monitoring.v1.ServerMetadata server = 2;
+  uint32 expected_chunks = 3;                 // optional but recommended
+  uint64 expected_total_samples = 4;          // optional
+  string agent_version = 5;
+  repeated string tags = 6;
+  // Transport hint; you can omit if you prefer server-side config
+  Compression compression = 10;               // NONE | GZIP | ZSTD
+  uint32 max_chunk_bytes = 11;                // hint only
+}
+
+message SampleChunk {
+  uint32 chunk_seq = 1;                       // 1..N, strictly increasing
+  repeated database_monitoring.v1.QuerySample samples = 2;  // no opaque bytes
+}
+
+message Finalize {
+  uint64 total_samples = 1;                   // for sanity check/telemetry
+}
+
+message SnapshotUploadResult {
+  enum Status { OK = 0; PARTIAL = 1; REJECTED = 2; }
+  Status status = 1;
+  string snapshot_id = 2;
+  repeated uint32 missing_chunks = 3;         // only when PARTIAL
+  string message = 4;
+}
+
+message GetMissingChunksRequest { string snapshot_id = 1; }
+
+message GetMissingChunksResponse {
+  UploadStatus status = 1;                    // clarifies whether the server knows this upload
+  repeated uint32 missing_chunks = 2;         // valid only when status == RECEIVING
+}
+
+enum UploadStatus {
+  UNKNOWN = 0;    // server has no state for this snapshot_id
+  RECEIVING = 1;  // upload exists but incomplete; use missing_chunks
+  COMPLETE = 2;   // upload finalized
+  EXPIRED = 3;    // server had state but GC’ed it (needs full re-upload)
+}
+
+enum Compression { COMPRESSION_NONE = 0; COMPRESSION_GZIP = 1; COMPRESSION_ZSTD = 2; }
