@@ -1,3 +1,13 @@
+infra:
+  telemetry:
+    enabled: true
+    service_name: sqlsights
+    otlp:
+      enabled: true
+      endpoint: localhost:4317
+    metrics:
+      enabled: true
+      host: localhost:9016
 runtimes:
   grpc_server:
     enabled: true

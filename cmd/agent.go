@@ -59,18 +59,6 @@ func StartAgent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		panic(err)
 	}
-	if config.Telemetry.Metrics.Enabled {
-		go func() {
-			promHost := config.Telemetry.Metrics.Host
-			mux := http.NewServeMux()
-			mux.Handle("/metrics", promhttp.Handler())
-			fmt.Sprintf("serving metrics on %s", promHost)
-			err2 := http.ListenAndServe(promHost, mux)
-			if err2 != nil {
-				panic(err2)
-			}
-		}()
-	}
 	client := collectorv1.NewIngestionServiceClient(cc)
 	GetPlanPageSize := int32(config.GetKnownPlanPageSize)
 	if GetPlanPageSize == 0 {
