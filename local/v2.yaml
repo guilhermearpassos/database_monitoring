@@ -1,0 +1,9 @@
+runtimes:
+  grpc_server:
+    enabled: true
+    grpc:
+      url: localhost:9014
+      grpc_message_max_size: 100000000
+  grpc_ui:
+    enabled: true
+    url: localhost:9015

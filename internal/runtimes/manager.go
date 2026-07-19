@@ -31,7 +31,15 @@ func NewRuntimeManager(runtimes map[RuntimeType]Runtime) *RuntimeManager {
 
 func (rm *RuntimeManager) StartRuntimes(ctx context.Context) error {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	grpc := rm.runtimes[GRPCRuntime]
+	err := grpc.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("starting grpc runtimes: %w", err)
+	}
 	for name, rt := range rm.runtimes {
+		if name == GRPCRuntime {
+			continue
+		}
 		log.Info(fmt.Sprintf("Starting runtime %s", name))
 		err := rt.Start(ctx)
 		if err != nil {

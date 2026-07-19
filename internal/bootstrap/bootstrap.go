@@ -16,14 +16,14 @@ type Service interface { //Agent extracts data
 	Regiter(grpcRuntime runtimes.GRPCServerRuntime, TaskRuntime runtimes.BackGroundTaskRuntime) error
 }
 type RuntimeCfg struct {
-	GRPCCfg   config.GRPCServerConfig `toml:"grpc_server"`
-	GRPCUICfg config.GRPCUIConfig     `toml:"grpc_ui"`
+	GRPCCfg   config.GRPCServerConfig `toml:"grpc_server" yaml:"grpc_server"`
+	GRPCUICfg config.GRPCUIConfig     `toml:"grpc_ui" yaml:"grpc_ui"`
 }
 type ServiceCfg struct {
 }
 type AppInstanceConfig struct {
-	Runtimes RuntimeCfg `toml:"runtimes"`
-	Services ServiceCfg `toml:"services"`
+	Runtimes RuntimeCfg `toml:"runtimes" yaml:"runtimes"`
+	Services ServiceCfg `toml:"services" yaml:"services"`
 }
 
 func NewApplicationInstance(cfg AppInstanceConfig) ApplicationInstance {
@@ -62,4 +62,5 @@ func (a *ApplicationInstance) Stop(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("stopping runtimes: %w", err)
 	}
+	return nil
 }

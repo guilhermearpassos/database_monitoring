@@ -6,6 +6,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/config"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 	"log"
 	"net"
 	"time"
@@ -21,6 +22,8 @@ func NewGRPCServerRuntime(cfg config.GRPCServerConfig) (*GRPCServerRuntime, erro
 		return nil, nil
 	}
 	server := telemetry.NewGrpcServer(cfg.Grpc.GrpcMessageMaxSize, cfg.Grpc.TLS.Enabled, cfg.Grpc.TLS.CertFile, cfg.Grpc.TLS.KeyFile)
+
+	reflection.Register(server)
 	lis, err := net.Listen("tcp", cfg.Grpc.Url)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", cfg.Grpc.Url, err)
