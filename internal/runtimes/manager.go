@@ -25,6 +25,10 @@ type RuntimeManager struct {
 	runtimes map[RuntimeType]Runtime
 }
 
+func NewRuntimeManager(runtimes map[RuntimeType]Runtime) *RuntimeManager {
+	return &RuntimeManager{runtimes: runtimes}
+}
+
 func (rm *RuntimeManager) StartRuntimes(ctx context.Context) error {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	for name, rt := range rm.runtimes {

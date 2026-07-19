@@ -1,82 +1,65 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
+	"github.com/guilhermearpassos/database-monitoring/internal/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/runtimes"
-	"github.com/jmoiron/sqlx"
-	"time"
+	"log/slog"
 )
 
 type ApplicationInstance struct {
 	Services []*Service
-	Manager  runtimes.RuntimeManager
+	Manager  *runtimes.RuntimeManager
 }
 type Service interface { //Agent extracts data
-	Regiter(registrars runtimes.GRPCServerRuntime, runtime runtimes.BackGroundTaskRuntime) error
+	Regiter(grpcRuntime runtimes.GRPCServerRuntime, TaskRuntime runtimes.BackGroundTaskRuntime) error
+}
+type RuntimeCfg struct {
+	GRPCCfg   config.GRPCServerConfig `toml:"grpc_server"`
+	GRPCUICfg config.GRPCUIConfig     `toml:"grpc_ui"`
+}
+type ServiceCfg struct {
+}
+type AppInstanceConfig struct {
+	Runtimes RuntimeCfg `toml:"runtimes"`
+	Services ServiceCfg `toml:"services"`
 }
 
-type Target struct {
-	Alias      string
-	Connection *sqlx.DB
-}
-type TargetMonitoring struct {
-	SnapshotMonitoring SnapshotMonitoring
-	MetricsMonitoring  MetricsMonitoring
-	DeadlockMonitoring DeadlockMonitoring
-}
-type DeadlockMonitoring struct {
-	Enabled  bool
-	DBFilter DBFilter
-}
-type MetricsMonitoring struct {
-	Enabled              bool
-	CollectInfraMetrics  bool
-	CollectSampleMetrics bool
-	DBFilter             DBFilter
-}
-
-type DBFilterMode string
-
-const (
-	DBFilterModeAll       DBFilterMode = "all"
-	DBFilterModeWhitelist DBFilterMode = "whitelist"
-	DBFilterModeBlacklist DBFilterMode = "blacklist"
-)
-
-func ToDBFilterMode(mode string) (DBFilterMode, error) {
-	switch mode {
-	case "all":
-		return DBFilterModeAll, nil
-	case "":
-		return DBFilterModeAll, nil
-	case "whitelist":
-		return DBFilterModeWhitelist, nil
-	case "blacklist":
-		return DBFilterModeBlacklist, nil
-	default:
-		return DBFilterModeAll, fmt.Errorf("invalid filter mode: %s", mode)
-
+func NewApplicationInstance(cfg AppInstanceConfig) ApplicationInstance {
+	var grpcRuntime *runtimes.GRPCServerRuntime
+	var taskRuntime *runtimes.BackGroundTaskRuntime
+	var grpcUIRuntime *runtimes.GRPCUiRuntime
+	var err error
+	grpcRuntime, err = runtimes.NewGRPCServerRuntime(cfg.Runtimes.GRPCCfg)
+	if err != nil {
+		panic(err)
+	}
+	grpcUIRuntime, err = runtimes.NewGRPCUiRuntime(cfg.Runtimes.GRPCUICfg, cfg.Runtimes.GRPCCfg.Grpc)
+	if err != nil {
+		panic(err)
+	}
+	taskLogger := slog.Default() //TODO improve logging
+	taskRuntime = runtimes.NewBackGroundTaskRuntime(taskLogger)
+	return ApplicationInstance{
+		Services: make([]*Service, 0),
+		Manager: runtimes.NewRuntimeManager(map[runtimes.RuntimeType]runtimes.Runtime{
+			runtimes.GRPCUIRuntime:  grpcUIRuntime,
+			runtimes.GRPCRuntime:    grpcRuntime,
+			runtimes.BackGroundTask: taskRuntime,
+		}),
 	}
 }
-
-type DBFilter struct {
-	DBFilterMode      DBFilterMode
-	IncludedDatabases []string
-	ExcludedDatabases []string
+func (a *ApplicationInstance) Start(ctx context.Context) error {
+	err := a.Manager.StartRuntimes(ctx)
+	if err != nil {
+		return fmt.Errorf("starting runtimes: %w", err)
+	}
+	return nil
 }
-
-type SnapshotFilter struct {
-	IncludeSqlsightsQueries bool
-	DBFilter                DBFilter
-}
-type SnapshotMonitoring struct {
-	Enabled  bool
-	Interval time.Duration
-	Filter   SnapshotFilter
-}
-
-type PlanMonitoring struct {
-	EnableCollection         bool
-	BackwardsSearchThreshold time.Duration // 0 to disable
-	EnableAnalyser           bool
+func (a *ApplicationInstance) Stop(ctx context.Context) error {
+	err := a.Manager.StopRuntimes(ctx)
+	if err != nil {
+		return fmt.Errorf("stopping runtimes: %w", err)
+	}
 }

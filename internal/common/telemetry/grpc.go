@@ -16,6 +16,12 @@ import (
 	"runtime/debug"
 )
 
+type GRPCClientConfig struct {
+	Endpoint   string `toml:"endpoint"`
+	MaxMsgSize int    `toml:"max_msg_size"`
+	TlsEnabled bool   `toml:"tls_enabled"`
+}
+
 func OpenInstrumentedClientConn(endpoint string, maxSize int, tlsEnabled bool) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),

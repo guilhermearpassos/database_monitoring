@@ -3,7 +3,10 @@ package runtimes
 import (
 	"context"
 	"fmt"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
+	"github.com/guilhermearpassos/database-monitoring/internal/config"
 	"google.golang.org/grpc"
+	"log"
 	"net"
 	"time"
 )
@@ -11,6 +14,18 @@ import (
 type GRPCServerRuntime struct {
 	lis    net.Listener
 	server *grpc.Server
+}
+
+func NewGRPCServerRuntime(cfg config.GRPCServerConfig) (*GRPCServerRuntime, error) {
+	if !cfg.Enabled {
+		return nil, nil
+	}
+	server := telemetry.NewGrpcServer(cfg.Grpc.GrpcMessageMaxSize, cfg.Grpc.TLS.Enabled, cfg.Grpc.TLS.CertFile, cfg.Grpc.TLS.KeyFile)
+	lis, err := net.Listen("tcp", cfg.Grpc.Url)
+	if err != nil {
+		log.Fatalf("failed to listen on %s: %s", cfg.Grpc.Url, err)
+	}
+	return &GRPCServerRuntime{server: server, lis: lis}, nil
 }
 
 var _ Runtime = (*GRPCServerRuntime)(nil)

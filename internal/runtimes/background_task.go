@@ -68,6 +68,16 @@ type BackGroundTaskRuntime struct {
 	logger  *slog.Logger
 }
 
+func NewBackGroundTaskRuntime(logger *slog.Logger) *BackGroundTaskRuntime {
+	return &BackGroundTaskRuntime{
+		tasks:   make([]Task, 0),
+		wg:      sync.WaitGroup{},
+		started: false,
+		cancel:  nil,
+		logger:  logger,
+	}
+}
+
 var _ Runtime = (*BackGroundTaskRuntime)(nil)
 
 func (b *BackGroundTaskRuntime) Start(ctx context.Context) error {
