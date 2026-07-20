@@ -61,7 +61,7 @@ type Task interface {
 	Opts() TaskOpts
 }
 type BackGroundTaskRuntime struct {
-	tasks   []Task
+	tasks   map[string]Task
 	wg      sync.WaitGroup
 	started bool
 	cancel  context.CancelFunc
@@ -70,7 +70,7 @@ type BackGroundTaskRuntime struct {
 
 func NewBackGroundTaskRuntime(logger *slog.Logger) *BackGroundTaskRuntime {
 	return &BackGroundTaskRuntime{
-		tasks:   make([]Task, 0),
+		tasks:   make(map[string]Task, 0),
 		wg:      sync.WaitGroup{},
 		started: false,
 		cancel:  nil,
@@ -79,6 +79,14 @@ func NewBackGroundTaskRuntime(logger *slog.Logger) *BackGroundTaskRuntime {
 }
 
 var _ Runtime = (*BackGroundTaskRuntime)(nil)
+
+func (b *BackGroundTaskRuntime) RegisterTask(task Task) error {
+	if _, ok := b.tasks[task.Name()]; ok {
+		return fmt.Errorf("task %s already exists", task.Name())
+	}
+	b.tasks[task.Name()] = task
+	return nil
+}
 
 func (b *BackGroundTaskRuntime) Start(ctx context.Context) error {
 	if b == nil {
