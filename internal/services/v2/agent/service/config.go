@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/runtimes"
@@ -34,7 +35,7 @@ type AgentConfig struct {
 	Enabled        bool                       `yaml:"enabled" toml:"enabled"`
 }
 
-func (c *AgentConfig) GetService(ctx context.Context) (appcommon.Service, error) {
+func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel) (appcommon.Service, error) {
 	tsks := make(map[string]runtimes.Task, len(c.Targets))
 	logger := slog.Default()
 	for _, target := range c.Targets {
@@ -44,7 +45,7 @@ func (c *AgentConfig) GetService(ctx context.Context) (appcommon.Service, error)
 		}
 		ss := collector.NewSqlServerSnapshotter(db)
 
-		isc := ingestorv2.NewIngestionServiceClient(cc)
+		isc := ingestorv2.NewIngestionServiceClient(inproc)
 		ic, err := ingestor.New(isc)
 		if err != nil {
 			return nil, err

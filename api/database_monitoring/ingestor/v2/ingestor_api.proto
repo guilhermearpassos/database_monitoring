@@ -47,8 +47,6 @@ message Finalize {
 message SnapshotUploadResult {
   enum Status { OK = 0; PARTIAL = 1; REJECTED = 2; }
   Status status = 1;
-  string snapshot_id = 2;
-  repeated uint32 missing_chunks = 3;         // only when PARTIAL
   string message = 4;
 }
 
@@ -63,7 +61,6 @@ enum UploadStatus {
   UNKNOWN = 0;    // server has no state for this snapshot_id
   RECEIVING = 1;  // upload exists but incomplete; use missing_chunks
   COMPLETE = 2;   // upload finalized
-  EXPIRED = 3;    // server had state but GC’ed it (needs full re-upload)
 }
 
 enum Compression { COMPRESSION_NONE = 0; COMPRESSION_GZIP = 1; COMPRESSION_ZSTD = 2; }

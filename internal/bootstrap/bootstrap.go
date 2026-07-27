@@ -3,11 +3,13 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/config"
 	"github.com/guilhermearpassos/database-monitoring/internal/runtimes"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/service"
+	agentsvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/service"
+	ingestersvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/service"
 	"log/slog"
 )
 
@@ -20,7 +22,8 @@ type RuntimeCfg struct {
 	GRPCUICfg config.GRPCUIConfig     `toml:"grpc_ui" yaml:"grpc_ui"`
 }
 type ServiceCfg struct {
-	AgentConfig service.AgentConfig `toml:"agent" yaml:"agent"`
+	AgentConfig    agentsvc.AgentConfig       `toml:"agent" yaml:"agent"`
+	IngesterConfig ingestersvc.IngesterConfig `toml:"ingester" yaml:"ingester"`
 }
 type InfraConfig struct {
 	Telemetry telemetry.TelemetryConfig `toml:"telemetry" yaml:"telemetry"`
@@ -40,7 +43,8 @@ func NewApplicationInstance(ctx context.Context, cfg AppInstanceConfig) Applicat
 	var grpcRuntime *runtimes.GRPCServerRuntime
 	var taskRuntime *runtimes.BackGroundTaskRuntime
 	var grpcUIRuntime *runtimes.GRPCUiRuntime
-	grpcRuntime, err = runtimes.NewGRPCServerRuntime(cfg.Runtimes.GRPCCfg)
+	inproc := &inprocgrpc.Channel{}
+	grpcRuntime, err = runtimes.NewGRPCServerRuntime(cfg.Runtimes.GRPCCfg, inproc)
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +56,7 @@ func NewApplicationInstance(ctx context.Context, cfg AppInstanceConfig) Applicat
 	taskRuntime = runtimes.NewBackGroundTaskRuntime(taskLogger)
 	services := make([]*appcommon.Service, 0)
 	if cfg.Services.AgentConfig.Enabled {
-		svc, err := cfg.Services.AgentConfig.GetService(ctx)
+		svc, err := cfg.Services.AgentConfig.GetService(ctx, inproc)
 		if err != nil {
 			panic(err)
 		}
@@ -61,6 +65,17 @@ func NewApplicationInstance(ctx context.Context, cfg AppInstanceConfig) Applicat
 			panic(err)
 		}
 		services = append(services, &svc)
+	}
+	if cfg.Services.IngesterConfig.Enabled {
+		ingSvc, err := cfg.Services.IngesterConfig.GetService(ctx, inproc)
+		if err != nil {
+			panic(err)
+		}
+		err = ingSvc.Register(grpcRuntime, taskRuntime)
+		if err != nil {
+			panic(err)
+		}
+		services = append(services, &ingSvc)
 	}
 	return ApplicationInstance{
 		Services: services,

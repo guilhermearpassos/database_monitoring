@@ -17,3 +17,15 @@ runtimes:
   grpc_ui:
     enabled: true
     url: localhost:9015
+services:
+  agent:
+    enabled: true
+    targets:
+      - alias: "localhost"
+        driver: mssql
+        conn_string: "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+        interval: 10s
+    ingestor_client:
+      endpoint: inproc://
+  ingester:
+    enabled: true

@@ -3,80 +3,20 @@ package command
 import (
 	"context"
 	"fmt"
-	"time"
-
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/contract"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
-	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 )
 
-// Config controls small guardrails at the application level.
-// You can extend this with size limits, timeouts, etc.
-type Config struct {
-	HeaderTTL       time.Duration
-	MaxChunkSamples int // 0 disables this check
+type SaveSnapshotStreamHandler struct {
+	store domain.SessionStore
+	repo  domain.SnapshotRepository
 }
 
-type Service struct {
-	Store  domain.SessionStore
-	Repo   domain.SnapshotRepository
-	Config Config
+func NewSaveSnapshotStreamHandler(store domain.SessionStore, repo domain.SnapshotRepository) *SaveSnapshotStreamHandler {
+	return &SaveSnapshotStreamHandler{store: store, repo: repo}
 }
 
-// UploadIterator is a transport-agnostic iterator used by the app layer.
-// Adapters should provide an implementation that yields header/chunk/finalize messages.
-type UploadIterator interface {
-	Next(ctx context.Context) (*UploadMessage, bool, error)
-}
-
-// App-layer DTOs (no dependency on ports to avoid cycles)
-
-type SnapshotHeader struct {
-	SnapshotID           string
-	TimestampUnix        int64
-	ServerHost           string
-	ServerType           string
-	ExpectedChunks       uint32
-	ExpectedTotalSamples uint64
-	AgentVersion         string
-	Tags                 []string
-	MaxChunkBytes        uint32
-}
-
-type SampleChunk struct {
-	ChunkSeq uint32
-	Samples  []*dbmv1.QuerySample
-}
-
-type Finalize struct {
-	TotalSamples uint64
-}
-
-type UploadMessage struct {
-	SnapshotID string
-	Header     *SnapshotHeader
-	Chunk      *SampleChunk
-	Finalize   *Finalize
-}
-
-type ResultStatus int32
-
-const (
-	ResultOK ResultStatus = iota
-	ResultPartial
-	ResultRejected
-)
-
-type Result struct {
-	Status        ResultStatus
-	SnapshotID    string
-	MissingChunks []uint32
-	Message       string
-}
-
-// IngestSnapshotStream consumes a transport-agnostic iterator that yields
-// Header, Chunk, Finalize messages for a single snapshot stream and orchestrates
-// the domain session store and repository to produce a final result.
-func (s Service) IngestSnapshotStream(ctx context.Context, it UploadIterator) (*Result, error) {
+func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it contract.UploadIterator) (string, error) {
 	var (
 		snapshotID   string
 		headerSeen   bool
@@ -86,7 +26,7 @@ func (s Service) IngestSnapshotStream(ctx context.Context, it UploadIterator) (*
 	for {
 		msg, ok, err := it.Next(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("stream read: %w", err)
+			return "", fmt.Errorf("stream read: %w", err)
 		}
 		if !ok {
 			break // EOF
@@ -95,17 +35,17 @@ func (s Service) IngestSnapshotStream(ctx context.Context, it UploadIterator) (*
 		if snapshotID == "" {
 			snapshotID = msg.SnapshotID
 			if snapshotID == "" {
-				return nil, fmt.Errorf("missing snapshot_id")
+				return "", fmt.Errorf("missing snapshot_id")
 			}
 		}
 
 		if msg.Header != nil {
 			if headerSeen {
-				return nil, domain.ErrDuplicateHeader
+				return "", domain.ErrDuplicateHeader
 			}
 			headerSeen = true
 			h := msg.Header
-			_, err := s.Store.UpsertHeader(domain.SnapshotHeader{
+			_, err := s.store.UpsertHeader(domain.SnapshotHeader{
 				SnapshotID:           snapshotID,
 				TimestampUnix:        h.TimestampUnix,
 				ServerHost:           h.ServerHost,
@@ -115,32 +55,28 @@ func (s Service) IngestSnapshotStream(ctx context.Context, it UploadIterator) (*
 				AgentVersion:         h.AgentVersion,
 				Tags:                 append([]string(nil), h.Tags...),
 				MaxChunkBytes:        h.MaxChunkBytes,
-			}, s.Config.HeaderTTL)
+			})
 			if err != nil {
-				return nil, fmt.Errorf("upsert header: %w", err)
+				return "", fmt.Errorf("upsert header: %w", err)
 			}
 			continue
 		}
 
 		if msg.Chunk != nil {
 			if !headerSeen {
-				return nil, domain.ErrChunkBeforeHeader
+				return "", domain.ErrChunkBeforeHeader
 			}
 			ch := msg.Chunk
 			if ch.ChunkSeq == 0 {
-				return nil, domain.ErrInvalidChunkSeq
+				return "", domain.ErrInvalidChunkSeq
 			}
-			if s.Config.MaxChunkSamples > 0 && len(ch.Samples) > s.Config.MaxChunkSamples {
-				return nil, fmt.Errorf("too many samples in chunk: %d", len(ch.Samples))
-			}
-
-			already, err := s.Store.SaveChunk(snapshotID, ch.ChunkSeq, ch.Samples)
+			already, err := s.store.SaveChunk(snapshotID, ch.ChunkSeq, ch.Samples)
 			if err != nil {
-				return nil, fmt.Errorf("save chunk %d: %w", ch.ChunkSeq, err)
+				return "", fmt.Errorf("save chunk %d: %w", ch.ChunkSeq, err)
 			}
 			if !already {
-				if err := s.Repo.SaveSamples(snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
-					return nil, fmt.Errorf("repo save chunk %d: %w", ch.ChunkSeq, err)
+				if err := s.repo.SaveSamples(snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
+					return "", fmt.Errorf("repo save chunk %d: %w", ch.ChunkSeq, err)
 				}
 			}
 			continue
@@ -148,44 +84,44 @@ func (s Service) IngestSnapshotStream(ctx context.Context, it UploadIterator) (*
 
 		if msg.Finalize != nil {
 			if !headerSeen {
-				return nil, domain.ErrMissingHeader
+				return "", domain.ErrMissingHeader
 			}
 			if finalizeSeen {
-				return nil, domain.ErrDuplicateFinalize
+				return "", domain.ErrDuplicateFinalize
 			}
 			finalizeSeen = true
-			if err := s.Store.Finalize(snapshotID, msg.Finalize.TotalSamples); err != nil {
-				return nil, fmt.Errorf("finalize: %w", err)
+			if err := s.store.Finalize(snapshotID, msg.Finalize.TotalSamples); err != nil {
+				return "", fmt.Errorf("finalize: %w", err)
 			}
 			continue
 		}
 
-		return nil, fmt.Errorf("empty upload message payload")
+		return "", fmt.Errorf("empty upload message payload")
 	}
 
 	// Decide outcome after EOF
-	st, missing, err := s.Store.GetMissing(snapshotID)
+	st, _, err := s.store.GetMissing(snapshotID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	switch st {
 	case domain.UploadStatusComplete:
-		if err := s.Repo.FinalizeSnapshot(snapshotID); err != nil {
-			return nil, err
+		if err := s.repo.FinalizeSnapshot(snapshotID); err != nil {
+			return "", err
 		}
-		_ = s.Store.MarkComplete(snapshotID)
-		return &Result{Status: ResultOK, SnapshotID: snapshotID}, nil
+		err = s.store.MarkComplete(snapshotID)
+		return snapshotID, err
 
 	case domain.UploadStatusReceiving:
-		return &Result{Status: ResultPartial, SnapshotID: snapshotID, MissingChunks: missing, Message: "awaiting missing chunks"}, nil
+		return snapshotID, domain.ErrMissingChunks
 
 	case domain.UploadStatusUnknown:
-		return &Result{Status: ResultRejected, SnapshotID: snapshotID, Message: "unknown snapshot_id"}, nil
+		return snapshotID, domain.ErrUnkownSnapId
 
 	case domain.UploadStatusExpired:
-		return &Result{Status: ResultRejected, SnapshotID: snapshotID, Message: "session expired"}, nil
+		return snapshotID, domain.ErrSessionExpired
 	}
 
-	return &Result{Status: ResultRejected, SnapshotID: snapshotID, Message: "unexpected state"}, nil
+	return snapshotID, fmt.Errorf("unknown upload stage")
 }

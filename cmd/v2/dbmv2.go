@@ -57,7 +57,7 @@ func DBMV2(cmd *cobra.Command, args []string) error {
 	default:
 		panic(fmt.Errorf("unsupported config file format: %s", configFileName))
 	}
-	app := bootstrap.NewApplicationInstance(cfg)
+	app := bootstrap.NewApplicationInstance(ctx, cfg)
 	if err := app.Start(ctx); err != nil {
 		panic(err)
 	}

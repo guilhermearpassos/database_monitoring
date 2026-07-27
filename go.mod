@@ -6,9 +6,9 @@ require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/XSAM/otelsql v0.37.0
 	github.com/elastic/go-elasticsearch/v8 v8.4.0-alpha.1.0.20241127143524-a7d13656118f
+	github.com/fullstorydev/grpchan v1.1.2
 	github.com/fullstorydev/grpcui v1.5.0
 	github.com/golang-migrate/migrate/v4 v4.18.3
-	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/grafana/grafana-plugin-sdk-go v0.284.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
@@ -30,6 +30,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -56,6 +57,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/grafana/otel-profiling-go v0.5.1 // indirect
@@ -122,5 +124,4 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250825161204-c5933d9347a5 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251002232023-7c0ddcbb5797 // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
