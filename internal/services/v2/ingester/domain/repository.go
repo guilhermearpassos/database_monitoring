@@ -6,6 +6,11 @@ import dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_mo
 // Implementations should be idempotent at least per (snapshotID, seq) to avoid
 // duplicates when chunks are retried.
 type SnapshotRepository interface {
+	// EnsureSnapshot guarantees a row exists for the given snapshot header in the v1 schema.
+	// It should upsert target by (host,type) and insert snapshot by external id (f_id) if missing.
+	EnsureSnapshot(header SnapshotHeader) error
+	// SaveSamples stores a chunk worth of samples for the given snapshot id and sequence.
 	SaveSamples(snapshotID string, seq uint32, samples []*dbmv1.QuerySample) error
+	// FinalizeSnapshot performs any finalize bookkeeping. Can be a no-op under v1 schema.
 	FinalizeSnapshot(snapshotID string) error
 }

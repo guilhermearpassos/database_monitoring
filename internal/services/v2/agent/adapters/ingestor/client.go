@@ -59,7 +59,7 @@ func (c *Client) SendSnapshot(ctx context.Context, snap *common_domain.DataBaseS
 	if qErr != nil {
 		return nil, fmt.Errorf("upload failed and resume query failed: %v (resume query err=%v)", err, qErr)
 	}
-	if status == ingestorv2.UploadStatus_UNKNOWN || status == ingestorv2.UploadStatus_EXPIRED {
+	if status == ingestorv2.UploadStatus_UNKNOWN {
 		// Server has no state — try once more from scratch
 		res2, err2 := c.streamUpload(ctx, snap, so, nil)
 		if err2 != nil {
@@ -104,7 +104,10 @@ func (c *Client) streamUpload(ctx context.Context, snap *common_domain.DataBaseS
 		Compression:          so.Compression,
 		MaxChunkBytes:        uint32(so.MaxUncompressedBytes),
 	}
-	if err := stream.Send(&ingestorv2.SnapshotUploadRequest{SnapshotId: snap.SnapInfo.ID, Payload: &ingestorv2.SnapshotUploadRequest_Header{Header: header}}); err != nil {
+	if err := stream.Send(&ingestorv2.SnapshotUploadRequest{
+		SnapshotId: snap.SnapInfo.ID,
+		Payload:    &ingestorv2.SnapshotUploadRequest_Header{Header: header},
+	}); err != nil {
 		_ = stream.CloseSend()
 		return nil, fmt.Errorf("send header: %w", err)
 	}
@@ -128,7 +131,11 @@ func (c *Client) streamUpload(ctx context.Context, snap *common_domain.DataBaseS
 		}
 		msg := &ingestorv2.SnapshotUploadRequest{
 			SnapshotId: snap.SnapInfo.ID,
-			Payload:    &ingestorv2.SnapshotUploadRequest_Chunk{Chunk: &ingestorv2.SampleChunk{ChunkSeq: seq, Samples: chunkSamples}},
+			Payload: &ingestorv2.SnapshotUploadRequest_Chunk{
+				Chunk: &ingestorv2.SampleChunk{
+					ChunkSeq: seq, Samples: chunkSamples,
+				},
+			},
 		}
 		if err := stream.Send(msg); err != nil {
 			_ = stream.CloseSend()
@@ -139,7 +146,9 @@ func (c *Client) streamUpload(ctx context.Context, snap *common_domain.DataBaseS
 	// Finalize
 	fin := &ingestorv2.SnapshotUploadRequest{
 		SnapshotId: snap.SnapInfo.ID,
-		Payload:    &ingestorv2.SnapshotUploadRequest_Finalize{Finalize: &ingestorv2.Finalize{TotalSamples: uint64(len(snap.Samples))}},
+		Payload: &ingestorv2.SnapshotUploadRequest_Finalize{
+			Finalize: &ingestorv2.Finalize{TotalSamples: uint64(len(snap.Samples))},
+		},
 	}
 	if err := stream.Send(fin); err != nil {
 		_ = stream.CloseSend()

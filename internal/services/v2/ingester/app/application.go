@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/adapters/repository"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/adapters/state"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app/command"
@@ -22,9 +23,15 @@ type Application struct {
 	Query   Query
 }
 
+// NewApplication builds an application with in-memory store and noop repository (default dev/testing).
 func NewApplication() Application {
 	store := state.NewMemoryStore()
 	repo := repository.NewNoopRepo()
+	return NewApplicationWithAdapters(store, repo)
+}
+
+// NewApplicationWithAdapters allows wiring custom store and repository implementations.
+func NewApplicationWithAdapters(store domain.SessionStore, repo domain.SnapshotRepository) Application {
 	return Application{
 		Command: Command{
 			SaveSnapshot: command.NewSaveSnapshotStreamHandler(store, repo),

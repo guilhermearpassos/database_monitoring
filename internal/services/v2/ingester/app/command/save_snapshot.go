@@ -44,7 +44,7 @@ func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadI
 			}
 			headerSeen = true
 			h := msg.Header
-			_, err := s.store.UpsertHeader(domain.SnapshotHeader{
+			header := domain.SnapshotHeader{
 				SnapshotID:           snapshotID,
 				TimestampUnix:        h.TimestampUnix,
 				ServerHost:           h.ServerHost,
@@ -54,9 +54,14 @@ func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadI
 				AgentVersion:         h.AgentVersion,
 				Tags:                 append([]string(nil), h.Tags...),
 				MaxChunkBytes:        h.MaxChunkBytes,
-			})
+			}
+			_, err := s.store.UpsertHeader(header)
 			if err != nil {
 				return "", fmt.Errorf("upsert header: %w", err)
+			}
+			// ensure snapshot existence in persistence layer (idempotent)
+			if err := s.repo.EnsureSnapshot(header); err != nil {
+				return "", fmt.Errorf("ensure snapshot: %w", err)
 			}
 			continue
 		}

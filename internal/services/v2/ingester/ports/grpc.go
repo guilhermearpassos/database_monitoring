@@ -29,24 +29,40 @@ func (u UpIter) Next(ctx context.Context) (*domain.UploadMessage, bool, error) {
 			return nil, false, nil
 		}
 	}
+	if msg == nil {
+		return nil, true, nil
+	}
+	header := &domain.SnapshotHeader{
+		SnapshotID:           msg.GetSnapshotId(),
+		TimestampUnix:        msg.GetHeader().GetTimestamp().GetSeconds(),
+		ServerHost:           msg.GetHeader().GetServer().GetHost(),
+		ServerType:           msg.GetHeader().GetServer().GetType(),
+		ExpectedChunks:       msg.GetHeader().GetExpectedChunks(),
+		ExpectedTotalSamples: msg.GetHeader().GetExpectedTotalSamples(),
+		AgentVersion:         msg.GetHeader().GetAgentVersion(),
+		Tags:                 msg.GetHeader().GetTags(),
+		MaxChunkBytes:        msg.GetHeader().GetMaxChunkBytes(),
+	}
+	chunk := &domain.SampleChunk{
+		ChunkSeq: msg.GetChunk().GetChunkSeq(),
+		Samples:  msg.GetChunk().GetSamples(),
+	}
+	finalize := &domain.Finalize{TotalSamples: msg.GetFinalize().GetTotalSamples()}
+	if msg.GetHeader() == nil {
+		header = nil
+	}
+	if msg.GetChunk() == nil {
+		chunk = nil
+	}
+	if msg.GetFinalize() == nil {
+		finalize = nil
+	}
+
 	return &domain.UploadMessage{
 		SnapshotID: msg.SnapshotId,
-		Header: &domain.SnapshotHeader{
-			SnapshotID:           msg.GetSnapshotId(),
-			TimestampUnix:        msg.GetHeader().GetTimestamp().GetSeconds(),
-			ServerHost:           msg.GetHeader().GetServer().GetHost(),
-			ServerType:           msg.GetHeader().GetServer().GetType(),
-			ExpectedChunks:       msg.GetHeader().GetExpectedChunks(),
-			ExpectedTotalSamples: msg.GetHeader().GetExpectedTotalSamples(),
-			AgentVersion:         msg.GetHeader().GetAgentVersion(),
-			Tags:                 msg.GetHeader().GetTags(),
-			MaxChunkBytes:        msg.GetHeader().GetMaxChunkBytes(),
-		},
-		Chunk: &domain.SampleChunk{
-			ChunkSeq: msg.GetChunk().GetChunkSeq(),
-			Samples:  msg.GetChunk().GetSamples(),
-		},
-		Finalize: &domain.Finalize{TotalSamples: msg.GetFinalize().GetTotalSamples()},
+		Header:     header,
+		Chunk:      chunk,
+		Finalize:   finalize,
 	}, true, nil
 }
 
@@ -54,6 +70,7 @@ var _ domain.UploadIterator = (*UpIter)(nil)
 
 func NewService(a app.Application) *GrpcIngester { return &GrpcIngester{app: a} }
 func (s *GrpcIngester) IngestSnapshotStream(in grpc.ClientStreamingServer[ingestorv2.SnapshotUploadRequest, ingestorv2.SnapshotUploadResult]) error {
+
 	_, err := s.ingestSnapshotStream(in.Context(), &UpIter{in: in})
 	var msg string
 	status := ingestorv2.SnapshotUploadResult_OK
@@ -98,4 +115,3 @@ func (s *GrpcIngester) ingestSnapshotStream(ctx context.Context, it domain.Uploa
 	}
 	return snapId, nil
 }
-

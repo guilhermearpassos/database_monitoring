@@ -29,3 +29,5 @@ services:
       endpoint: inproc://
   ingester:
     enabled: true
+    postgres:
+      connstring: "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"

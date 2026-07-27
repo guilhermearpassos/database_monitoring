@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 )
 
@@ -10,5 +11,6 @@ type NoopRepo struct{}
 
 func NewNoopRepo() *NoopRepo { return &NoopRepo{} }
 
+func (n *NoopRepo) EnsureSnapshot(_ domain.SnapshotHeader) error { return nil }
 func (n *NoopRepo) SaveSamples(_ string, _ uint32, _ []*dbmv1.QuerySample) error { return nil }
 func (n *NoopRepo) FinalizeSnapshot(_ string) error { return nil }
