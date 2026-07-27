@@ -3,7 +3,6 @@ package command
 import (
 	"context"
 	"fmt"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/contract"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 )
 
@@ -16,7 +15,7 @@ func NewSaveSnapshotStreamHandler(store domain.SessionStore, repo domain.Snapsho
 	return &SaveSnapshotStreamHandler{store: store, repo: repo}
 }
 
-func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it contract.UploadIterator) (string, error) {
+func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadIterator) (string, error) {
 	var (
 		snapshotID   string
 		headerSeen   bool
