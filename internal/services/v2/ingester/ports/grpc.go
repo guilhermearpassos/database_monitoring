@@ -3,11 +3,12 @@ package ports
 import (
 	"context"
 	"errors"
+	"io"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
 	"google.golang.org/grpc"
-	"io"
 )
 
 // GrpcIngester is the gRPC port facade that depends on the application layer.
@@ -69,6 +70,7 @@ func (u UpIter) Next(ctx context.Context) (*domain.UploadMessage, bool, error) {
 var _ domain.UploadIterator = (*UpIter)(nil)
 
 func NewService(a app.Application) *GrpcIngester { return &GrpcIngester{app: a} }
+
 func (s *GrpcIngester) IngestSnapshotStream(in grpc.ClientStreamingServer[ingestorv2.SnapshotUploadRequest, ingestorv2.SnapshotUploadResult]) error {
 
 	_, err := s.ingestSnapshotStream(in.Context(), &UpIter{in: in})
@@ -85,6 +87,7 @@ func (s *GrpcIngester) IngestSnapshotStream(in grpc.ClientStreamingServer[ingest
 	})
 	return err
 }
+
 func (s *GrpcIngester) GetMissingChunks(ctx context.Context, in *ingestorv2.GetMissingChunksRequest) (*ingestorv2.GetMissingChunksResponse, error) {
 	st, miss, err := s.app.Query.GetMissingChunks.Handle(ctx, in.GetSnapshotId())
 	if err != nil {
