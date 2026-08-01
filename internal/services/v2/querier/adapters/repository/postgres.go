@@ -1,0 +1,286 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"slices"
+	"time"
+
+	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/querier/domain"
+	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
+	"github.com/jmoiron/sqlx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+)
+
+type PostgresRepo struct {
+	db     *sqlx.DB
+	tracer trace.Tracer
+}
+
+func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
+	return &PostgresRepo{db: db, tracer: otel.Tracer("postgres-repo")}
+}
+
+var _ domain.SampleRepository = (*PostgresRepo)(nil)
+
+func (p *PostgresRepo) ListServers(ctx context.Context, start time.Time, end time.Time) ([]domain.ServerSummary, error) {
+	q := `select distinct t.host, t.type_id  from snapshot s 
+    inner join public.target t on t.id = s.target_id where snap_time between $1 and $2`
+	rows, err := p.db.QueryContext(ctx, q, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("listing servers: %w", err)
+	}
+	defer rows.Close()
+	servers := make([]domain.ServerSummary, 0)
+	for rows.Next() {
+		var name string
+		var typeID int
+		err = rows.Scan(&name, &typeID)
+		if err != nil {
+			return nil, fmt.Errorf("listing servers scan: %w", err)
+		}
+		servers = append(servers, domain.ServerSummary{
+			Name:             name,
+			Type:             "mssql",
+			Connections:      0,
+			RequestRate:      0,
+			ConnsByWaitGroup: make(map[string]int32),
+		})
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing servers rows: %w", err)
+	}
+	return servers, nil
+}
+
+func (p *PostgresRepo) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int, serverID string) ([]common_domain.DataBaseSnapshot, int, error) {
+	//language=SQL
+	q := fmt.Sprintf(`
+with snapinfos as (
+	select s.id, s.f_id, s.snap_time, t.host, t.type_id, count(*) OVER() AS full_count from snapshot s
+	inner join public.target t on t.id = s.target_id
+	where s.snap_time between $1 and $2 and t.host = $3
+	order by s.snap_time desc
+	offset %d rows limit %d
+)
+
+select si.f_id, si.snap_time, si.host, si.type_id, qs.f_id as qfid, qs.data, full_count from snapinfos si
+inner join query_samples qs on qs.snap_id = si.id
+
+
+`, pageSize*(pageNumber-1), pageSize)
+	rows, err := p.db.QueryContext(ctx, q, start, end, serverID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	fullCount, snapshots, err2 := parseSnapshotRows(rows)
+	if err2 != nil {
+		return snapshots, fullCount, fmt.Errorf("parsing snapshots: %w", err2)
+	}
+	slices.SortFunc(snapshots, func(a, b common_domain.DataBaseSnapshot) int {
+		if a.SnapInfo.Timestamp.Before(b.SnapInfo.Timestamp) {
+			return 1
+		}
+		return -1
+	})
+	return snapshots, fullCount, nil
+
+}
+
+func (p *PostgresRepo) GetSnapshot(ctx context.Context, id string) (common_domain.DataBaseSnapshot, error) {
+	q := `select s.f_id, s.snap_time, t.host, t.type_id, qs.f_id as sid, qs.data, count(*) OVER() AS full_count from snapshot s
+inner join public.target t on t.id = s.target_id
+inner join public.query_samples qs on s.id = qs.snap_id
+where s.f_id = $1`
+	rows, err := p.db.QueryContext(ctx, q, id)
+	if err != nil {
+		return common_domain.DataBaseSnapshot{}, fmt.Errorf("getting snapshot %s: %w", id, err)
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+	_, snapshots, err2 := parseSnapshotRows(rows)
+
+	if err2 != nil {
+		return common_domain.DataBaseSnapshot{}, fmt.Errorf("getting snapshot %s: %w", id, err2)
+	}
+	if len(snapshots) == 0 {
+		return common_domain.DataBaseSnapshot{}, custom_errors.NotFoundErr{Message: fmt.Sprintf("snapshot %s not found", id)}
+	}
+	return snapshots[0], nil
+}
+
+func (p *PostgresRepo) ListSnapshotSummaries(ctx context.Context, serverID string, start time.Time, end time.Time) ([]common_domain.SnapshotSummary, error) {
+	q := `select s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event, count(qs.id), sum(qs.wait_time),
+       sum(case when blocked=true then 1 else 0 end) as waiters,
+       sum(case when blocker=true then 1 else 0 end) as blockers ,
+       sum(case when blocked=true then wait_time else 0 end) as waiter_time,
+       sum(case when blocker=true then block_ms else 0 end) as blocker_time from snapshot s
+inner join public.query_samples qs on s.id = qs.snap_id
+         inner join target t on s.target_id = t.id
+where t.host = $1 and snap_time between $2 and $3
+group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
+	rows, err := p.db.QueryContext(ctx, q, serverID, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("listing snapshot summaries: %w", err)
+	}
+	defer rows.Close()
+	ret := make([]common_domain.SnapshotSummary, 0)
+	detailsMapByID := make(map[string]struct {
+		id        string
+		timestamp time.Time
+		server    common_domain.ServerMeta
+	})
+	connsMapByID := make(map[string]map[string]int64)
+	timeMsMapByID := make(map[string]map[string]int64)
+	baseCountByID := make(map[string]*struct {
+		waiters     int64
+		blockers    int64
+		waiterTime  int64
+		blockerTime int64
+		connections int64
+	})
+	for rows.Next() {
+		var snapTime time.Time
+		var snapID string
+		var host string
+		var typeID int
+		var waitEvent string
+		var count int64
+		var waitTime int64
+		var waiters int64
+		var blockers int64
+		var waiterTime int64
+		var blockerTime int64
+		err = rows.Scan(&snapTime, &snapID, &host, &typeID, &waitEvent, &count, &waitTime,
+			&waiters, &blockers, &waiterTime, &blockerTime)
+		if err != nil {
+			return nil, fmt.Errorf("listing snapshot summaries scan: %w", err)
+		}
+		if _, ok := detailsMapByID[snapID]; !ok {
+			detailsMapByID[snapID] = struct {
+				id        string
+				timestamp time.Time
+				server    common_domain.ServerMeta
+			}{
+				id:        snapID,
+				timestamp: snapTime,
+				server: common_domain.ServerMeta{
+					Host: host,
+					Type: "mssql",
+				},
+			}
+		}
+		if _, ok := baseCountByID[snapID]; !ok {
+			baseCountByID[snapID] = &struct {
+				waiters     int64
+				blockers    int64
+				waiterTime  int64
+				blockerTime int64
+				connections int64
+			}{waiters: waiters, blockers: blockers, waiterTime: waiterTime, blockerTime: blockerTime, connections: count}
+		} else {
+			baseCountByID[snapID].waiters += waiters
+			baseCountByID[snapID].waiterTime += waiterTime
+			baseCountByID[snapID].blockers += blockers
+			baseCountByID[snapID].blockerTime += blockerTime
+			baseCountByID[snapID].connections += count
+		}
+		if _, ok := connsMapByID[snapID]; !ok {
+			connsMapByID[snapID] = make(map[string]int64)
+		}
+		if _, ok := timeMsMapByID[snapID]; !ok {
+			timeMsMapByID[snapID] = make(map[string]int64)
+		}
+		connsMapByID[snapID][waitEvent] = count
+		timeMsMapByID[snapID][waitEvent] = waitTime
+	}
+	for k, v := range detailsMapByID {
+		connMap := connsMapByID[k]
+		TimeMap := timeMsMapByID[k]
+		baseCount := baseCountByID[k]
+		ret = append(ret, common_domain.SnapshotSummary{
+			ID:               v.id,
+			Timestamp:        v.timestamp,
+			Server:           v.server,
+			ConnsByWaitType:  connMap,
+			TimeMsByWaitType: TimeMap,
+			Connections:      int(baseCount.connections),
+			Waiters:          int(baseCount.waiters),
+			Blockers:         int(baseCount.blockers),
+			WaitDuration:     float64(baseCount.waiterTime),
+			AvgDuration:      0,
+			MaxDuration:      0,
+		})
+	}
+	slices.SortFunc(ret, func(a, b common_domain.SnapshotSummary) int {
+		if a.Timestamp.Before(b.Timestamp) {
+			return 1
+		}
+		return -1
+	})
+	return ret, nil
+}
+
+func parseSnapshotRows(rows *sql.Rows) (int, []common_domain.DataBaseSnapshot, error) {
+	var err error
+	queriesBySnapId := make(map[string][]*common_domain.QuerySample)
+	snapInfos := make(map[string]common_domain.SnapInfo)
+	var fullCount int
+	for rows.Next() {
+		var sId string
+		var qId string
+		var snapTime time.Time
+		var host string
+		var typeID int
+		var queryData []byte
+		err = rows.Scan(&sId, &snapTime, &host, &typeID, &qId, &queryData, &fullCount)
+		if err != nil {
+			return 0, nil, fmt.Errorf("listing snapshots: %w", err)
+		}
+		snapInfos[sId] = common_domain.SnapInfo{
+			ID:        sId,
+			Timestamp: snapTime,
+			Server: common_domain.ServerMeta{
+				Host: host,
+				Type: "mssql",
+			},
+		}
+		proto := dbmv1.QuerySample{}
+		err = proto.UnmarshalVT(queryData)
+		if err != nil {
+			return 0, nil, fmt.Errorf("listing snapshots unmarshal proto: %w", err)
+		}
+		proto.Id = qId
+		toDomain := converters.SampleToDomain(&proto)
+		_, ok := queriesBySnapId[sId]
+		if !ok {
+			queriesBySnapId[sId] = []*common_domain.QuerySample{toDomain}
+		} else {
+			queriesBySnapId[sId] = append(queriesBySnapId[sId], toDomain)
+		}
+
+	}
+	err = rows.Err()
+	if err != nil {
+		return 0, nil, fmt.Errorf("listing snapshots rows: %w", err)
+	}
+	ret := make([]common_domain.DataBaseSnapshot, 0, len(snapInfos))
+	for k, v := range snapInfos {
+		samples := queriesBySnapId[k]
+		ret = append(ret, common_domain.DataBaseSnapshot{
+			SnapInfo: v,
+			Samples:  samples,
+		})
+	}
+	return fullCount, ret, nil
+}

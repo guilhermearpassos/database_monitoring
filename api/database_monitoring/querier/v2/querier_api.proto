@@ -1,0 +1,61 @@
+syntax = "proto3";
+package database_monitoring.v2;
+option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v2/querier;querierv2";
+
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/sample.proto";        // QuerySample
+import "database_monitoring/v1/snapshot.proto";      // ServerMetadata
+import "database_monitoring/v1/execution_plan.proto";
+
+service QuerierAPI {
+  rpc ListSnapshotSummaries(ListSnapshotSummariesRequest) returns (ListSnapshotSummariesResponse);
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+  rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
+
+}
+message ListSnapshotSummariesRequest {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string server = 3;
+}
+message SnapshotSummary {
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  database_monitoring.v1.ServerMetadata server = 3;
+  map<string, int64> connections_by_wait_event = 4;
+  map<string, int64> time_ms_by_wait_event = 5;
+  int32 connections = 6;
+  int32 waiters = 7;
+  int32 blockers = 8;
+  double wait_duration = 9;
+  double avg_duration = 10;
+  double max_duration = 11;
+}
+message ListSnapshotSummariesResponse {
+  repeated SnapshotSummary snap_summaries = 1;
+
+}
+message GetSnapshotRequest{
+  string id = 1;
+}
+message GetSnapshotResponse{
+  database_monitoring.v1.DBSnapshot snapshot = 1;
+}
+
+message ListServerSummaryRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+
+}
+
+message ServerSummary {
+  string name = 1;
+  string type = 2;
+  int32 connections = 3;
+  double request_rate = 4;
+  map<string, int32> connections_by_wait_group = 5;
+}
+
+message ListServerSummaryResponse{
+  repeated ServerSummary servers = 1;
+}

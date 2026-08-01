@@ -31,3 +31,7 @@ services:
     enabled: true
     postgres:
       connstring: "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"
+  querier:
+    enabled: true
+    postgres:
+      connstring: "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"

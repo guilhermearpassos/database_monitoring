@@ -5,15 +5,41 @@ option go_package = "github.com/guilhermearpassos/database-monitoring/proto/data
 import "google/protobuf/timestamp.proto";
 import "database_monitoring/v1/sample.proto";        // QuerySample
 import "database_monitoring/v1/snapshot.proto";      // ServerMetadata
+import "database_monitoring/v1/execution_plan.proto";
 
 service IngestionService {
   // One snapshot per stream: HEADER -> CHUNK{1..N} -> FINALIZE
   rpc IngestSnapshotStream(stream SnapshotUploadRequest) returns (SnapshotUploadResult);
-
+  rpc IngestExecutionPlans(stream ExecutionPlanUploadRequest) returns (ExecutionPlanUploadResult);
+  rpc GetKnownPlanHandles(GetKnownPlanHandlesRequest) returns (GetKnownPlanHandlesResponse);
   // For resuming after a broken stream.
   rpc GetMissingChunks(GetMissingChunksRequest) returns (GetMissingChunksResponse);
 }
 
+message ExecutionPlanUploadRequest{
+  oneof payload {
+    PlanHeader header = 2;
+    IngestExecutionPlans chunk = 3;
+    Finalize finalize = 4;
+  }
+}
+message PlanHeader {
+  google.protobuf.Timestamp timestamp = 1;
+  database_monitoring.v1.ServerMetadata server = 2;
+  uint32 expected_chunks = 3;                 // optional but recommended
+  uint64 expected_total_plans = 4;          // optional
+  string agent_version = 5;
+  // Transport hint; you can omit if you prefer server-side config
+  Compression compression = 10;               // NONE | GZIP | ZSTD
+  uint32 max_chunk_bytes = 11;                // hint only
+}
+
+message IngestExecutionPlans{
+  repeated database_monitoring.v1.ExecutionPlan plans = 1;
+}
+message ExecutionPlanUploadResult{
+
+}
 message SnapshotUploadRequest {
   string snapshot_id = 1; // idempotency key (agent-generated UUID)
   oneof payload {
@@ -64,3 +90,17 @@ enum UploadStatus {
 }
 
 enum Compression { COMPRESSION_NONE = 0; COMPRESSION_GZIP = 1; COMPRESSION_ZSTD = 2; }
+
+
+message GetKnownPlanHandlesRequest {
+  database_monitoring.v1.ServerMetadata server = 1;
+  int32 page_size = 2;
+  int32 page_number = 3;
+}
+
+message GetKnownPlanHandlesResponse {
+  repeated string handles = 1;
+  int32 page_number = 2;
+  int32 page_size = 3;
+  int32 total_pages = 4;
+}

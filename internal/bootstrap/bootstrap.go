@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"log/slog"
+
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
@@ -10,7 +12,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/runtimes"
 	agentsvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/service"
 	ingestersvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/service"
-	"log/slog"
+	queriersvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/querier/service"
 )
 
 type ApplicationInstance struct {
@@ -24,6 +26,7 @@ type RuntimeCfg struct {
 type ServiceCfg struct {
 	AgentConfig    agentsvc.AgentConfig       `toml:"agent" yaml:"agent"`
 	IngesterConfig ingestersvc.IngesterConfig `toml:"ingester" yaml:"ingester"`
+	QuerierConfig  queriersvc.QuerierConfig   `toml:"querier" yaml:"querier"`
 }
 type InfraConfig struct {
 	Telemetry telemetry.TelemetryConfig `toml:"telemetry" yaml:"telemetry"`
@@ -76,6 +79,17 @@ func NewApplicationInstance(ctx context.Context, cfg AppInstanceConfig) Applicat
 			panic(err)
 		}
 		services = append(services, &ingSvc)
+	}
+	if cfg.Services.QuerierConfig.Enabled {
+		querierSvc, err := cfg.Services.QuerierConfig.GetService(ctx, inproc)
+		if err != nil {
+			panic(err)
+		}
+		err = querierSvc.Register(grpcRuntime, taskRuntime)
+		if err != nil {
+			panic(err)
+		}
+		services = append(services, &querierSvc)
 	}
 	return ApplicationInstance{
 		Services: services,
