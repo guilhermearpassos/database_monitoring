@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 )
 
@@ -15,7 +16,7 @@ func NewSaveSnapshotStreamHandler(store domain.SessionStore, repo domain.Snapsho
 	return &SaveSnapshotStreamHandler{store: store, repo: repo}
 }
 
-func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadIterator) (string, error) {
+func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadIterator[domain.SnapUploadMessage]) (string, error) {
 	var (
 		snapshotID   string
 		headerSeen   bool
@@ -23,11 +24,11 @@ func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadI
 	)
 
 	for {
-		msg, ok, err := it.Next(ctx)
+		msg, err := it.Next(ctx)
 		if err != nil {
 			return "", fmt.Errorf("stream read: %w", err)
 		}
-		if !ok {
+		if msg == nil {
 			break // EOF
 		}
 
@@ -43,24 +44,12 @@ func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadI
 				return "", domain.ErrDuplicateHeader
 			}
 			headerSeen = true
-			h := msg.Header
-			header := domain.SnapshotHeader{
-				SnapshotID:           snapshotID,
-				TimestampUnix:        h.TimestampUnix,
-				ServerHost:           h.ServerHost,
-				ServerType:           h.ServerType,
-				ExpectedChunks:       h.ExpectedChunks,
-				ExpectedTotalSamples: h.ExpectedTotalSamples,
-				AgentVersion:         h.AgentVersion,
-				Tags:                 append([]string(nil), h.Tags...),
-				MaxChunkBytes:        h.MaxChunkBytes,
-			}
-			_, err := s.store.UpsertHeader(header)
+			_, err := s.store.UpsertHeader(*msg.Header)
 			if err != nil {
 				return "", fmt.Errorf("upsert header: %w", err)
 			}
 			// ensure snapshot existence in persistence layer (idempotent)
-			if err := s.repo.EnsureSnapshot(header); err != nil {
+			if err := s.repo.EnsureSnapshot(ctx, *msg.Header); err != nil {
 				return "", fmt.Errorf("ensure snapshot: %w", err)
 			}
 			continue
@@ -79,7 +68,7 @@ func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadI
 				return "", fmt.Errorf("save chunk %d: %w", ch.ChunkSeq, err)
 			}
 			if !already {
-				if err := s.repo.SaveSamples(snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
+				if err := s.repo.SaveSamples(ctx, snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
 					return "", fmt.Errorf("repo save chunk %d: %w", ch.ChunkSeq, err)
 				}
 			}
@@ -111,7 +100,7 @@ func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadI
 
 	switch st {
 	case domain.UploadStatusComplete:
-		if err := s.repo.FinalizeSnapshot(snapshotID); err != nil {
+		if err := s.repo.FinalizeSnapshot(ctx, snapshotID); err != nil {
 			return "", err
 		}
 		err = s.store.MarkComplete(snapshotID)

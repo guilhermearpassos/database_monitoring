@@ -21,7 +21,6 @@ type MemoryStore struct {
 type sessionState struct {
 	header    domain.SnapshotHeader
 	received  map[uint32]struct{}
-	expiresAt time.Time
 	finalized bool
 	completed bool
 }
@@ -34,7 +33,7 @@ func (m *MemoryStore) UpsertHeader(h domain.SnapshotHeader) (*domain.SnapshotSes
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	st, ok := m.sessions[h.SnapshotID]
-	if !ok || time.Now().After(st.expiresAt) {
+	if !ok {
 		st = &sessionState{
 			header:   h,
 			received: make(map[uint32]struct{}),
@@ -51,9 +50,6 @@ func (m *MemoryStore) SaveChunk(snapshotID string, seq uint32, samples []*dbmv1.
 	st, ok := m.sessions[snapshotID]
 	if !ok {
 		return false, nil // unknown; caller will decide status later
-	}
-	if time.Now().After(st.expiresAt) {
-		return false, nil
 	}
 	_, had := st.received[seq]
 	if had {
@@ -89,14 +85,10 @@ func (m *MemoryStore) GetMissing(snapshotID string) (domain.UploadStatus, []uint
 	for k := range st.received {
 		received = append(received, k)
 	}
-	expired := time.Now().After(st.expiresAt)
 	finalized := st.finalized
 	completed := st.completed
 	m.mu.RUnlock()
 
-	if expired {
-		return domain.UploadStatusExpired, nil, nil
-	}
 	if completed {
 		return domain.UploadStatusComplete, nil, nil
 	}
@@ -170,7 +162,6 @@ func (m *MemoryStore) asDomainSession(st *sessionState) *domain.SnapshotSession 
 		Header:         st.header,
 		Received:       cloneSet(st.received),
 		ExpectedChunks: st.header.ExpectedChunks,
-		ExpiresAt:      st.expiresAt,
 		Finalized:      st.finalized,
 		Completed:      st.completed,
 	}

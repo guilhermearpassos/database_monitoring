@@ -3,8 +3,11 @@ package ports
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
@@ -23,15 +26,15 @@ type UpIter struct {
 	in grpc.ClientStreamingServer[ingestorv2.SnapshotUploadRequest, ingestorv2.SnapshotUploadResult]
 }
 
-func (u UpIter) Next(ctx context.Context) (*domain.UploadMessage, bool, error) {
+func (u UpIter) Next(ctx context.Context) (*domain.SnapUploadMessage, error) {
 	msg, err := u.in.Recv()
 	if err != nil {
 		if err == io.EOF {
-			return nil, false, nil
+			return nil, nil
 		}
 	}
 	if msg == nil {
-		return nil, true, nil
+		return nil, nil
 	}
 	header := &domain.SnapshotHeader{
 		SnapshotID:           msg.GetSnapshotId(),
@@ -59,21 +62,72 @@ func (u UpIter) Next(ctx context.Context) (*domain.UploadMessage, bool, error) {
 		finalize = nil
 	}
 
-	return &domain.UploadMessage{
+	return &domain.SnapUploadMessage{
 		SnapshotID: msg.SnapshotId,
 		Header:     header,
 		Chunk:      chunk,
 		Finalize:   finalize,
-	}, true, nil
+	}, nil
 }
 
-var _ domain.UploadIterator = (*UpIter)(nil)
+type PlanUpIter struct {
+	in grpc.ClientStreamingServer[ingestorv2.ExecutionPlanUploadRequest, ingestorv2.ExecutionPlanUploadResult]
+}
+
+func (u PlanUpIter) Next(ctx context.Context) (*domain.PlanUploadMessage, error) {
+	msg, err := u.in.Recv()
+	if err != nil {
+		if err == io.EOF {
+			return nil, nil
+		}
+	}
+	if msg == nil {
+		return nil, nil
+	}
+	header := &domain.PlanHeader{
+		TimestampUnix:  msg.GetHeader().GetTimestamp().GetSeconds(),
+		ServerHost:     msg.GetHeader().GetServer().GetHost(),
+		ServerType:     msg.GetHeader().GetServer().GetType(),
+		ExpectedChunks: msg.GetHeader().GetExpectedChunks(),
+		AgentVersion:   msg.GetHeader().GetAgentVersion(),
+		MaxChunkBytes:  msg.GetHeader().GetMaxChunkBytes(),
+	}
+	domainPlans := make([]*common_domain.ExecutionPlan, len(msg.GetChunk().GetPlans()))
+	for i, chunk := range msg.GetChunk().GetPlans() {
+		plan, err := converters.ExecutionPlanToDomain(chunk)
+		if err != nil {
+			return nil, fmt.Errorf("converting plan %d: %w", i, err)
+		}
+		domainPlans[i] = plan
+	}
+	chunk := &domain.PlanChunk{
+		ChunkSeq:       msg.GetChunk().GetChunkSeq(),
+		ExecutionPlans: domainPlans,
+	}
+	finalize := &domain.Finalize{TotalSamples: msg.GetFinalize().GetTotalSamples()}
+	if msg.GetHeader() == nil {
+		header = nil
+	}
+	if msg.GetChunk() == nil {
+		chunk = nil
+	}
+	if msg.GetFinalize() == nil {
+		finalize = nil
+	}
+
+	return &domain.PlanUploadMessage{
+		Header:   header,
+		Chunk:    chunk,
+		Finalize: finalize,
+	}, nil
+}
+
+var _ domain.UploadIterator[domain.SnapUploadMessage] = (*UpIter)(nil)
 
 func NewService(a app.Application) *GrpcIngester { return &GrpcIngester{app: a} }
 
 func (s *GrpcIngester) IngestSnapshotStream(in grpc.ClientStreamingServer[ingestorv2.SnapshotUploadRequest, ingestorv2.SnapshotUploadResult]) error {
-
-	_, err := s.ingestSnapshotStream(in.Context(), &UpIter{in: in})
+	_, err := s.app.Command.SaveSnapshot.Handle(in.Context(), &UpIter{in: in})
 	var msg string
 	status := ingestorv2.SnapshotUploadResult_OK
 	if err != nil {
@@ -110,11 +164,11 @@ func (s *GrpcIngester) GetMissingChunks(ctx context.Context, in *ingestorv2.GetM
 	return &ingestorv2.GetMissingChunksResponse{Status: protoStatus, MissingChunks: miss}, nil
 }
 
-// IngestSnapshotStream adapts the ports iterator/DTOs to the app layer and maps the result back.
-func (s *GrpcIngester) ingestSnapshotStream(ctx context.Context, it domain.UploadIterator) (string, error) {
-	snapId, err := s.app.Command.SaveSnapshot.Handle(ctx, it)
+func (s *GrpcIngester) IngestExecutionPlanStream(in grpc.ClientStreamingServer[ingestorv2.ExecutionPlanUploadRequest, ingestorv2.ExecutionPlanUploadResult]) error {
+	err := s.app.Command.SaveExecutionPlans.Handle(in.Context(), &PlanUpIter{in: in})
 	if err != nil {
-		return "", err
+		return err
 	}
-	return snapId, nil
+	err = in.SendAndClose(&ingestorv2.ExecutionPlanUploadResult{})
+	return err
 }

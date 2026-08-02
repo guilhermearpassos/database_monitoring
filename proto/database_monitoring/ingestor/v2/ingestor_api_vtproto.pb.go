@@ -213,7 +213,7 @@ func (m *PlanHeader) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *IngestExecutionPlans) MarshalVT() (dAtA []byte, err error) {
+func (m *ExecPlanChunk) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -226,12 +226,12 @@ func (m *IngestExecutionPlans) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *IngestExecutionPlans) MarshalToVT(dAtA []byte) (int, error) {
+func (m *ExecPlanChunk) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *IngestExecutionPlans) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *ExecPlanChunk) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -264,8 +264,13 @@ func (m *IngestExecutionPlans) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 				i = protohelpers.EncodeVarint(dAtA, i, uint64(len(encoded)))
 			}
 			i--
-			dAtA[i] = 0xa
+			dAtA[i] = 0x12
 		}
+	}
+	if m.ChunkSeq != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ChunkSeq))
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -753,7 +758,7 @@ func (m *GetMissingChunksResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 	return len(dAtA) - i, nil
 }
 
-func (m *GetKnownPlanHandlesRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *GetMissingPlansRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -766,12 +771,12 @@ func (m *GetKnownPlanHandlesRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetKnownPlanHandlesRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *GetMissingPlansRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *GetKnownPlanHandlesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *GetMissingPlansRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -782,16 +787,6 @@ func (m *GetKnownPlanHandlesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
-	}
-	if m.PageNumber != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.PageNumber))
-		i--
-		dAtA[i] = 0x18
-	}
-	if m.PageSize != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.PageSize))
-		i--
-		dAtA[i] = 0x10
 	}
 	if m.Server != nil {
 		if vtmsg, ok := interface{}(m.Server).(interface {
@@ -818,7 +813,7 @@ func (m *GetKnownPlanHandlesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 	return len(dAtA) - i, nil
 }
 
-func (m *GetKnownPlanHandlesResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *PlanHandleChunk) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -831,12 +826,12 @@ func (m *GetKnownPlanHandlesResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetKnownPlanHandlesResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *PlanHandleChunk) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *GetKnownPlanHandlesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *PlanHandleChunk) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -848,26 +843,11 @@ func (m *GetKnownPlanHandlesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.TotalPages != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TotalPages))
-		i--
-		dAtA[i] = 0x20
-	}
-	if m.PageSize != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.PageSize))
-		i--
-		dAtA[i] = 0x18
-	}
-	if m.PageNumber != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.PageNumber))
-		i--
-		dAtA[i] = 0x10
-	}
-	if len(m.Handles) > 0 {
-		for iNdEx := len(m.Handles) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Handles[iNdEx])
-			copy(dAtA[i:], m.Handles[iNdEx])
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Handles[iNdEx])))
+	if len(m.PlanHandles) > 0 {
+		for iNdEx := len(m.PlanHandles) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.PlanHandles[iNdEx])
+			copy(dAtA[i:], m.PlanHandles[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.PlanHandles[iNdEx])))
 			i--
 			dAtA[i] = 0xa
 		}
@@ -875,6 +855,86 @@ func (m *GetKnownPlanHandlesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, 
 	return len(dAtA) - i, nil
 }
 
+func (m *GetMissingPlansResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetMissingPlansResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *GetMissingPlansResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if vtmsg, ok := m.Payload.(interface {
+		MarshalToSizedBufferVT([]byte) (int, error)
+	}); ok {
+		size, err := vtmsg.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetMissingPlansResponse_Chunk) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *GetMissingPlansResponse_Chunk) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.Chunk != nil {
+		size, err := m.Chunk.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+func (m *GetMissingPlansResponse_Finalize) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *GetMissingPlansResponse_Finalize) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	if m.Finalize != nil {
+		size, err := m.Finalize.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x12
+	}
+	return len(dAtA) - i, nil
+}
 func (m *ExecutionPlanUploadRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -964,12 +1024,15 @@ func (m *PlanHeader) SizeVT() (n int) {
 	return n
 }
 
-func (m *IngestExecutionPlans) SizeVT() (n int) {
+func (m *ExecPlanChunk) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
+	if m.ChunkSeq != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.ChunkSeq))
+	}
 	if len(m.Plans) > 0 {
 		for _, e := range m.Plans {
 			if size, ok := interface{}(e).(interface {
@@ -1184,7 +1247,7 @@ func (m *GetMissingChunksResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *GetKnownPlanHandlesRequest) SizeVT() (n int) {
+func (m *GetMissingPlansRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1200,41 +1263,63 @@ func (m *GetKnownPlanHandlesRequest) SizeVT() (n int) {
 		}
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.PageSize != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.PageSize))
-	}
-	if m.PageNumber != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.PageNumber))
-	}
 	n += len(m.unknownFields)
 	return n
 }
 
-func (m *GetKnownPlanHandlesResponse) SizeVT() (n int) {
+func (m *PlanHandleChunk) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if len(m.Handles) > 0 {
-		for _, s := range m.Handles {
+	if len(m.PlanHandles) > 0 {
+		for _, s := range m.PlanHandles {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
-	}
-	if m.PageNumber != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.PageNumber))
-	}
-	if m.PageSize != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.PageSize))
-	}
-	if m.TotalPages != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.TotalPages))
 	}
 	n += len(m.unknownFields)
 	return n
 }
 
+func (m *GetMissingPlansResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if vtmsg, ok := m.Payload.(interface{ SizeVT() int }); ok {
+		n += vtmsg.SizeVT()
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *GetMissingPlansResponse_Chunk) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Chunk != nil {
+		l = m.Chunk.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	return n
+}
+func (m *GetMissingPlansResponse_Finalize) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Finalize != nil {
+		l = m.Finalize.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	return n
+}
 func (m *ExecutionPlanUploadRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -1339,7 +1424,7 @@ func (m *ExecutionPlanUploadRequest) UnmarshalVT(dAtA []byte) error {
 					return err
 				}
 			} else {
-				v := &IngestExecutionPlans{}
+				v := &ExecPlanChunk{}
 				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 					return err
 				}
@@ -1648,7 +1733,7 @@ func (m *PlanHeader) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *IngestExecutionPlans) UnmarshalVT(dAtA []byte) error {
+func (m *ExecPlanChunk) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1671,13 +1756,32 @@ func (m *IngestExecutionPlans) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: IngestExecutionPlans: wiretype end group for non-group")
+			return fmt.Errorf("proto: ExecPlanChunk: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: IngestExecutionPlans: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ExecPlanChunk: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ChunkSeq", wireType)
+			}
+			m.ChunkSeq = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ChunkSeq |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Plans", wireType)
 			}
@@ -2782,7 +2886,7 @@ func (m *GetMissingChunksResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetKnownPlanHandlesRequest) UnmarshalVT(dAtA []byte) error {
+func (m *GetMissingPlansRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2805,10 +2909,10 @@ func (m *GetKnownPlanHandlesRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: GetKnownPlanHandlesRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: GetMissingPlansRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetKnownPlanHandlesRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: GetMissingPlansRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -2855,44 +2959,6 @@ func (m *GetKnownPlanHandlesRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PageSize", wireType)
-			}
-			m.PageSize = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.PageSize |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PageNumber", wireType)
-			}
-			m.PageNumber = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.PageNumber |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -2915,7 +2981,7 @@ func (m *GetKnownPlanHandlesRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetKnownPlanHandlesResponse) UnmarshalVT(dAtA []byte) error {
+func (m *PlanHandleChunk) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -2938,15 +3004,15 @@ func (m *GetKnownPlanHandlesResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: GetKnownPlanHandlesResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: PlanHandleChunk: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: GetKnownPlanHandlesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: PlanHandleChunk: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Handles", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field PlanHandles", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -2974,13 +3040,105 @@ func (m *GetKnownPlanHandlesResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Handles = append(m.Handles, string(dAtA[iNdEx:postIndex]))
+			m.PlanHandles = append(m.PlanHandles, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetMissingPlansResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetMissingPlansResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetMissingPlansResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Chunk", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if oneof, ok := m.Payload.(*GetMissingPlansResponse_Chunk); ok {
+				if err := oneof.Chunk.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+			} else {
+				v := &PlanHandleChunk{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
+				}
+				m.Payload = &GetMissingPlansResponse_Chunk{Chunk: v}
+			}
 			iNdEx = postIndex
 		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PageNumber", wireType)
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Finalize", wireType)
 			}
-			m.PageNumber = 0
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -2990,49 +3148,33 @@ func (m *GetKnownPlanHandlesResponse) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.PageNumber |= int32(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field PageSize", wireType)
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
 			}
-			m.PageSize = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.PageSize |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
 			}
-		case 4:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TotalPages", wireType)
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
 			}
-			m.TotalPages = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
+			if oneof, ok := m.Payload.(*GetMissingPlansResponse_Finalize); ok {
+				if err := oneof.Finalize.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
 				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
+			} else {
+				v := &Finalize{}
+				if err := v.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+					return err
 				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.TotalPages |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
+				m.Payload = &GetMissingPlansResponse_Finalize{Finalize: v}
 			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

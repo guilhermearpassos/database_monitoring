@@ -3,8 +3,11 @@ package ingestor
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/guilhermearpassos/database-monitoring/internal/common/util"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	domainingestor "github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/domain/ingestor"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
@@ -49,7 +52,7 @@ func (c *Client) SendSnapshot(ctx context.Context, snap *common_domain.DataBaseS
 	}
 
 	// First attempt: plain streaming upload
-	res, err := c.streamUpload(ctx, snap, so, nil)
+	res, err := c.streamUploadSamples(ctx, snap, so, nil)
 	if err == nil {
 		return res, nil
 	}
@@ -61,21 +64,21 @@ func (c *Client) SendSnapshot(ctx context.Context, snap *common_domain.DataBaseS
 	}
 	if status == ingestorv2.UploadStatus_UNKNOWN {
 		// Server has no state — try once more from scratch
-		res2, err2 := c.streamUpload(ctx, snap, so, nil)
+		res2, err2 := c.streamUploadSamples(ctx, snap, so, nil)
 		if err2 != nil {
 			return nil, err2
 		}
 		return res2, nil
 	}
 	// Server has partial data; resend only missing sequences
-	res2, err2 := c.streamUpload(ctx, snap, so, missing)
+	res2, err2 := c.streamUploadSamples(ctx, snap, so, missing)
 	if err2 != nil {
 		return nil, err2
 	}
 	return res2, nil
 }
 
-func (c *Client) streamUpload(ctx context.Context, snap *common_domain.DataBaseSnapshot, so SendOptions, resendSeqs []uint32) (*ingestorv2.SnapshotUploadResult, error) {
+func (c *Client) streamUploadSamples(ctx context.Context, snap *common_domain.DataBaseSnapshot, so SendOptions, resendSeqs []uint32) (*ingestorv2.SnapshotUploadResult, error) {
 	stream, err := c.client.IngestSnapshotStream(withAgentMeta(ctx, so.AgentVersion))
 	if err != nil {
 		return nil, err
@@ -223,4 +226,96 @@ func withAgentMeta(ctx context.Context, agentVersion string) context.Context {
 	}
 	md := metadata.Pairs("x-agent-version", agentVersion)
 	return metadata.NewOutgoingContext(ctx, md)
+}
+
+func (c *Client) SendExecutionPlans(ctx context.Context, plans []*common_domain.ExecutionPlan, server common_domain.ServerMeta, so SendOptions) (*ingestorv2.ExecutionPlanUploadResult, error) {
+
+	if plans == nil {
+		return &ingestorv2.ExecutionPlanUploadResult{}, nil
+	}
+	// default to ~1 MiB if not provided, with a small safety margin
+	if so.MaxUncompressedBytes <= 0 {
+		so.MaxUncompressedBytes = 900 * 1024
+	}
+
+	// First attempt: plain streaming upload
+	res, err := c.streamUploadPlans(ctx, plans, server, so)
+	if err != nil {
+		return nil, fmt.Errorf("send execution plans: %w", err)
+	}
+
+	return res, nil
+}
+
+func (c *Client) streamUploadPlans(ctx context.Context, plans []*common_domain.ExecutionPlan,
+	server common_domain.ServerMeta, so SendOptions) (*ingestorv2.ExecutionPlanUploadResult, error) {
+	stream, err := c.client.IngestExecutionPlanStream(withAgentMeta(ctx, so.AgentVersion))
+	if err != nil {
+		return nil, err
+	}
+
+	// Pre-build proto samples and pack into chunks under MaxUncompressedBytes
+	protoSamples := make([]*dbmv1.ExecutionPlan, 0, len(plans))
+	for _, s := range plans {
+		proto, err := converters.ExecutionPlanToProto(s)
+		if err != nil {
+			return nil, fmt.Errorf("convert execution plan to proto: %w", err)
+		}
+		protoSamples = append(protoSamples, proto)
+	}
+	// Use a reusable probe to compute vtproto size when tentatively appending the next item
+	probe := &ingestorv2.ExecPlanChunk{ChunkSeq: 1}
+	chunks := util.PackByMaxBytes(protoSamples, so.MaxUncompressedBytes, func(cur []*dbmv1.ExecutionPlan, next *dbmv1.ExecutionPlan) int {
+		probe.Plans = append(cur, next)
+		return probe.SizeVT()
+	})
+
+	// Header
+	header := &ingestorv2.PlanHeader{
+		Timestamp:      timestamppb.New(time.Now()),
+		Server:         toProtoServer(server),
+		ExpectedChunks: uint32(len(chunks)),
+		AgentVersion:   so.AgentVersion,
+		Compression:    so.Compression,
+		MaxChunkBytes:  uint32(so.MaxUncompressedBytes),
+	}
+	if err := stream.Send(&ingestorv2.ExecutionPlanUploadRequest{
+		Payload: &ingestorv2.ExecutionPlanUploadRequest_Header{Header: header},
+	}); err != nil {
+		_ = stream.CloseSend()
+		return nil, fmt.Errorf("send header: %w", err)
+	}
+
+	// Stream chunks
+	for i, chunkSamples := range chunks {
+		seq := uint32(i + 1)
+		msg := &ingestorv2.ExecutionPlanUploadRequest{
+			Payload: &ingestorv2.ExecutionPlanUploadRequest_Chunk{
+				Chunk: &ingestorv2.ExecPlanChunk{
+					ChunkSeq: seq, Plans: chunkSamples,
+				},
+			},
+		}
+		if err := stream.Send(msg); err != nil {
+			_ = stream.CloseSend()
+			return nil, fmt.Errorf("send chunk %d: %w", seq, err)
+		}
+	}
+
+	// Finalize
+	fin := &ingestorv2.ExecutionPlanUploadRequest{
+		Payload: &ingestorv2.ExecutionPlanUploadRequest_Finalize{
+			Finalize: &ingestorv2.Finalize{TotalSamples: uint64(len(plans))},
+		},
+	}
+	if err := stream.Send(fin); err != nil {
+		_ = stream.CloseSend()
+		return nil, fmt.Errorf("send finalize: %w", err)
+	}
+
+	res, err := stream.CloseAndRecv()
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }

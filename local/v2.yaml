@@ -1,3 +1,4 @@
+pg_addr: &pg_addr "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"
 infra:
   telemetry:
     enabled: true
@@ -8,6 +9,9 @@ infra:
     metrics:
       enabled: true
       host: localhost:9016
+  migrate:
+    enabled: true
+    conn_string: *pg_addr
 runtimes:
   grpc_server:
     enabled: true
@@ -30,8 +34,8 @@ services:
   ingester:
     enabled: true
     postgres:
-      connstring: "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"
+      connstring: *pg_addr
   querier:
     enabled: true
     postgres:
-      connstring: "postgres://postgres:example@localhost:5432/postgres?sslmode=disable"
+      connstring: *pg_addr

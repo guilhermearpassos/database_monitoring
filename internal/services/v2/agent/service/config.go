@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"time"
+
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
@@ -11,22 +14,40 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/adapters/ingestor"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/ports/tasks"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
-	"log/slog"
-	"time"
 )
 
 type TargetConfig struct {
-	Alias      string        `yaml:"alias" toml:"alias"`
-	Driver     string        `yaml:"driver" toml:"driver"`
-	ConnString string        `yaml:"conn_string" toml:"conn_string"`
-	Interval   time.Duration `yaml:"interval" toml:"interval"`
+	Alias          string         `yaml:"alias" toml:"alias"`
+	Driver         string         `yaml:"driver" toml:"driver"`
+	ConnString     string         `yaml:"conn_string" toml:"conn_string"`
+	SnapInterval   time.Duration  `yaml:"snap_interval" toml:"snap_interval"`
+	PlanCollection PlanCollection `yaml:"plan" toml:"plan"`
 }
 
-func (cfg *TargetConfig) GetInterval() time.Duration {
+func (cfg *TargetConfig) GetSnapInterval() time.Duration {
+	if cfg.SnapInterval == 0 {
+		return 10 * time.Second
+	}
+	return cfg.SnapInterval
+}
+
+type PlanCollection struct {
+	Disabled bool          `yaml:"disabled" toml:"disabled"`
+	Interval time.Duration `yaml:"interval" toml:"interval"`
+	Lookback time.Duration `yaml:"lookback" toml:"lookback"`
+}
+
+func (cfg *PlanCollection) GetPlanInterval() time.Duration {
 	if cfg.Interval == 0 {
 		return 10 * time.Second
 	}
 	return cfg.Interval
+}
+func (cfg *PlanCollection) GetPlanLookback() time.Duration {
+	if cfg.Lookback == 0 {
+		return 3 * cfg.GetPlanInterval()
+	}
+	return cfg.Lookback
 }
 
 type AgentConfig struct {
@@ -50,8 +71,13 @@ func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel
 		if err != nil {
 			return nil, err
 		}
-		t := tasks.NewCollectSnapshotTask(target.Alias, []string{}, target.GetInterval(), ss, ic, logger)
+		t := tasks.NewCollectSnapshotTask(target.Alias, []string{}, target.GetSnapInterval(), ss, ic, logger)
 		tsks[t.Name()] = t
+		planCfg := target.PlanCollection
+		if !planCfg.Disabled {
+			t2 := tasks.NewCollectExecutionPlansTask(target.Alias, []string{}, planCfg.GetPlanInterval(), planCfg.GetPlanLookback(), ss, ic, logger)
+			tsks[t2.Name()] = t2
+		}
 	}
 	return AgentService{Tasks: tsks}, nil
 }

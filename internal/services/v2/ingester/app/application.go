@@ -1,15 +1,16 @@
 package app
 
 import (
-	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/adapters/repository"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/adapters/state"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app/command"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app/query"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 )
 
 type Command struct {
-	SaveSnapshot *command.SaveSnapshotStreamHandler
+	SaveSnapshot       *command.SaveSnapshotStreamHandler
+	SaveExecutionPlans *command.SaveExecutionPlansStreamHandler
 }
 type Query struct {
 	GetMissingChunks *query.GetMissingChunksHandler
@@ -34,7 +35,8 @@ func NewApplication() Application {
 func NewApplicationWithAdapters(store domain.SessionStore, repo domain.SnapshotRepository) Application {
 	return Application{
 		Command: Command{
-			SaveSnapshot: command.NewSaveSnapshotStreamHandler(store, repo),
+			SaveSnapshot:       command.NewSaveSnapshotStreamHandler(store, repo),
+			SaveExecutionPlans: command.NewSaveExecutionPlansStreamHandler(repo),
 		},
 		Query: Query{
 			GetMissingChunks: query.NewGetMissingChunksHandler(store),

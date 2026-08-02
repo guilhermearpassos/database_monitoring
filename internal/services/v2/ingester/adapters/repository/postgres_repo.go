@@ -5,10 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
@@ -31,15 +36,20 @@ import (
 // It does not reuse the v1 collector repository code to keep coupling minimal.
 
 type PostgresRepo struct {
-	db *sqlx.DB
+	db     *sqlx.DB
+	tracer trace.Tracer
 }
 
-func NewPostgresRepo(db *sqlx.DB) *PostgresRepo { return &PostgresRepo{db: db} }
+func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
+	return &PostgresRepo{
+		db:     db,
+		tracer: otel.Tracer("ingesterRepo"),
+	}
+}
 
 var _ domain.SnapshotRepository = (*PostgresRepo)(nil)
 
-func (p *PostgresRepo) EnsureSnapshot(header domain.SnapshotHeader) (err error) {
-	ctx := context.Background()
+func (p *PostgresRepo) EnsureSnapshot(ctx context.Context, header domain.SnapshotHeader) (err error) {
 	tx, err := p.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -72,8 +82,7 @@ func (p *PostgresRepo) EnsureSnapshot(header domain.SnapshotHeader) (err error) 
 	return nil
 }
 
-func (p *PostgresRepo) SaveSamples(snapshotID string, seq uint32, samples []*dbmv1.QuerySample) (err error) {
-	ctx := context.Background()
+func (p *PostgresRepo) SaveSamples(ctx context.Context, snapshotID string, seq uint32, samples []*dbmv1.QuerySample) (err error) {
 	if len(samples) == 0 {
 		return nil
 	}
@@ -129,7 +138,7 @@ func (p *PostgresRepo) SaveSamples(snapshotID string, seq uint32, samples []*dbm
 		}
 		var sid, connID string
 		if s.GetSession() != nil {
-   sid = s.GetSession().GetSessionId()
+			sid = s.GetSession().GetSessionId()
 			connID = s.GetSession().GetConnectionId()
 		}
 		var txID string
@@ -142,21 +151,21 @@ func (p *PostgresRepo) SaveSamples(snapshotID string, seq uint32, samples []*dbm
 		}
 
 		_, err = stmt.ExecContext(ctx,
-			s.GetId(),           // f_id (row external id)
-			snapPK,              // snap_id (FK)
-			s.GetSqlHandle(),    // sql_handle
-			s.GetBlocked(),      // blocked
-			s.GetBlocker(),      // blocker
-			s.GetPlanHandle(),   // plan_handle
-			protoBytes,          // data (protobuf)
-			waitType,            // wait_event
-			waitTime,            // wait_time
-			sid,                 // sid
-			connID,              // connection_id
-			txID,                // transaction_id
-			-1,                  // block_ms (not tracked in v2; keep -1 like v1)
-			blockCount,          // block_count
-			s.GetQueryHash(),    // query_hash
+			s.GetId(),         // f_id (row external id)
+			snapPK,            // snap_id (FK)
+			s.GetSqlHandle(),  // sql_handle
+			s.GetBlocked(),    // blocked
+			s.GetBlocker(),    // blocker
+			s.GetPlanHandle(), // plan_handle
+			protoBytes,        // data (protobuf)
+			waitType,          // wait_event
+			waitTime,          // wait_time
+			sid,               // sid
+			connID,            // connection_id
+			txID,              // transaction_id
+			-1,                // block_ms (not tracked in v2; keep -1 like v1)
+			blockCount,        // block_count
+			s.GetQueryHash(),  // query_hash
 		)
 		if err != nil {
 			return fmt.Errorf("copy exec: %w", err)
@@ -169,7 +178,7 @@ func (p *PostgresRepo) SaveSamples(snapshotID string, seq uint32, samples []*dbm
 	return nil
 }
 
-func (p *PostgresRepo) FinalizeSnapshot(_ string) error {
+func (p *PostgresRepo) FinalizeSnapshot(ctx context.Context, _ string) error {
 	// v1 schema has no finalize marker; nothing to do for now.
 	return nil
 }
@@ -205,4 +214,60 @@ func (p *PostgresRepo) getTargetID(ctx context.Context, tx sqlx.QueryerContext, 
 		return 0, err
 	}
 	return id, nil
+}
+
+func (p *PostgresRepo) SaveExecutionPlans(ctx context.Context, executionPlans []*common_domain.ExecutionPlan) error {
+	ctx, span := p.tracer.Start(ctx, "StoreExecutionPlans")
+	defer span.End()
+	span.SetAttributes(attribute.Int("num_samples", len(executionPlans)))
+	q := `insert into query_plans (plan_handle, plan_xml, target_id) VALUES `
+	if len(executionPlans) == 0 {
+		return nil
+	}
+
+	tx, err := p.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("transaction begin: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err2 := tx.Rollback()
+			if err2 != nil {
+				err = errors.Join(err, err2)
+			}
+			return
+		}
+		err2 := tx.Commit()
+		if err2 != nil {
+			err = errors.Join(err, err2)
+			return
+		}
+	}()
+	var targetID int
+	targetID, err = p.getOrCreateTargetID(ctx, tx, executionPlans[0].Server.Host)
+	if err != nil {
+		return fmt.Errorf("get target id: %w", err)
+	}
+	chunks := slices.Chunk(executionPlans, 300)
+	n := 1
+	for chunk := range chunks {
+		currentQuery := q
+		args := make([]interface{}, 0, len(chunk)*3)
+		for _, data := range chunk {
+			currentQuery = currentQuery + fmt.Sprintf(" ($%d, $%d, $%d),", n, n+1, n+2)
+
+			encodedHandle := data.PlanHandle
+			args = append(args, encodedHandle, data.XmlData, targetID)
+			n += 3
+		}
+		currentQuery = currentQuery[:len(currentQuery)-1]
+		res, err := tx.ExecContext(ctx, currentQuery, args...)
+		if err != nil {
+			return fmt.Errorf("exec query: %w", err)
+		}
+		_, _ = res.LastInsertId()
+		_, _ = res.RowsAffected()
+
+	}
+	return nil
 }

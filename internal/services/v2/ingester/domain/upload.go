@@ -2,6 +2,8 @@ package domain
 
 import (
 	"context"
+
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 )
 
@@ -18,17 +20,38 @@ type Finalize struct {
 	TotalSamples uint64
 }
 
-// UploadMessage is a single message in the upload stream (Header OR Chunk OR Finalize).
+// SnapUploadMessage is a single message in the upload stream (Header OR Chunk OR Finalize).
 // Only one of Header, Chunk, or Finalize should be non-nil in a given message.
-type UploadMessage struct {
+type SnapUploadMessage struct {
 	SnapshotID string
 	Header     *SnapshotHeader
 	Chunk      *SampleChunk
 	Finalize   *Finalize
 }
+type PlanUploadMessage struct {
+	Header   *PlanHeader
+	Chunk    *PlanChunk
+	Finalize *Finalize
+}
+
+// SnapshotHeader holds metadata for a snapshot upload session.
+type PlanHeader struct {
+	TimestampUnix      int64
+	ServerHost         string
+	ServerType         string
+	ExpectedChunks     uint32
+	ExpectedTotalPlans uint64
+	AgentVersion       string
+	Tags               []string
+	MaxChunkBytes      uint32
+}
+type PlanChunk struct {
+	ChunkSeq       uint32
+	ExecutionPlans []*common_domain.ExecutionPlan
+}
 
 // UploadIterator abstracts over a streaming transport.
-// Next returns (msg, true, nil) for a message; (nil, false, nil) for EOF; or (nil, false, err) on error.
-type UploadIterator interface {
-	Next(ctx context.Context) (*UploadMessage, bool, error)
+// Next returns (msg, nil) for a message; (nil, nil) for EOF; or (nil, err) on error.
+type UploadIterator[T any] interface {
+	Next(ctx context.Context) (*T, error)
 }

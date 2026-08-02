@@ -6,6 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/config"
@@ -13,6 +15,7 @@ import (
 	agentsvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/service"
 	ingestersvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/service"
 	queriersvc "github.com/guilhermearpassos/database-monitoring/internal/services/v2/querier/service"
+	"github.com/guilhermearpassos/database-monitoring/sql"
 )
 
 type ApplicationInstance struct {
@@ -30,7 +33,32 @@ type ServiceCfg struct {
 }
 type InfraConfig struct {
 	Telemetry telemetry.TelemetryConfig `toml:"telemetry" yaml:"telemetry"`
+	Migrate   MigrateConfig             `toml:"migrate" yaml:"migrate"`
 }
+
+type MigrateConfig struct {
+	Enabled    bool   `toml:"enabled" yaml:"enabled"`
+	ConnString string `toml:"conn_string" yaml:"conn_string"`
+}
+
+func (m *MigrateConfig) Migrate() error {
+	slog.Info("migrate called")
+	d, err := iofs.New(sql.MigrationsFS, "migrations")
+	if err != nil {
+		return fmt.Errorf("migrate fs: %w", err)
+	}
+	mig, err := migrate.NewWithSourceInstance("iofs", d, m.ConnString)
+	if err != nil {
+		return fmt.Errorf("migrate instance: %w", err)
+	}
+	err = mig.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("migrate up: %w", err)
+	}
+	slog.Info("migrate up completed")
+	return nil
+}
+
 type AppInstanceConfig struct {
 	Infra    InfraConfig `toml:"infra" yaml:"infra"`
 	Runtimes RuntimeCfg  `toml:"runtimes" yaml:"runtimes"`
@@ -58,6 +86,12 @@ func NewApplicationInstance(ctx context.Context, cfg AppInstanceConfig) Applicat
 	taskLogger := slog.Default() //TODO improve logging
 	taskRuntime = runtimes.NewBackGroundTaskRuntime(taskLogger)
 	services := make([]*appcommon.Service, 0)
+	if cfg.Infra.Migrate.Enabled {
+		err = cfg.Infra.Migrate.Migrate()
+		if err != nil {
+			panic(err)
+		}
+	}
 	if cfg.Services.AgentConfig.Enabled {
 		svc, err := cfg.Services.AgentConfig.GetService(ctx, inproc)
 		if err != nil {

@@ -4,25 +4,33 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/domain/collector"
 	"github.com/jmoiron/sqlx"
 	mssql "github.com/microsoft/go-mssqldb"
-	"slices"
-	"strconv"
-	"strings"
-	"time"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type SqlServerSnapshotter struct {
 	db     *sqlx.DB
 	Server common_domain.ServerMeta
+	tracer trace.Tracer
 }
 
 func NewSqlServerSnapshotter(db *sqlx.DB) *SqlServerSnapshotter {
-	return &SqlServerSnapshotter{db: db}
+	return &SqlServerSnapshotter{
+		db:     db,
+		tracer: otel.Tracer("SQLServerSnapshotter"),
+	}
 }
 
 var _ collector.Snapshotter = (*SqlServerSnapshotter)(nil)
@@ -476,7 +484,112 @@ WHERE s.status = 'sleeping'
 	return result, nil
 }
 
-func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles []string) map[string]*common_domain.ExecutionPlan {
-	//TODO implement me
-	panic("implement me")
+func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles []string) (*collector.ExecPlanChunk, error) {
+	ctx, span := s.tracer.Start(ctx, "GetPlanHandles")
+	defer span.End()
+	handles2 := make([]interface{}, 0, len(handles))
+	for _, handle := range handles {
+		decoded, err := base64.StdEncoding.DecodeString(handle)
+		if err == nil {
+			handles2 = append(handles2, decoded)
+		}
+	}
+	if len(handles2) == 0 {
+		return &collector.ExecPlanChunk{Server: s.Server}, nil
+	}
+
+	ret, err3 := s.batchFetchPlanHandles(ctx, s.db, handles2, s.Server)
+	if err3 != nil {
+		ret = make(map[string]*common_domain.ExecutionPlan)
+		//fallback to 1 by 1 strategy, as there might be a problem with tempdb
+		query := "select query_plan from sys.dm_exec_query_plan(?)"
+		for _, handle := range handles {
+			decodeString, err3 := base64.StdEncoding.DecodeString(handle)
+			if err3 != nil {
+				span.RecordError(err3)
+				continue
+			}
+			row := s.db.QueryRowContext(ctx, query, decodeString)
+			err := row.Err()
+			if err != nil {
+				return &collector.ExecPlanChunk{Server: s.Server, Plans: ret}, fmt.Errorf("fetch plan handle - %w", err)
+			}
+			var queryPlan *string
+			err = row.Scan(&queryPlan)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				return &collector.ExecPlanChunk{Server: s.Server, Plans: ret}, fmt.Errorf("fetch plan handle scan - %w", err)
+			}
+			if queryPlan == nil {
+				continue
+			}
+			ret[handle] = &common_domain.ExecutionPlan{
+				PlanHandle: handle,
+				XmlData:    *queryPlan,
+				Server:     s.Server,
+			}
+		}
+	}
+	return &collector.ExecPlanChunk{Server: s.Server, Plans: ret}, nil
+}
+
+func (s SqlServerSnapshotter) batchFetchPlanHandles(ctx context.Context, db *sqlx.DB, handles2 []interface{}, server common_domain.ServerMeta) (map[string]*common_domain.ExecutionPlan, error) {
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadUncommitted})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func(tx *sql.Tx) {
+		_ = tx.Rollback()
+	}(tx)
+	createTempTable := `
+create table #temp_plans (handle varbinary(64) not null)`
+	insertIds := fmt.Sprintf(`
+insert into #temp_plans (handle) values %s
+`, strings.Join(slices.Repeat([]string{"(?)"}, len(handles2)), ","))
+	query := `
+select handle, query_plan from #temp_plans
+    cross apply sys.dm_exec_query_plan(handle)
+`
+	_, err = tx.ExecContext(ctx, createTempTable)
+	if err != nil {
+		return nil, fmt.Errorf("create id table: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, insertIds, handles2...)
+	if err != nil {
+		return nil, fmt.Errorf("insert ids: %w", err)
+	}
+	rows, err2 := tx.QueryContext(ctx, query)
+	if err2 != nil {
+		return nil, fmt.Errorf("fetch plans: %w", err2)
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+	ret := make(map[string]*common_domain.ExecutionPlan)
+	for rows.Next() {
+		var handle []byte
+		var queryPlan *string
+		err = rows.Scan(&handle, &queryPlan)
+		if err != nil {
+			return nil, fmt.Errorf("fetch plans - scan: %w", err)
+		}
+		if queryPlan == nil {
+			continue
+		}
+		b64Handle := base64.StdEncoding.EncodeToString(handle)
+		ret[b64Handle] = &common_domain.ExecutionPlan{
+			PlanHandle: b64Handle,
+			XmlData:    *queryPlan,
+			Server:     server,
+		}
+
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("fetch plans - err: %w", err)
+	}
+	return ret, nil
 }

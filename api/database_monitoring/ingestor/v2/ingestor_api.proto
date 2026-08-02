@@ -10,8 +10,8 @@ import "database_monitoring/v1/execution_plan.proto";
 service IngestionService {
   // One snapshot per stream: HEADER -> CHUNK{1..N} -> FINALIZE
   rpc IngestSnapshotStream(stream SnapshotUploadRequest) returns (SnapshotUploadResult);
-  rpc IngestExecutionPlans(stream ExecutionPlanUploadRequest) returns (ExecutionPlanUploadResult);
-  rpc GetKnownPlanHandles(GetKnownPlanHandlesRequest) returns (GetKnownPlanHandlesResponse);
+  rpc IngestExecutionPlanStream(stream ExecutionPlanUploadRequest) returns (ExecutionPlanUploadResult);
+  rpc GetMissingPlans(GetMissingPlansRequest) returns (GetMissingPlansResponse);
   // For resuming after a broken stream.
   rpc GetMissingChunks(GetMissingChunksRequest) returns (GetMissingChunksResponse);
 }
@@ -19,7 +19,7 @@ service IngestionService {
 message ExecutionPlanUploadRequest{
   oneof payload {
     PlanHeader header = 2;
-    IngestExecutionPlans chunk = 3;
+    ExecPlanChunk chunk = 3;
     Finalize finalize = 4;
   }
 }
@@ -34,8 +34,9 @@ message PlanHeader {
   uint32 max_chunk_bytes = 11;                // hint only
 }
 
-message IngestExecutionPlans{
-  repeated database_monitoring.v1.ExecutionPlan plans = 1;
+message ExecPlanChunk{
+  uint32 chunk_seq = 1;
+  repeated database_monitoring.v1.ExecutionPlan plans = 2;
 }
 message ExecutionPlanUploadResult{
 
@@ -92,15 +93,17 @@ enum UploadStatus {
 enum Compression { COMPRESSION_NONE = 0; COMPRESSION_GZIP = 1; COMPRESSION_ZSTD = 2; }
 
 
-message GetKnownPlanHandlesRequest {
+message GetMissingPlansRequest {
   database_monitoring.v1.ServerMetadata server = 1;
-  int32 page_size = 2;
-  int32 page_number = 3;
 }
 
-message GetKnownPlanHandlesResponse {
-  repeated string handles = 1;
-  int32 page_number = 2;
-  int32 page_size = 3;
-  int32 total_pages = 4;
+message PlanHandleChunk {
+  repeated string plan_handles = 1;
+}
+
+message GetMissingPlansResponse {
+  oneof payload {
+    PlanHandleChunk chunk =1;
+    Finalize finalize = 2;
+  }
 }

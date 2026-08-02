@@ -24,4 +24,5 @@ type SendOptions struct {
 // Adapters (e.g., gRPC client) should implement this interface.
 type Client interface {
 	SendSnapshot(ctx context.Context, snap *common_domain.DataBaseSnapshot, so SendOptions) (*ingestorv2.SnapshotUploadResult, error)
+	SendExecutionPlans(ctx context.Context, plans []*common_domain.ExecutionPlan, server common_domain.ServerMeta, so SendOptions) (*ingestorv2.ExecutionPlanUploadResult, error)
 }
