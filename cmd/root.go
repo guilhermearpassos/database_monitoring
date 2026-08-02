@@ -14,6 +14,7 @@ func main() {
 			return cmd.Usage()
 		},
 	}
+	c.AddCommand(DbmV2)
 	c.AddCommand(CollectorCmd)
 	c.AddCommand(AgentCmd)
 	c.AddCommand(GrpcCmd)

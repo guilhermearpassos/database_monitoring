@@ -3,16 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/guilhermearpassos/database-monitoring/internal/bootstrap"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-	"os"
-	"os/signal"
-	"strings"
-	"time"
 )
 
 var (
@@ -24,7 +25,6 @@ var (
 		Example: "dbm all",
 		RunE:    DBMV2,
 	}
-	pgAddr string
 )
 
 func init() {
