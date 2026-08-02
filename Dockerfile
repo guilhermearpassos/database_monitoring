@@ -1,5 +1,5 @@
 ARG release_image_tag
-FROM golang:1.25.0 AS base
+FROM golang:1.26.5 AS base
 LABEL authors="guilherme passos"
 COPY ./go.mod ./go.sum ./
 RUN go mod download

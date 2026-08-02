@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
+	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
@@ -73,7 +74,7 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 	if snapID == "" {
 		http.Error(w, "snapId is required", http.StatusBadRequest)
 	}
-	resp, err := a.client.GetSampleDetails(r.Context(), &dbmv1.GetSampleDetailsRequest{
+	resp, err := a.client.GetSampleDetails(r.Context(), &querierv2.GetSampleDetailsRequest{
 		SampleId: sampleID,
 		SnapId:   snapID,
 	})
@@ -114,7 +115,7 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func blockChainFromProto(chain *dbmv1.BlockChain) (domain.BlockChain, error) {
+func blockChainFromProto(chain *querierv2.BlockChain) (domain.BlockChain, error) {
 	roots := make([]domain.BlockingNode, len(chain.Roots))
 	for i, root := range chain.Roots {
 		node, err2 := nodeFromProto(root, i)
@@ -173,7 +174,7 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) 
 	return dSample, nil
 }
 
-func nodeFromProto(root *dbmv1.BlockChain_BlockingNode, i int) (domain.BlockingNode, error) {
+func nodeFromProto(root *querierv2.BlockChain_BlockingNode, i int) (domain.BlockingNode, error) {
 	ds, err := protoSampleToDomain(root.QuerySample)
 	if err != nil {
 		return domain.BlockingNode{}, err
@@ -341,7 +342,7 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 	timeRange := query.TimeRange
 	from := timeRange.From
 	to := timeRange.To
-	r, err := a.client.ListSnapshotSummaries(ctx, &dbmv1.ListSnapshotSummariesRequest{
+	r, err := a.client.ListSnapshotSummaries(ctx, &querierv2.ListSnapshotSummariesRequest{
 		Start:  timestamppb.New(from),
 		End:    timestamppb.New(to),
 		Server: q.Database,
@@ -404,7 +405,7 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 	timeRange := query.TimeRange
 	from := timeRange.From
 	to := timeRange.To
-	r, err := a.client.ListSnapshotSummaries(ctx, &dbmv1.ListSnapshotSummariesRequest{
+	r, err := a.client.ListSnapshotSummaries(ctx, &querierv2.ListSnapshotSummariesRequest{
 		Start:  timestamppb.New(from),
 		End:    timestamppb.New(to),
 		Server: q.Database,
@@ -478,7 +479,7 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 	//timeRange := query.TimeRange
 	//from := timeRange.From
 	//to := timeRange.To
-	r, err := a.client.GetSnapshot(ctx, &dbmv1.GetSnapshotRequest{
+	r, err := a.client.GetSnapshot(ctx, &querierv2.GetSnapshotRequest{
 		Id: q.SnapID,
 	})
 	if err != nil {
@@ -577,7 +578,7 @@ func (a *App) queryMetrics(ctx context.Context, pCtx backend.PluginContext, quer
 	timeRange := query.TimeRange
 	from := timeRange.From
 	to := timeRange.To
-	resp, err := a.client.ListQueryMetrics(ctx, &dbmv1.ListQueryMetricsRequest{
+	resp, err := a.client.ListQueryMetrics(ctx, &querierv2.ListQueryMetricsRequest{
 		Start:      timestamppb.New(from),
 		End:        timestamppb.New(to),
 		Host:       q.Database,
@@ -660,7 +661,7 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 	if to.Sub(from) > 15*time.Hour {
 		interval = "30m"
 	}
-	resp, err := a.client.GetQueryMetricsTimeSeries(ctx, &dbmv1.GetQueryMetricsTimeSeriesRequest{
+	resp, err := a.client.GetQueryMetricsTimeSeries(ctx, &querierv2.GetQueryMetricsTimeSeriesRequest{
 		Start:     timestamppb.New(from),
 		End:       timestamppb.New(to),
 		Host:      q.Database,
@@ -780,7 +781,7 @@ func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
 
 // getDatabaseOptions fetches available databases
 func (a *App) getDatabaseOptions(ctx context.Context, startTimestamp time.Time, endTimestamp time.Time) ([]DropdownOption, error) {
-	resp, err := a.client.ListServerSummary(ctx, &dbmv1.ListServerSummaryRequest{
+	resp, err := a.client.ListServerSummary(ctx, &querierv2.ListServerSummaryRequest{
 		Start: timestamppb.New(startTimestamp),
 		End:   timestamppb.New(endTimestamp),
 	})
