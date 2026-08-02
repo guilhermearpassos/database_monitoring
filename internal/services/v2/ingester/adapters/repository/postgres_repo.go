@@ -458,3 +458,38 @@ func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.
 
 	return nil
 }
+
+func (p *PostgresRepo) PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeSnapshots")
+	defer span.End()
+	q := `with rows_to_delete as (
+    select CTID from snapshot
+where snap_time between  $1 and $2
+limit $3
+)
+delete from snapshot using rows_to_delete where snapshot.CTID = rows_to_delete.CTID`
+	rowsAffected := int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, q, start, end, size)
+		if err != nil {
+			return fmt.Errorf("purgeSnapshots: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+	return nil
+}
+
+func (p *PostgresRepo) PurgeAllSnapshots(ctx context.Context) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeAllSnapshots")
+	defer span.End()
+	// language=SQL
+	query := `
+truncate table snapshot cascade`
+	r, err := p.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("purgeSnapshots: %w", err)
+	}
+	rowsAffected, _ := r.RowsAffected()
+	span.SetAttributes(attribute.Int64("rows_affected", rowsAffected))
+	return nil
+}
