@@ -2,6 +2,7 @@ package ingestor
 
 import (
 	"context"
+	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
@@ -25,4 +26,5 @@ type SendOptions struct {
 type Client interface {
 	SendSnapshot(ctx context.Context, snap *common_domain.DataBaseSnapshot, so SendOptions) (*ingestorv2.SnapshotUploadResult, error)
 	SendExecutionPlans(ctx context.Context, plans []*common_domain.ExecutionPlan, server common_domain.ServerMeta, so SendOptions) (*ingestorv2.ExecutionPlanUploadResult, error)
+	GetMissingPlansHandles(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error)
 }

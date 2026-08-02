@@ -26,10 +26,11 @@ type SqlServerSnapshotter struct {
 	tracer trace.Tracer
 }
 
-func NewSqlServerSnapshotter(db *sqlx.DB) *SqlServerSnapshotter {
+func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlServerSnapshotter {
 	return &SqlServerSnapshotter{
 		db:     db,
 		tracer: otel.Tracer("SQLServerSnapshotter"),
+		Server: server,
 	}
 }
 

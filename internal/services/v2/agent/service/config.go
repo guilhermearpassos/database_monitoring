@@ -10,6 +10,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/runtimes"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/adapters/collector"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/adapters/ingestor"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/ports/tasks"
@@ -60,11 +61,15 @@ func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel
 	tsks := make(map[string]runtimes.Task, len(c.Targets))
 	logger := slog.Default()
 	for _, target := range c.Targets {
+		server := common_domain.ServerMeta{
+			Host: target.Alias,
+			Type: target.Driver,
+		}
 		db, err := telemetry.OpenInstrumentedDB(target.Driver, target.ConnString)
 		if err != nil {
 			return nil, fmt.Errorf("open instrumented DB: %w", err)
 		}
-		ss := collector.NewSqlServerSnapshotter(db)
+		ss := collector.NewSqlServerSnapshotter(db, server)
 
 		isc := ingestorv2.NewIngestionServiceClient(inproc)
 		ic, err := ingestor.New(isc)
@@ -75,7 +80,7 @@ func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel
 		tsks[t.Name()] = t
 		planCfg := target.PlanCollection
 		if !planCfg.Disabled {
-			t2 := tasks.NewCollectExecutionPlansTask(target.Alias, []string{}, planCfg.GetPlanInterval(), planCfg.GetPlanLookback(), ss, ic, logger)
+			t2 := tasks.NewCollectExecutionPlansTask(target.Alias, server, []string{}, planCfg.GetPlanInterval(), planCfg.GetPlanLookback(), ss, ic, logger)
 			tsks[t2.Name()] = t2
 		}
 	}

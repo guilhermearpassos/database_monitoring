@@ -11,7 +11,7 @@ service IngestionService {
   // One snapshot per stream: HEADER -> CHUNK{1..N} -> FINALIZE
   rpc IngestSnapshotStream(stream SnapshotUploadRequest) returns (SnapshotUploadResult);
   rpc IngestExecutionPlanStream(stream ExecutionPlanUploadRequest) returns (ExecutionPlanUploadResult);
-  rpc GetMissingPlans(GetMissingPlansRequest) returns (GetMissingPlansResponse);
+  rpc GetMissingPlans(GetMissingPlansRequest) returns (stream GetMissingPlansResponse);
   // For resuming after a broken stream.
   rpc GetMissingChunks(GetMissingChunksRequest) returns (GetMissingChunksResponse);
 }
@@ -95,6 +95,8 @@ enum Compression { COMPRESSION_NONE = 0; COMPRESSION_GZIP = 1; COMPRESSION_ZSTD 
 
 message GetMissingPlansRequest {
   database_monitoring.v1.ServerMetadata server = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
 }
 
 message PlanHandleChunk {

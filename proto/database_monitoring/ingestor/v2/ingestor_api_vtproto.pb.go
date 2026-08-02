@@ -788,6 +788,26 @@ func (m *GetMissingPlansRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.To != nil {
+		size, err := (*timestamppb.Timestamp)(m.To).MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.From != nil {
+		size, err := (*timestamppb.Timestamp)(m.From).MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.Server != nil {
 		if vtmsg, ok := interface{}(m.Server).(interface {
 			MarshalToSizedBufferVT([]byte) (int, error)
@@ -1261,6 +1281,14 @@ func (m *GetMissingPlansRequest) SizeVT() (n int) {
 		} else {
 			l = proto.Size(m.Server)
 		}
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.From != nil {
+		l = (*timestamppb.Timestamp)(m.From).SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.To != nil {
+		l = (*timestamppb.Timestamp)(m.To).SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2957,6 +2985,78 @@ func (m *GetMissingPlansRequest) UnmarshalVT(dAtA []byte) error {
 				if err := proto.Unmarshal(dAtA[iNdEx:postIndex], m.Server); err != nil {
 					return err
 				}
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field From", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.From == nil {
+				m.From = &timestamppb1.Timestamp{}
+			}
+			if err := (*timestamppb.Timestamp)(m.From).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field To", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.To == nil {
+				m.To = &timestamppb1.Timestamp{}
+			}
+			if err := (*timestamppb.Timestamp)(m.To).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
 			}
 			iNdEx = postIndex
 		default:

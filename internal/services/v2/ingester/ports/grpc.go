@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/guilhermearpassos/database-monitoring/internal/common/util"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // GrpcIngester is the gRPC port facade that depends on the application layer.
@@ -171,4 +173,43 @@ func (s *GrpcIngester) IngestExecutionPlanStream(in grpc.ClientStreamingServer[i
 	}
 	err = in.SendAndClose(&ingestorv2.ExecutionPlanUploadResult{})
 	return err
+}
+
+func (s *GrpcIngester) GetMissingPlans(in *ingestorv2.GetMissingPlansRequest, stream grpc.ServerStreamingServer[ingestorv2.GetMissingPlansResponse]) error {
+	if err := in.GetFrom().CheckValid(); err != nil {
+		return fmt.Errorf("invalid from timestamp %v: %w", in.GetFrom(), err)
+	}
+	if err := in.GetTo().CheckValid(); err != nil {
+		return fmt.Errorf("invalid to timestamp %v: %w", in.GetTo(), err)
+	}
+	handles, err := s.app.Query.GetMissingPlans.Handle(stream.Context(), common_domain.ServerMeta{
+		Host: in.Server.Host,
+		Type: in.Server.Type,
+	}, in.GetFrom().AsTime(), in.GetTo().AsTime())
+	if err != nil {
+		return fmt.Errorf("getting missing plans: %w", err)
+	}
+
+	chunks := util.PackByMaxBytes(handles, 100000, func(cur []string, next string) int {
+		return proto.Size(&ingestorv2.PlanHandleChunk{PlanHandles: append(cur, next)})
+	})
+	for _, chunk := range chunks {
+		if err := stream.Send(&ingestorv2.GetMissingPlansResponse{
+			Payload: &ingestorv2.GetMissingPlansResponse_Chunk{
+				Chunk: &ingestorv2.PlanHandleChunk{
+					PlanHandles: chunk,
+				},
+			},
+		}); err != nil {
+			return fmt.Errorf("sending plan handles: %w", err)
+		}
+	}
+	err = stream.Send(&ingestorv2.GetMissingPlansResponse{
+		Payload: &ingestorv2.GetMissingPlansResponse_Finalize{Finalize: &ingestorv2.Finalize{TotalSamples: uint64(len(handles))}},
+	})
+	if err != nil {
+		return fmt.Errorf("sending finalize: %w", err)
+	}
+
+	return nil
 }

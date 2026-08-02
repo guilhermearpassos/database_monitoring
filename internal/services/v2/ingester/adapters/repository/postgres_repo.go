@@ -271,3 +271,34 @@ func (p *PostgresRepo) SaveExecutionPlans(ctx context.Context, executionPlans []
 	}
 	return nil
 }
+
+func (p *PostgresRepo) GetMissingPlans(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error) {
+	targetId, err := p.getTargetID(ctx, p.db, server.Host)
+	if err != nil {
+		return nil, fmt.Errorf("missing plans target id: %w", err)
+	}
+	q := `select distinct qs.plan_handle from query_samples qs
+    inner join snapshot s on qs.snap_id = s.id
+left join query_plans qp on qp.plan_handle = qs.plan_handle
+where qp.plan_handle is null and s.target_id = $1 and s.snap_time between $2 and $3`
+
+	rows, err := p.db.QueryContext(ctx, q, targetId, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("missing plans query: %w", err)
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+	missingPlans := make([]string, 0)
+	for rows.Next() {
+		var handle string
+		if err := rows.Scan(&handle); err != nil {
+			return nil, fmt.Errorf("missing plans scan row: %w", err)
+		}
+		missingPlans = append(missingPlans, handle)
+	}
+	if err := rows.Err(); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("missing plans rows: %w", err)
+	}
+	return missingPlans, nil
+}

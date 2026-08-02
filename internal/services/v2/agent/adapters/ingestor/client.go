@@ -3,6 +3,7 @@ package ingestor
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/common/util"
@@ -318,4 +319,35 @@ func (c *Client) streamUploadPlans(ctx context.Context, plans []*common_domain.E
 		return nil, err
 	}
 	return res, nil
+}
+
+func (c *Client) GetMissingPlansHandles(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error) {
+	stream, err := c.client.GetMissingPlans(ctx, &ingestorv2.GetMissingPlansRequest{
+		Server: &dbmv1.ServerMetadata{
+			Host: server.Host,
+			Type: server.Type,
+		},
+		From: timestamppb.New(start),
+		To:   timestamppb.New(end),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get missing plan handles: %w", err)
+	}
+	resp := make([]string, 0)
+	for {
+		r, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("receive missing plan handles: %w", err)
+		}
+		if r.GetFinalize() != nil {
+			break
+		}
+		if r.GetChunk() != nil {
+			resp = append(resp, r.GetChunk().GetPlanHandles()...)
+		}
+	}
+	return resp, nil
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
@@ -22,4 +23,7 @@ func (n *NoopRepo) FinalizeSnapshot(_ context.Context, _ string) error { return 
 
 func (n *NoopRepo) SaveExecutionPlans(_ context.Context, _ []*common_domain.ExecutionPlan) error {
 	return nil
+}
+func (n *NoopRepo) GetMissingPlans(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error) {
+	return nil, nil
 }

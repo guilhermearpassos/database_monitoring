@@ -14,6 +14,7 @@ type Command struct {
 }
 type Query struct {
 	GetMissingChunks *query.GetMissingChunksHandler
+	GetMissingPlans  *query.GetMissingPlansHandler
 }
 
 // Application wraps command and query handlers for the ingester use-cases.
@@ -40,6 +41,7 @@ func NewApplicationWithAdapters(store domain.SessionStore, repo domain.SnapshotR
 		},
 		Query: Query{
 			GetMissingChunks: query.NewGetMissingChunksHandler(store),
+			GetMissingPlans:  query.NewGetMissingPlansHandler(repo),
 		},
 	}
 }

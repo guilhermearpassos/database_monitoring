@@ -32,7 +32,7 @@ type IngestionServiceClient interface {
 	// One snapshot per stream: HEADER -> CHUNK{1..N} -> FINALIZE
 	IngestSnapshotStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[SnapshotUploadRequest, SnapshotUploadResult], error)
 	IngestExecutionPlanStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ExecutionPlanUploadRequest, ExecutionPlanUploadResult], error)
-	GetMissingPlans(ctx context.Context, in *GetMissingPlansRequest, opts ...grpc.CallOption) (*GetMissingPlansResponse, error)
+	GetMissingPlans(ctx context.Context, in *GetMissingPlansRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetMissingPlansResponse], error)
 	// For resuming after a broken stream.
 	GetMissingChunks(ctx context.Context, in *GetMissingChunksRequest, opts ...grpc.CallOption) (*GetMissingChunksResponse, error)
 }
@@ -71,15 +71,24 @@ func (c *ingestionServiceClient) IngestExecutionPlanStream(ctx context.Context, 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type IngestionService_IngestExecutionPlanStreamClient = grpc.ClientStreamingClient[ExecutionPlanUploadRequest, ExecutionPlanUploadResult]
 
-func (c *ingestionServiceClient) GetMissingPlans(ctx context.Context, in *GetMissingPlansRequest, opts ...grpc.CallOption) (*GetMissingPlansResponse, error) {
+func (c *ingestionServiceClient) GetMissingPlans(ctx context.Context, in *GetMissingPlansRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetMissingPlansResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetMissingPlansResponse)
-	err := c.cc.Invoke(ctx, IngestionService_GetMissingPlans_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &IngestionService_ServiceDesc.Streams[2], IngestionService_GetMissingPlans_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[GetMissingPlansRequest, GetMissingPlansResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type IngestionService_GetMissingPlansClient = grpc.ServerStreamingClient[GetMissingPlansResponse]
 
 func (c *ingestionServiceClient) GetMissingChunks(ctx context.Context, in *GetMissingChunksRequest, opts ...grpc.CallOption) (*GetMissingChunksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -98,7 +107,7 @@ type IngestionServiceServer interface {
 	// One snapshot per stream: HEADER -> CHUNK{1..N} -> FINALIZE
 	IngestSnapshotStream(grpc.ClientStreamingServer[SnapshotUploadRequest, SnapshotUploadResult]) error
 	IngestExecutionPlanStream(grpc.ClientStreamingServer[ExecutionPlanUploadRequest, ExecutionPlanUploadResult]) error
-	GetMissingPlans(context.Context, *GetMissingPlansRequest) (*GetMissingPlansResponse, error)
+	GetMissingPlans(*GetMissingPlansRequest, grpc.ServerStreamingServer[GetMissingPlansResponse]) error
 	// For resuming after a broken stream.
 	GetMissingChunks(context.Context, *GetMissingChunksRequest) (*GetMissingChunksResponse, error)
 	mustEmbedUnimplementedIngestionServiceServer()
@@ -117,8 +126,8 @@ func (UnimplementedIngestionServiceServer) IngestSnapshotStream(grpc.ClientStrea
 func (UnimplementedIngestionServiceServer) IngestExecutionPlanStream(grpc.ClientStreamingServer[ExecutionPlanUploadRequest, ExecutionPlanUploadResult]) error {
 	return status.Errorf(codes.Unimplemented, "method IngestExecutionPlanStream not implemented")
 }
-func (UnimplementedIngestionServiceServer) GetMissingPlans(context.Context, *GetMissingPlansRequest) (*GetMissingPlansResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetMissingPlans not implemented")
+func (UnimplementedIngestionServiceServer) GetMissingPlans(*GetMissingPlansRequest, grpc.ServerStreamingServer[GetMissingPlansResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method GetMissingPlans not implemented")
 }
 func (UnimplementedIngestionServiceServer) GetMissingChunks(context.Context, *GetMissingChunksRequest) (*GetMissingChunksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMissingChunks not implemented")
@@ -158,23 +167,16 @@ func _IngestionService_IngestExecutionPlanStream_Handler(srv interface{}, stream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type IngestionService_IngestExecutionPlanStreamServer = grpc.ClientStreamingServer[ExecutionPlanUploadRequest, ExecutionPlanUploadResult]
 
-func _IngestionService_GetMissingPlans_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetMissingPlansRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _IngestionService_GetMissingPlans_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetMissingPlansRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(IngestionServiceServer).GetMissingPlans(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: IngestionService_GetMissingPlans_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IngestionServiceServer).GetMissingPlans(ctx, req.(*GetMissingPlansRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(IngestionServiceServer).GetMissingPlans(m, &grpc.GenericServerStream[GetMissingPlansRequest, GetMissingPlansResponse]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type IngestionService_GetMissingPlansServer = grpc.ServerStreamingServer[GetMissingPlansResponse]
 
 func _IngestionService_GetMissingChunks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetMissingChunksRequest)
@@ -202,10 +204,6 @@ var IngestionService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*IngestionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetMissingPlans",
-			Handler:    _IngestionService_GetMissingPlans_Handler,
-		},
-		{
 			MethodName: "GetMissingChunks",
 			Handler:    _IngestionService_GetMissingChunks_Handler,
 		},
@@ -220,6 +218,11 @@ var IngestionService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "IngestExecutionPlanStream",
 			Handler:       _IngestionService_IngestExecutionPlanStream_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetMissingPlans",
+			Handler:       _IngestionService_GetMissingPlans_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "database_monitoring/ingestor/v2/ingestor_api.proto",

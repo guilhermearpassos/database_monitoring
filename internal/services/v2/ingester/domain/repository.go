@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
@@ -20,4 +21,5 @@ type SnapshotRepository interface {
 	FinalizeSnapshot(ctx context.Context, snapshotID string) error
 
 	SaveExecutionPlans(ctx context.Context, executionPlan []*common_domain.ExecutionPlan) error
+	GetMissingPlans(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error)
 }

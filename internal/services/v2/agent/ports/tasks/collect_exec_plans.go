@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/runtimes"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/domain/collector"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/domain/ingestor"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
@@ -15,6 +16,7 @@ import (
 
 type CollectExecutionPlansTask struct {
 	targetalias    string
+	server         common_domain.ServerMeta
 	databases      []string
 	interval       time.Duration
 	lookback       time.Duration
@@ -23,7 +25,7 @@ type CollectExecutionPlansTask struct {
 	logger         *slog.Logger
 }
 
-func NewCollectExecutionPlansTask(targetalias string, databases []string, interval, lookback time.Duration, snapshotter collector.Snapshotter, ingestorClient ingestor.Client, logger *slog.Logger) *CollectExecutionPlansTask {
+func NewCollectExecutionPlansTask(targetalias string, server common_domain.ServerMeta, databases []string, interval, lookback time.Duration, snapshotter collector.Snapshotter, ingestorClient ingestor.Client, logger *slog.Logger) *CollectExecutionPlansTask {
 	return &CollectExecutionPlansTask{
 		targetalias:    targetalias,
 		databases:      databases,
@@ -32,6 +34,7 @@ func NewCollectExecutionPlansTask(targetalias string, databases []string, interv
 		snapshotter:    snapshotter,
 		ingestorClient: ingestorClient,
 		logger:         logger,
+		server:         server,
 	}
 }
 
@@ -46,8 +49,10 @@ func (c CollectExecutionPlansTask) Interval() time.Duration {
 }
 
 func (c CollectExecutionPlansTask) Run(ctx context.Context) error {
-	handles := make([]string, 0)
-
+	handles, err := c.ingestorClient.GetMissingPlansHandles(ctx, c.server, time.Now().Add(-c.lookback), time.Now())
+	if err != nil {
+		return fmt.Errorf("missing plans handles: %w", err)
+	}
 	plans, err := c.snapshotter.FetchExecutionPlans(ctx, handles)
 	if plans != nil && len(plans.Plans) > 0 {
 		_, err2 := c.ingestorClient.SendExecutionPlans(ctx, maps.Values(plans.Plans), plans.Server, ingestor.SendOptions{
