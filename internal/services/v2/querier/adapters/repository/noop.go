@@ -36,3 +36,10 @@ func (n NoopSampleRepo) ListSnapshotSummaries(ctx context.Context, serverID stri
 	//TODO implement me
 	panic("implement me")
 }
+
+func (n NoopSampleRepo) ListQueryMetrics(ctx context.Context, start time.Time, end time.Time, serverID string) ([]*common_domain.QueryMetric, error) {
+	return nil, nil
+}
+func (n NoopSampleRepo) GetQueryMetricsSlice(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) ([]*common_domain.QueryMetric, error) {
+	return nil, nil
+}

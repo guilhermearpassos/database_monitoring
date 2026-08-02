@@ -109,3 +109,67 @@ func SnapSummaryToProto(summary *common_domain.SnapshotSummary) *querierv2.Snaps
 		MaxDuration:            summary.MaxDuration,
 	}
 }
+
+func (s GRPCServer) GetSampleDetails(ctx context.Context, in *querierv2.GetSampleDetailsRequest) (*querierv2.GetSampleDetailsResponse, error) {
+
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.snap_id", in.GetSnapId()),
+		attribute.String("request.sample_id", in.SampleId),
+	)
+
+	resp, err := s.app.Queries.GetQuerySampleDetails.Handle(ctx, in.GetSnapId(), in.SampleId)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (s GRPCServer) ListQueryMetrics(ctx context.Context, in *querierv2.ListQueryMetricsRequest) (*querierv2.ListQueryMetricsResponse, error) {
+	resp, err := s.app.Queries.ListQueryMetrics.Handle(ctx, in.Start.AsTime(), in.End.AsTime(), in.Host)
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]*dbmv1.QueryMetric, len(resp))
+	for i, metric := range resp {
+		protoMetric, err2 := converters.QueryMetricToProto(metric)
+		if err2 != nil {
+			return nil, err2
+		}
+		ret[i] = protoMetric
+	}
+
+	return &querierv2.ListQueryMetricsResponse{Metrics: ret}, nil
+}
+
+func (s GRPCServer) GetQueryMetricsTimeSeries(ctx context.Context, in *querierv2.GetQueryMetricsTimeSeriesRequest) (*querierv2.GetQueryMetricsTimeSeriesResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.start", in.Start.AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", in.End.AsTime().Format(time.RFC3339)),
+		attribute.String("request.host", in.Host),
+		attribute.String("request.sql_handle", in.SqlHandle),
+		attribute.String("request.interval", in.Interval),
+	)
+	interval, err := time.ParseDuration(in.Interval)
+	if err != nil {
+		return nil, err
+	}
+	ret, err := s.app.Queries.GetQueryMetricsSlice.Handle(ctx, in.Start.AsTime(), in.End.AsTime(), in.Host, in.SqlHandle, interval)
+	if err != nil {
+		return nil, err
+	}
+
+	protoM := make([]*dbmv1.QueryMetric, 0, len(ret))
+	for _, metric := range ret {
+		pm, err := converters.QueryMetricToProto(metric)
+		if err != nil {
+			return nil, err
+		}
+		if pm == nil {
+			continue
+		}
+		protoM = append(protoM, pm)
+	}
+	return &querierv2.GetQueryMetricsTimeSeriesResponse{Metrics: protoM}, nil
+}

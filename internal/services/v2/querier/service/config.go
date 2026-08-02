@@ -25,7 +25,10 @@ type QuerierConfig struct {
 // GetService constructs the transport-agnostic ports.GrpcIngester using
 // in-memory/default adapters so the service can run without external deps.
 func (c *QuerierConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel) (appcommon.Service, error) { //nolint:revive,unused
-	var repo domain.SampleRepository = repository.NewNoopSampleRepo()
+	var repo interface {
+		domain.SampleRepository
+		domain.QueryMetricsRepository
+	} = repository.NewNoopSampleRepo()
 	if c.Postgres.Connstring != "" {
 		db, err := c.Postgres.Get(ctx)
 		if err != nil {
@@ -33,7 +36,7 @@ func (c *QuerierConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chann
 		}
 		repo = repository.NewPostgresRepo(db)
 	}
-	application := app.NewApplication(repo)
+	application := app.NewApplication(repo, repo)
 	p := ports.NewGRPCServer(application)
 	return QuerierService{Port: &p}, nil
 }

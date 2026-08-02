@@ -14,18 +14,24 @@ type Queries struct {
 	GetSnapshot           query.GetSnapshotHandler
 	ListServerSummary     query.ListServerSummaryHandler
 	ListSnapshotSummaries query.ListSnapshotSummariesHandler
+	GetQueryMetricsSlice  query.GetQueryMetricsSliceHandler
+	ListQueryMetrics      query.ListQueryMetricsHandler
+	GetQuerySampleDetails query.GetQuerySampleDetailsHandler
 }
 
 type Commands struct {
 }
 
-func NewApplication(repo domain.SampleRepository) *Application {
+func NewApplication(repo domain.SampleRepository, queryRepo domain.QueryMetricsRepository) *Application {
 	return &Application{
 		Commands: Commands{},
 		Queries: Queries{
 			GetSnapshot:           query.NewGetSnapshotHandler(repo),
 			ListServerSummary:     query.NewListServerSummaryHandler(repo),
 			ListSnapshotSummaries: query.NewListSnapshotSummariesHandler(repo),
+			GetQueryMetricsSlice:  query.NewGetQueryMetricsSliceHandler(queryRepo),
+			ListQueryMetrics:      query.NewListQueryMetricsHandler(queryRepo),
+			GetQuerySampleDetails: query.NewGetQuerySampleDetailsHandler(repo),
 		},
 	}
 }

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -283,4 +284,46 @@ func parseSnapshotRows(rows *sql.Rows) (int, []common_domain.DataBaseSnapshot, e
 		})
 	}
 	return fullCount, ret, nil
+}
+
+func (p *PostgresRepo) GetExecutionPlan(ctx context.Context, planHandle string, server common_domain.ServerMeta) (*common_domain.ExecutionPlan, error) {
+	targetId, err := p.getTargetID(ctx, p.db, server.Host)
+	if err != nil {
+		return nil, fmt.Errorf("getting target id: %w", err)
+	}
+	q := "select plan_xml from query_plans where plan_handle = $1 and target_id = $2"
+	result := p.db.QueryRowContext(ctx, q, planHandle, targetId)
+	err = result.Err()
+	if err != nil {
+		return nil, fmt.Errorf("getting query plan: %w", err)
+	}
+	var planXML string
+	err = result.Scan(&planXML)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, custom_errors.NotFoundErr{Message: "plan not found"}
+		}
+		return nil, fmt.Errorf("scanning query plan: %w", err)
+	}
+	return &common_domain.ExecutionPlan{
+		PlanHandle: planHandle,
+		Server:     server,
+		XmlData:    planXML,
+	}, nil
+
+}
+
+func (p *PostgresRepo) getTargetID(ctx context.Context, tx sqlx.QueryerContext, host string) (int, error) {
+	//language=SQL
+	q := `select id from target where host = $1 and type_id = 1`
+	row := tx.QueryRowxContext(ctx, q, host)
+	if row == nil {
+		return 0, fmt.Errorf("nil row")
+	}
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
