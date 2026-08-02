@@ -19,10 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	QuerierAPI_ListSnapshotSummaries_FullMethodName = "/database_monitoring.v2.QuerierAPI/ListSnapshotSummaries"
-	QuerierAPI_GetSnapshot_FullMethodName           = "/database_monitoring.v2.QuerierAPI/GetSnapshot"
-	QuerierAPI_ListServerSummary_FullMethodName     = "/database_monitoring.v2.QuerierAPI/ListServerSummary"
-	QuerierAPI_GetSampleDetails_FullMethodName      = "/database_monitoring.v2.QuerierAPI/GetSampleDetails"
+	QuerierAPI_ListSnapshotSummaries_FullMethodName     = "/database_monitoring.v2.QuerierAPI/ListSnapshotSummaries"
+	QuerierAPI_GetSnapshot_FullMethodName               = "/database_monitoring.v2.QuerierAPI/GetSnapshot"
+	QuerierAPI_ListServerSummary_FullMethodName         = "/database_monitoring.v2.QuerierAPI/ListServerSummary"
+	QuerierAPI_GetSampleDetails_FullMethodName          = "/database_monitoring.v2.QuerierAPI/GetSampleDetails"
+	QuerierAPI_ListQueryMetrics_FullMethodName          = "/database_monitoring.v2.QuerierAPI/ListQueryMetrics"
+	QuerierAPI_GetQueryMetricsTimeSeries_FullMethodName = "/database_monitoring.v2.QuerierAPI/GetQueryMetricsTimeSeries"
 )
 
 // QuerierAPIClient is the client API for QuerierAPI service.
@@ -33,6 +35,8 @@ type QuerierAPIClient interface {
 	GetSnapshot(ctx context.Context, in *GetSnapshotRequest, opts ...grpc.CallOption) (*GetSnapshotResponse, error)
 	ListServerSummary(ctx context.Context, in *ListServerSummaryRequest, opts ...grpc.CallOption) (*ListServerSummaryResponse, error)
 	GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error)
+	ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error)
+	GetQueryMetricsTimeSeries(ctx context.Context, in *GetQueryMetricsTimeSeriesRequest, opts ...grpc.CallOption) (*GetQueryMetricsTimeSeriesResponse, error)
 }
 
 type querierAPIClient struct {
@@ -83,6 +87,26 @@ func (c *querierAPIClient) GetSampleDetails(ctx context.Context, in *GetSampleDe
 	return out, nil
 }
 
+func (c *querierAPIClient) ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListQueryMetricsResponse)
+	err := c.cc.Invoke(ctx, QuerierAPI_ListQueryMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *querierAPIClient) GetQueryMetricsTimeSeries(ctx context.Context, in *GetQueryMetricsTimeSeriesRequest, opts ...grpc.CallOption) (*GetQueryMetricsTimeSeriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetQueryMetricsTimeSeriesResponse)
+	err := c.cc.Invoke(ctx, QuerierAPI_GetQueryMetricsTimeSeries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QuerierAPIServer is the server API for QuerierAPI service.
 // All implementations must embed UnimplementedQuerierAPIServer
 // for forward compatibility.
@@ -91,6 +115,8 @@ type QuerierAPIServer interface {
 	GetSnapshot(context.Context, *GetSnapshotRequest) (*GetSnapshotResponse, error)
 	ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error)
 	GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error)
+	ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error)
+	GetQueryMetricsTimeSeries(context.Context, *GetQueryMetricsTimeSeriesRequest) (*GetQueryMetricsTimeSeriesResponse, error)
 	mustEmbedUnimplementedQuerierAPIServer()
 }
 
@@ -112,6 +138,12 @@ func (UnimplementedQuerierAPIServer) ListServerSummary(context.Context, *ListSer
 }
 func (UnimplementedQuerierAPIServer) GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSampleDetails not implemented")
+}
+func (UnimplementedQuerierAPIServer) ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListQueryMetrics not implemented")
+}
+func (UnimplementedQuerierAPIServer) GetQueryMetricsTimeSeries(context.Context, *GetQueryMetricsTimeSeriesRequest) (*GetQueryMetricsTimeSeriesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetQueryMetricsTimeSeries not implemented")
 }
 func (UnimplementedQuerierAPIServer) mustEmbedUnimplementedQuerierAPIServer() {}
 func (UnimplementedQuerierAPIServer) testEmbeddedByValue()                    {}
@@ -206,6 +238,42 @@ func _QuerierAPI_GetSampleDetails_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _QuerierAPI_ListQueryMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListQueryMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuerierAPIServer).ListQueryMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuerierAPI_ListQueryMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuerierAPIServer).ListQueryMetrics(ctx, req.(*ListQueryMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QuerierAPI_GetQueryMetricsTimeSeries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetQueryMetricsTimeSeriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuerierAPIServer).GetQueryMetricsTimeSeries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuerierAPI_GetQueryMetricsTimeSeries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuerierAPIServer).GetQueryMetricsTimeSeries(ctx, req.(*GetQueryMetricsTimeSeriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // QuerierAPI_ServiceDesc is the grpc.ServiceDesc for QuerierAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +296,14 @@ var QuerierAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSampleDetails",
 			Handler:    _QuerierAPI_GetSampleDetails_Handler,
+		},
+		{
+			MethodName: "ListQueryMetrics",
+			Handler:    _QuerierAPI_ListQueryMetrics_Handler,
+		},
+		{
+			MethodName: "GetQueryMetricsTimeSeries",
+			Handler:    _QuerierAPI_GetQueryMetricsTimeSeries_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

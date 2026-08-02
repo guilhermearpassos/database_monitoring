@@ -12,6 +12,30 @@ service QuerierAPI {
   rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
   rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
   rpc GetSampleDetails(GetSampleDetailsRequest) returns (GetSampleDetailsResponse);
+  rpc ListQueryMetrics(ListQueryMetricsRequest) returns (ListQueryMetricsResponse);
+  rpc GetQueryMetricsTimeSeries(GetQueryMetricsTimeSeriesRequest) returns (GetQueryMetricsTimeSeriesResponse);
+}
+message GetQueryMetricsTimeSeriesRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  string sql_handle = 4;
+  string interval = 5;
+}
+message GetQueryMetricsTimeSeriesResponse{
+  repeated database_monitoring.v1.QueryMetric metrics = 1;
+}
+message ListQueryMetricsRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  string database = 4;
+  int32 page_size = 5;
+  int64 page_number = 6;
+
+}
+message ListQueryMetricsResponse{
+  repeated database_monitoring.v1.QueryMetric metrics = 1;
 }
 message GetSampleDetailsRequest {
   string sample_id = 1;
