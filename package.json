@@ -1,6 +1,6 @@
 {
   "name": "sqlsights",
-  "version": "1.0.28",
+  "version": "2.0.0-b8",
   "scripts": {
     "build": "webpack -c ./.config/webpack/webpack.config.ts --env production",
     "dev": "webpack -w -c ./.config/webpack/webpack.config.ts --env development",
