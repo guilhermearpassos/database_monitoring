@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/common/util"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
@@ -12,6 +13,8 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -212,4 +215,33 @@ func (s *GrpcIngester) GetMissingPlans(in *ingestorv2.GetMissingPlansRequest, st
 	}
 
 	return nil
+}
+
+func (s *GrpcIngester) IngestMetrics(ctx context.Context, metrics *ingestorv2.DatabaseMetrics) (*ingestorv2.IngestMetricsResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.timestamp", metrics.Timestamp.AsTime().Format(time.RFC3339)),
+		attribute.String("request.server.host", metrics.Server.Host),
+		attribute.String("request.server.type", metrics.Server.Type),
+		attribute.Int("request.metrics_count", len(metrics.GetQueryMetrics().GetQueryMetrics())),
+	)
+
+	timestamp := metrics.Timestamp.AsTime()
+	domainMetrics := make([]*common_domain.QueryMetric, len(metrics.GetQueryMetrics().GetQueryMetrics()))
+	for i, m := range metrics.GetQueryMetrics().GetQueryMetrics() {
+		domainMetric, err := converters.QueryMetricToDomain(m)
+		if err != nil {
+			return nil, err
+		}
+		domainMetric.CollectionTime = timestamp
+		domainMetrics[i] = domainMetric
+	}
+	err := s.app.Command.StoreQueryMetrics.Handle(ctx, domainMetrics, common_domain.ServerMeta{
+		Host: metrics.Server.Host,
+		Type: metrics.Server.Type,
+	}, timestamp)
+	if err != nil {
+		return nil, err
+	}
+	return &ingestorv2.IngestMetricsResponse{}, nil
 }

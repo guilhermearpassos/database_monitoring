@@ -23,6 +23,7 @@ const (
 	IngestionService_IngestExecutionPlanStream_FullMethodName = "/database_monitoring.v2.IngestionService/IngestExecutionPlanStream"
 	IngestionService_GetMissingPlans_FullMethodName           = "/database_monitoring.v2.IngestionService/GetMissingPlans"
 	IngestionService_GetMissingChunks_FullMethodName          = "/database_monitoring.v2.IngestionService/GetMissingChunks"
+	IngestionService_IngestMetrics_FullMethodName             = "/database_monitoring.v2.IngestionService/IngestMetrics"
 )
 
 // IngestionServiceClient is the client API for IngestionService service.
@@ -35,6 +36,7 @@ type IngestionServiceClient interface {
 	GetMissingPlans(ctx context.Context, in *GetMissingPlansRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetMissingPlansResponse], error)
 	// For resuming after a broken stream.
 	GetMissingChunks(ctx context.Context, in *GetMissingChunksRequest, opts ...grpc.CallOption) (*GetMissingChunksResponse, error)
+	IngestMetrics(ctx context.Context, in *DatabaseMetrics, opts ...grpc.CallOption) (*IngestMetricsResponse, error)
 }
 
 type ingestionServiceClient struct {
@@ -100,6 +102,16 @@ func (c *ingestionServiceClient) GetMissingChunks(ctx context.Context, in *GetMi
 	return out, nil
 }
 
+func (c *ingestionServiceClient) IngestMetrics(ctx context.Context, in *DatabaseMetrics, opts ...grpc.CallOption) (*IngestMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IngestMetricsResponse)
+	err := c.cc.Invoke(ctx, IngestionService_IngestMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IngestionServiceServer is the server API for IngestionService service.
 // All implementations must embed UnimplementedIngestionServiceServer
 // for forward compatibility.
@@ -110,6 +122,7 @@ type IngestionServiceServer interface {
 	GetMissingPlans(*GetMissingPlansRequest, grpc.ServerStreamingServer[GetMissingPlansResponse]) error
 	// For resuming after a broken stream.
 	GetMissingChunks(context.Context, *GetMissingChunksRequest) (*GetMissingChunksResponse, error)
+	IngestMetrics(context.Context, *DatabaseMetrics) (*IngestMetricsResponse, error)
 	mustEmbedUnimplementedIngestionServiceServer()
 }
 
@@ -131,6 +144,9 @@ func (UnimplementedIngestionServiceServer) GetMissingPlans(*GetMissingPlansReque
 }
 func (UnimplementedIngestionServiceServer) GetMissingChunks(context.Context, *GetMissingChunksRequest) (*GetMissingChunksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMissingChunks not implemented")
+}
+func (UnimplementedIngestionServiceServer) IngestMetrics(context.Context, *DatabaseMetrics) (*IngestMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IngestMetrics not implemented")
 }
 func (UnimplementedIngestionServiceServer) mustEmbedUnimplementedIngestionServiceServer() {}
 func (UnimplementedIngestionServiceServer) testEmbeddedByValue()                          {}
@@ -196,6 +212,24 @@ func _IngestionService_GetMissingChunks_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IngestionService_IngestMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DatabaseMetrics)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IngestionServiceServer).IngestMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IngestionService_IngestMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IngestionServiceServer).IngestMetrics(ctx, req.(*DatabaseMetrics))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IngestionService_ServiceDesc is the grpc.ServiceDesc for IngestionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,6 +240,10 @@ var IngestionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMissingChunks",
 			Handler:    _IngestionService_GetMissingChunks_Handler,
+		},
+		{
+			MethodName: "IngestMetrics",
+			Handler:    _IngestionService_IngestMetrics_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

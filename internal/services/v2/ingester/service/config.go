@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/config"
@@ -18,15 +19,18 @@ import (
 // It provides minimal knobs for the ingestion server application layer.
 // Adapter wiring (e.g., gRPC) is intentionally left out for now.
 type IngesterConfig struct {
-	Enabled  bool                   `yaml:"enabled" toml:"enabled"`
-	Postgres config.PostgresConfig  `yaml:"postgres" toml:"postgres"`
+	Enabled  bool                  `yaml:"enabled" toml:"enabled"`
+	Postgres config.PostgresConfig `yaml:"postgres" toml:"postgres"`
 }
 
 // GetService constructs the transport-agnostic ports.GrpcIngester using
 // in-memory/default adapters so the service can run without external deps.
 func (c *IngesterConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel) (appcommon.Service, error) { //nolint:revive,unused
 	store := state.NewMemoryStore()
-	var repo domain.SnapshotRepository = repository.NewNoopRepo()
+	var repo interface {
+		domain.SnapshotRepository
+		domain.QueryMetricsRepository
+	} = repository.NewNoopRepo()
 	if c.Postgres.Connstring != "" {
 		db, err := c.Postgres.Get(ctx)
 		if err != nil {
@@ -34,7 +38,7 @@ func (c *IngesterConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chan
 		}
 		repo = repository.NewPostgresRepo(db)
 	}
-	application := app.NewApplicationWithAdapters(store, repo)
+	application := app.NewApplicationWithAdapters(store, repo, repo)
 	p := ports.NewService(application)
 	return IngesterService{Port: p}, nil
 }

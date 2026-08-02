@@ -23,3 +23,9 @@ type SnapshotRepository interface {
 	SaveExecutionPlans(ctx context.Context, executionPlan []*common_domain.ExecutionPlan) error
 	GetMissingPlans(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error)
 }
+
+type QueryMetricsRepository interface {
+	StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error
+	PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error
+	PurgeAllQueryMetrics(ctx context.Context) error
+}

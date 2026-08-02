@@ -43,3 +43,7 @@ func (n NoopSampleRepo) ListQueryMetrics(ctx context.Context, start time.Time, e
 func (n NoopSampleRepo) GetQueryMetricsSlice(ctx context.Context, start time.Time, end time.Time, serverID string, sampleID string) ([]*common_domain.QueryMetric, error) {
 	return nil, nil
 }
+
+func (n NoopSampleRepo) GetExecutionPlan(ctx context.Context, planHandle string, server common_domain.ServerMeta) (*common_domain.ExecutionPlan, error) {
+	return nil, nil
+}

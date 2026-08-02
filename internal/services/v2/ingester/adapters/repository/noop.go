@@ -27,3 +27,13 @@ func (n *NoopRepo) SaveExecutionPlans(_ context.Context, _ []*common_domain.Exec
 func (n *NoopRepo) GetMissingPlans(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error) {
 	return nil, nil
 }
+
+func (n *NoopRepo) StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error {
+	return nil
+}
+func (n *NoopRepo) PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error {
+	return nil
+}
+func (n *NoopRepo) PurgeAllQueryMetrics(ctx context.Context) error {
+	return nil
+}

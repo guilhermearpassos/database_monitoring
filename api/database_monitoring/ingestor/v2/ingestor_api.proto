@@ -6,7 +6,6 @@ import "google/protobuf/timestamp.proto";
 import "database_monitoring/v1/sample.proto";        // QuerySample
 import "database_monitoring/v1/snapshot.proto";      // ServerMetadata
 import "database_monitoring/v1/execution_plan.proto";
-
 service IngestionService {
   // One snapshot per stream: HEADER -> CHUNK{1..N} -> FINALIZE
   rpc IngestSnapshotStream(stream SnapshotUploadRequest) returns (SnapshotUploadResult);
@@ -14,7 +13,23 @@ service IngestionService {
   rpc GetMissingPlans(GetMissingPlansRequest) returns (stream GetMissingPlansResponse);
   // For resuming after a broken stream.
   rpc GetMissingChunks(GetMissingChunksRequest) returns (GetMissingChunksResponse);
+  rpc IngestMetrics(DatabaseMetrics) returns (IngestMetricsResponse);
+
 }
+
+message DatabaseMetrics {
+  message QueryMetricSample{
+    repeated database_monitoring.v1.QueryMetric query_metrics = 1;
+  }
+  database_monitoring.v1.ServerMetadata server = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  oneof metrics {
+    QueryMetricSample query_metrics = 3;
+
+  }
+}
+
+message IngestMetricsResponse{}
 
 message ExecutionPlanUploadRequest{
   oneof payload {

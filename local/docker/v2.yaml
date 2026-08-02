@@ -1,0 +1,41 @@
+pg_addr: &pg_addr "postgres://postgres:example@postgres:5432/postgres?sslmode=disable"
+infra:
+  telemetry:
+    enabled: true
+    service_name: sqlsights
+    otlp:
+      enabled: true
+      endpoint: otel-collector:4317
+    metrics:
+      enabled: true
+      host: 0.0.0.0:9016
+  migrate:
+    enabled: true
+    conn_string: *pg_addr
+runtimes:
+  grpc_server:
+    enabled: true
+    grpc:
+      url: 0.0.0.0:9014
+      grpc_message_max_size: 100000000
+  grpc_ui:
+    enabled: true
+    url: 0.0.0.0:9015
+services:
+  agent:
+    enabled: true
+    targets:
+      - alias: "localhost"
+        driver: mssql
+        conn_string: "server=sqlserver;port=1433;user id=sa;password=SqlServer2019!"
+        interval: 10s
+    ingestor_client:
+      endpoint: inproc://
+  ingester:
+    enabled: true
+    postgres:
+      connstring: *pg_addr
+  querier:
+    enabled: true
+    postgres:
+      connstring: *pg_addr

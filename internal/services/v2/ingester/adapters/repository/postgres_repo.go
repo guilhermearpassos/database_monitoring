@@ -8,7 +8,9 @@ import (
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"go.opentelemetry.io/otel"
@@ -301,4 +303,158 @@ where qp.plan_handle is null and s.target_id = $1 and s.snap_time between $2 and
 		return nil, fmt.Errorf("missing plans rows: %w", err)
 	}
 	return missingPlans, nil
+}
+
+func (p *PostgresRepo) StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error {
+	ctx, span := p.tracer.Start(ctx, "StoreQueryMetrics")
+	defer span.End()
+	tx, err := p.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			err2 := tx.Rollback()
+			if err2 != nil {
+				err = errors.Join(err, err2)
+			}
+			return
+		}
+		err2 := tx.Commit()
+		if err2 != nil {
+			err = errors.Join(err, err2)
+			return
+		}
+	}()
+	var snapId int
+	snapId, err = p.insertQueryStatSnapshot(ctx, tx, serverMeta, timestamp)
+	if err != nil {
+		return fmt.Errorf("insert snapshot: %w", err)
+	}
+	err = p.bulkInsertQueryStatSamples(ctx, tx, metrics, snapId)
+	if err != nil {
+		return fmt.Errorf("bulk insert stat samples: %w", err)
+	}
+	return nil
+}
+func (p *PostgresRepo) PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeQueryMetrics")
+	defer span.End()
+	// language=SQL
+	query := `
+with rows_to_delete as (
+    select qss.CTID from query_stat_sample qss
+inner join query_stat_snapshot qsnap on qss.snap_id = qsnap.id
+where collected_at between  $1 and $2
+limit $3
+)
+delete from query_stat_sample using rows_to_delete where query_stat_sample.CTID = rows_to_delete.CTID`
+	rowsAffected := int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, query, start, end, batchSize)
+		if err != nil {
+			return fmt.Errorf("purgeQueryMetrics: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+	// language=SQL
+	querySnap := `
+with rows_to_delete as (
+    select CTID from query_stat_snapshot 
+where collected_at between  $1 and $2
+limit $3
+)
+delete from query_stat_snapshot using rows_to_delete where query_stat_snapshot.CTID = rows_to_delete.CTID`
+	rowsAffected = int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, querySnap, start, end, batchSize)
+		if err != nil {
+			return fmt.Errorf("purgeQueryMetrics: %w", err)
+		}
+		rowsAffected, _ = r.RowsAffected()
+	}
+	return nil
+}
+func (p *PostgresRepo) PurgeAllQueryMetrics(ctx context.Context) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeAllQueryMetrics")
+	defer span.End()
+	// language=SQL
+	query := `
+truncate table query_stat_snapshot cascade`
+	r, err := p.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("purgeQueryMetrics: %w", err)
+	}
+	rowsAffected, _ := r.RowsAffected()
+	span.SetAttributes(attribute.Int64("rows_affected", rowsAffected))
+	return nil
+}
+
+// insertQueryStatSnapshot inserts a single query stat snapshot and returns the generated ID
+func (p *PostgresRepo) insertQueryStatSnapshot(ctx context.Context, tx *sqlx.Tx, meta common_domain.ServerMeta, collectedAt time.Time) (int, error) {
+	ctx, span := p.tracer.Start(ctx, "insertQueryStatSnapshot")
+	defer span.End()
+	query := `
+		INSERT INTO query_stat_snapshot (f_id, target_id, collected_at)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`
+
+	var id int
+	newUuid, err := uuid.NewUUID()
+	if err != nil {
+		return 0, fmt.Errorf("insertQueryStatSnapshot uuid: %w", err)
+	}
+
+	targetId, err := p.getOrCreateTargetID(ctx, tx, meta.Host)
+	if err != nil {
+		return 0, fmt.Errorf("get target id: %w", err)
+	}
+	err = tx.QueryRowxContext(ctx, query, newUuid, targetId, collectedAt).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("insertQueryStatSnapshot scan: %w", err)
+	}
+
+	return id, nil
+}
+
+// bulkInsertQueryStatSamples performs bulk insert of query stat samples using PostgreSQL COPY
+func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.Tx, samples []*common_domain.QueryMetric, snapId int) error {
+	ctx, span := p.tracer.Start(ctx, "bulkInsertQueryStatSamples")
+	defer span.End()
+	// Prepare the COPY statement
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("query_stat_sample", "snap_id", "sql_handle", "data"))
+	if err != nil {
+		return fmt.Errorf("failed to prepare COPY statement: %w", err)
+	}
+	defer func(stmt *sql.Stmt) {
+		_ = stmt.Close()
+	}(stmt)
+
+	// Execute COPY for each sample
+	for _, sample := range samples {
+
+		proto, err2 := converters.QueryMetricToProto(sample)
+		if err2 != nil {
+			return fmt.Errorf("convert to proto: %w", err2)
+		}
+		var protoBytes []byte
+		protoBytes, err = proto.MarshalVT()
+		if err != nil {
+			return fmt.Errorf("marshal proto: %w", err)
+		}
+
+		_, err = stmt.ExecContext(ctx, snapId, sample.QueryHash, protoBytes)
+		if err != nil {
+			return fmt.Errorf("failed to execute COPY for sample: %w", err)
+		}
+	}
+
+	// Execute the final COPY command
+	_, err = stmt.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to complete COPY operation: %w", err)
+	}
+
+	return nil
 }
