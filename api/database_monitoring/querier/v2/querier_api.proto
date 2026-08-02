@@ -11,7 +11,24 @@ service QuerierAPI {
   rpc ListSnapshotSummaries(ListSnapshotSummariesRequest) returns (ListSnapshotSummariesResponse);
   rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
   rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
+  rpc GetSampleDetails(GetSampleDetailsRequest) returns (GetSampleDetailsResponse);
+}
+message GetSampleDetailsRequest {
+  string sample_id = 1;
+  string snap_id = 2;
+}
+message BlockChain{
+  message BlockingNode {
+    database_monitoring.v1.QuerySample query_sample = 1;
+    repeated BlockingNode child_nodes = 2;
+  }
+  repeated BlockingNode roots = 1;
+}
 
+message GetSampleDetailsResponse {
+  database_monitoring.v1.QuerySample query_sample = 1;
+  database_monitoring.v1.ParsedExecutionPlan parsed_plan = 2;
+  BlockChain block_chain = 3;
 }
 message ListSnapshotSummariesRequest {
   google.protobuf.Timestamp start = 1;

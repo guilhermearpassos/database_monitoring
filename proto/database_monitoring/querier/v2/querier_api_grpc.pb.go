@@ -22,6 +22,7 @@ const (
 	QuerierAPI_ListSnapshotSummaries_FullMethodName = "/database_monitoring.v2.QuerierAPI/ListSnapshotSummaries"
 	QuerierAPI_GetSnapshot_FullMethodName           = "/database_monitoring.v2.QuerierAPI/GetSnapshot"
 	QuerierAPI_ListServerSummary_FullMethodName     = "/database_monitoring.v2.QuerierAPI/ListServerSummary"
+	QuerierAPI_GetSampleDetails_FullMethodName      = "/database_monitoring.v2.QuerierAPI/GetSampleDetails"
 )
 
 // QuerierAPIClient is the client API for QuerierAPI service.
@@ -31,6 +32,7 @@ type QuerierAPIClient interface {
 	ListSnapshotSummaries(ctx context.Context, in *ListSnapshotSummariesRequest, opts ...grpc.CallOption) (*ListSnapshotSummariesResponse, error)
 	GetSnapshot(ctx context.Context, in *GetSnapshotRequest, opts ...grpc.CallOption) (*GetSnapshotResponse, error)
 	ListServerSummary(ctx context.Context, in *ListServerSummaryRequest, opts ...grpc.CallOption) (*ListServerSummaryResponse, error)
+	GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error)
 }
 
 type querierAPIClient struct {
@@ -71,6 +73,16 @@ func (c *querierAPIClient) ListServerSummary(ctx context.Context, in *ListServer
 	return out, nil
 }
 
+func (c *querierAPIClient) GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSampleDetailsResponse)
+	err := c.cc.Invoke(ctx, QuerierAPI_GetSampleDetails_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QuerierAPIServer is the server API for QuerierAPI service.
 // All implementations must embed UnimplementedQuerierAPIServer
 // for forward compatibility.
@@ -78,6 +90,7 @@ type QuerierAPIServer interface {
 	ListSnapshotSummaries(context.Context, *ListSnapshotSummariesRequest) (*ListSnapshotSummariesResponse, error)
 	GetSnapshot(context.Context, *GetSnapshotRequest) (*GetSnapshotResponse, error)
 	ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error)
+	GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error)
 	mustEmbedUnimplementedQuerierAPIServer()
 }
 
@@ -96,6 +109,9 @@ func (UnimplementedQuerierAPIServer) GetSnapshot(context.Context, *GetSnapshotRe
 }
 func (UnimplementedQuerierAPIServer) ListServerSummary(context.Context, *ListServerSummaryRequest) (*ListServerSummaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListServerSummary not implemented")
+}
+func (UnimplementedQuerierAPIServer) GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSampleDetails not implemented")
 }
 func (UnimplementedQuerierAPIServer) mustEmbedUnimplementedQuerierAPIServer() {}
 func (UnimplementedQuerierAPIServer) testEmbeddedByValue()                    {}
@@ -172,6 +188,24 @@ func _QuerierAPI_ListServerSummary_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _QuerierAPI_GetSampleDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSampleDetailsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuerierAPIServer).GetSampleDetails(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuerierAPI_GetSampleDetails_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuerierAPIServer).GetSampleDetails(ctx, req.(*GetSampleDetailsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // QuerierAPI_ServiceDesc is the grpc.ServiceDesc for QuerierAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +224,10 @@ var QuerierAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListServerSummary",
 			Handler:    _QuerierAPI_ListServerSummary_Handler,
+		},
+		{
+			MethodName: "GetSampleDetails",
+			Handler:    _QuerierAPI_GetSampleDetails_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
