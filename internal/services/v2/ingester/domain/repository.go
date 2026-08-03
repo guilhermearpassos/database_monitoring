@@ -24,8 +24,14 @@ type SnapshotRepository interface {
 	GetMissingPlans(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error)
 	PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error
 	PurgeAllSnapshots(ctx context.Context) error
+	GetUnanalizedPlans(ctx context.Context, size int) ([]*common_domain.ExecutionPlan, error)
+	SetPlanAnalisys(ctx context.Context, planHandle string, planAnalisysResults PlanAnalisysResults) error
 }
-
+type PlanAnalisysResults struct {
+	MissingIndexes      int
+	ImplicitConversions int
+	LargeTableScans     int
+}
 type QueryMetricsRepository interface {
 	StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error
 	PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error

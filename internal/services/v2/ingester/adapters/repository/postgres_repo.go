@@ -459,6 +459,54 @@ func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.
 	return nil
 }
 
+func (p *PostgresRepo) GetUnanalizedPlans(ctx context.Context, size int) ([]*common_domain.ExecutionPlan, error) {
+	q := fmt.Sprintf(`select  plan_handle, plan_xml, target_id, t.host
+from query_plans qs
+	inner join target t on qs.target_id = t.id where analyzed = false limit %d`, size)
+	rows, err := p.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+	var plans []*common_domain.ExecutionPlan
+	for rows.Next() {
+		var planHandle string
+		var planXML string
+		var targetID string
+		var tHost string
+		err = rows.Scan(&planHandle, &planXML, &targetID, &tHost)
+		if err != nil {
+			return nil, fmt.Errorf("scan row: %w", err)
+		}
+		plan := &common_domain.ExecutionPlan{
+			PlanHandle: planHandle,
+			Server: common_domain.ServerMeta{
+				Host: tHost,
+				Type: "mssql",
+			},
+			XmlData: planXML,
+		}
+		plans = append(plans, plan)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("rows: %w", err)
+	}
+	return plans, nil
+}
+
+func (p *PostgresRepo) SetPlanAnalisys(ctx context.Context, planHandle string, planAnalisysResults domain.PlanAnalisysResults) error {
+	q := `
+update query_plans set analyzed=true, missing_indexes=$1,implicit_conversions=$2,large_table_scans=$3
+where plan_handle=$4 and analyzed=false`
+	_, err := p.db.ExecContext(ctx, q, planAnalisysResults.MissingIndexes, planAnalisysResults.ImplicitConversions, planAnalisysResults.LargeTableScans, planHandle)
+	if err != nil {
+		return fmt.Errorf("query: %w", err)
+	}
+	return nil
+
+}
+
 func (p *PostgresRepo) PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error {
 	ctx, span := p.tracer.Start(ctx, "PurgeSnapshots")
 	defer span.End()

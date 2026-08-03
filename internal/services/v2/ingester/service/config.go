@@ -72,6 +72,7 @@ func (c *IngesterConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chan
 	tsks := []runtimes.Task{
 		tasks.NewPurgeQueryMetricsTask(application, c.Retention.Metrics.GetInterval(), c.Retention.Metrics.GetRetention(), slog.Default()),
 		tasks.NewPurgeSnapshotsTask(application, c.Retention.Snapshots.GetInterval(), c.Retention.Snapshots.GetRetention(), slog.Default()),
+		tasks.NewAnalizePlansTask(application, 10*time.Second, slog.Default()),
 	}
 	return IngesterService{Port: p, Tasks: tsks}, nil
 }
