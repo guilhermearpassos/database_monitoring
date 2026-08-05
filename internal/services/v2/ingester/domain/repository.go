@@ -32,6 +32,11 @@ type PlanAnalisysResults struct {
 	ImplicitConversions int
 	LargeTableScans     int
 }
+
+func (r PlanAnalisysResults) HasProblems() bool {
+	return r.ImplicitConversions > 0 || r.LargeTableScans > 0 || r.MissingIndexes > 0
+}
+
 type QueryMetricsRepository interface {
 	StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error
 	PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error

@@ -497,9 +497,10 @@ from query_plans qs
 
 func (p *PostgresRepo) SetPlanAnalisys(ctx context.Context, planHandle string, planAnalisysResults domain.PlanAnalisysResults) error {
 	q := `
-update query_plans set analyzed=true, missing_indexes=$1,implicit_conversions=$2,large_table_scans=$3
+update query_plans set analyzed=true, missing_indexes=$1,implicit_conversions=$2,large_table_scans=$3, has_problems=$5
 where plan_handle=$4 and analyzed=false`
-	_, err := p.db.ExecContext(ctx, q, planAnalisysResults.MissingIndexes, planAnalisysResults.ImplicitConversions, planAnalisysResults.LargeTableScans, planHandle)
+	hasProblems := planAnalisysResults.HasProblems()
+	_, err := p.db.ExecContext(ctx, q, planAnalisysResults.MissingIndexes, planAnalisysResults.ImplicitConversions, planAnalisysResults.LargeTableScans, planHandle, hasProblems)
 	if err != nil {
 		return fmt.Errorf("query: %w", err)
 	}

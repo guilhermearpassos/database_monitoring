@@ -1,0 +1,2 @@
+
+drop index query_plans_analyzed_has_problems_plan_handle_target_id_index;
