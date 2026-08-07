@@ -11,11 +11,14 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/ports/tasks/parsers"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/querier/domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"github.com/jmoiron/sqlx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/maps"
+	"google.golang.org/protobuf/proto"
 )
 
 type PostgresRepo struct {
@@ -326,4 +329,96 @@ func (p *PostgresRepo) getTargetID(ctx context.Context, tx sqlx.QueryerContext, 
 		return 0, err
 	}
 	return id, nil
+}
+
+func (p *PostgresRepo) ListPlansWithIssues(ctx context.Context, ServerID string, Start, End time.Time, pageSize, pageNumber int) ([]*domain.PlanWithIssue, error) {
+	targetId, err := p.getTargetID(ctx, p.db, ServerID)
+	if err != nil {
+		return nil, fmt.Errorf("getting target id: %w", err)
+	}
+	q := `
+
+select qs.query_hash,
+       qs.sql_handle,
+       qs.plan_handle,
+       qs.data,
+       qs.blocker,
+       plan_xml,
+       missing_indexes,
+       implicit_conversions,
+       large_table_scans
+from query_plans qp
+         inner join query_samples qs on qs.plan_handle = qp.plan_handle
+         inner join snapshot s on qs.snap_id = s.id
+where s.snap_time between $1 and $2
+  and s.target_id = $3
+  and qp.target_id = $3
+  and analyzed = true
+  and has_problems = true
+	`
+	rows, err := p.db.QueryContext(ctx, q, Start, End, targetId)
+	if err != nil {
+		return nil, fmt.Errorf("query plans with issues: %w", err)
+	}
+	defer rows.Close()
+	ret := make(map[string]*domain.PlanWithIssue)
+
+	for rows.Next() {
+		var queryHash string
+		var sqlHandle string
+		var planHandle string
+		var data []byte
+		var blocker bool
+		var planXml string
+		var missingIndexes int
+		var implicitConversions int
+		var largeTableScans int
+		err = rows.Scan(&queryHash,
+			&sqlHandle,
+			&planHandle,
+			&data,
+			&blocker,
+			&planXml,
+			&missingIndexes,
+			&implicitConversions,
+			&largeTableScans)
+		if err != nil {
+			return nil, fmt.Errorf("scan plans with issues: %w", err)
+		}
+		issueCount := missingIndexes + implicitConversions + largeTableScans
+		if pwi, ok := ret[planHandle]; ok {
+			pwi.IssueCount += issueCount
+			if blocker {
+				pwi.LockCount++
+			}
+			continue
+		}
+		parsedPlan, err := parsers.ParseExecutionPlan(planXml)
+		if err != nil {
+			return nil, fmt.Errorf("parsing plan with issues: %w", err)
+		}
+		qs := &dbmv1.QuerySample{}
+		err = proto.Unmarshal(data, qs)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshalling sample on plan with issues: %w", err)
+		}
+		domainSample := converters.SampleToDomain(qs)
+		lc := 0
+		if blocker {
+			lc++
+		}
+		pwi := &domain.PlanWithIssue{
+			ParsedPlan: parsedPlan,
+			Sample:     domainSample,
+			IssueCount: issueCount,
+			LockCount:  lc,
+		}
+		ret[planHandle] = pwi
+
+	}
+	err = rows.Err()
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("query plans with issues rows: %w", err)
+	}
+	return maps.Values(ret), nil
 }

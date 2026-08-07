@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/guilhermearpassos/database-monitoring/internal/appcommon"
@@ -28,13 +29,16 @@ func (c *QuerierConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chann
 	var repo interface {
 		domain.SampleRepository
 		domain.QueryMetricsRepository
-	} = repository.NewNoopSampleRepo()
+	}
 	if c.Postgres.Connstring != "" {
 		db, err := c.Postgres.Get(ctx)
 		if err != nil {
 			return nil, err
 		}
 		repo = repository.NewPostgresRepo(db)
+	}
+	if repo == nil {
+		return nil, fmt.Errorf("no repo found in config")
 	}
 	application := app.NewApplication(repo, repo)
 	p := ports.NewGRPCServer(application)

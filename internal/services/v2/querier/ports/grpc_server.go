@@ -7,6 +7,7 @@ import (
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/ports/tasks/parsers"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/querier/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/querier/app/query"
 	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
@@ -27,6 +28,44 @@ func NewGRPCServer(app *app.Application) GRPCServer {
 	return GRPCServer{app: app,
 		tracer: otel.Tracer("grpc-server"),
 	}
+}
+
+func (s GRPCServer) ListPlansWithIssues(ctx context.Context, in *querierv2.ListPlansWithIssuesRequest) (*querierv2.ListPlansWithIssuesResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.start", in.Start.AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", in.End.AsTime().Format(time.RFC3339)),
+		attribute.String("request.server", in.Host),
+		attribute.Int("request.page_size", int(in.PageSize)),
+		attribute.Int("request.page_number", int(in.PageNumber)),
+	)
+	ret, err := s.app.Queries.ListPlansWithIssues.Handle(ctx, query.ListPlansWithIssuesQuery{
+		Start:      in.Start.AsTime(),
+		End:        in.End.AsTime(),
+		ServerID:   in.Host,
+		PageNumber: int(in.PageSize),
+		PageSize:   int(in.PageNumber),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list plans with issues: %w", err)
+	}
+	span.SetAttributes(
+		attribute.Int("response.count", len(ret)),
+	)
+	protoRet := make([]*querierv2.PlansWithIssues, len(ret))
+	for i, r := range ret {
+		protoPlan, err := parsers.PlanToProto("", common_domain.ServerMeta{Host: in.Host}, r.ParsedPlan)
+		if err != nil {
+			return nil, fmt.Errorf("parsed plan to proto: %w", err)
+		}
+		protoRet[i] = &querierv2.PlansWithIssues{
+			ParsedPlan:       protoPlan,
+			LatestSample:     converters.SampleToProto(r.Sample),
+			IssueCount:       int32(r.IssueCount),
+			RelatedLockCount: int32(r.LockCount),
+		}
+	}
+	return &querierv2.ListPlansWithIssuesResponse{Plans: protoRet}, nil
 }
 
 func (s GRPCServer) ListSnapshotSummaries(ctx context.Context, in *querierv2.ListSnapshotSummariesRequest) (*querierv2.ListSnapshotSummariesResponse, error) {

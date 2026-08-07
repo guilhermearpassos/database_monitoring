@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/ports/tasks/parsers"
 )
 
 type SampleRepository interface {
@@ -13,4 +14,11 @@ type SampleRepository interface {
 	GetSnapshot(ctx context.Context, id string) (common_domain.DataBaseSnapshot, error)
 	ListSnapshotSummaries(ctx context.Context, serverID string, start time.Time, end time.Time) ([]common_domain.SnapshotSummary, error)
 	GetExecutionPlan(ctx context.Context, planHandle string, server common_domain.ServerMeta) (*common_domain.ExecutionPlan, error)
+	ListPlansWithIssues(ctx context.Context, ServerID string, Start, End time.Time, pageSize, pageNumber int) ([]*PlanWithIssue, error)
+}
+type PlanWithIssue struct {
+	ParsedPlan *parsers.ParsedExecutionPlan
+	Sample     *common_domain.QuerySample
+	IssueCount int
+	LockCount  int
 }

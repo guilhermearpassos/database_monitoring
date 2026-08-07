@@ -25,6 +25,7 @@ const (
 	QuerierAPI_GetSampleDetails_FullMethodName          = "/database_monitoring.v2.QuerierAPI/GetSampleDetails"
 	QuerierAPI_ListQueryMetrics_FullMethodName          = "/database_monitoring.v2.QuerierAPI/ListQueryMetrics"
 	QuerierAPI_GetQueryMetricsTimeSeries_FullMethodName = "/database_monitoring.v2.QuerierAPI/GetQueryMetricsTimeSeries"
+	QuerierAPI_ListPlansWithIssues_FullMethodName       = "/database_monitoring.v2.QuerierAPI/ListPlansWithIssues"
 )
 
 // QuerierAPIClient is the client API for QuerierAPI service.
@@ -37,6 +38,7 @@ type QuerierAPIClient interface {
 	GetSampleDetails(ctx context.Context, in *GetSampleDetailsRequest, opts ...grpc.CallOption) (*GetSampleDetailsResponse, error)
 	ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error)
 	GetQueryMetricsTimeSeries(ctx context.Context, in *GetQueryMetricsTimeSeriesRequest, opts ...grpc.CallOption) (*GetQueryMetricsTimeSeriesResponse, error)
+	ListPlansWithIssues(ctx context.Context, in *ListPlansWithIssuesRequest, opts ...grpc.CallOption) (*ListPlansWithIssuesResponse, error)
 }
 
 type querierAPIClient struct {
@@ -107,6 +109,16 @@ func (c *querierAPIClient) GetQueryMetricsTimeSeries(ctx context.Context, in *Ge
 	return out, nil
 }
 
+func (c *querierAPIClient) ListPlansWithIssues(ctx context.Context, in *ListPlansWithIssuesRequest, opts ...grpc.CallOption) (*ListPlansWithIssuesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPlansWithIssuesResponse)
+	err := c.cc.Invoke(ctx, QuerierAPI_ListPlansWithIssues_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QuerierAPIServer is the server API for QuerierAPI service.
 // All implementations must embed UnimplementedQuerierAPIServer
 // for forward compatibility.
@@ -117,6 +129,7 @@ type QuerierAPIServer interface {
 	GetSampleDetails(context.Context, *GetSampleDetailsRequest) (*GetSampleDetailsResponse, error)
 	ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error)
 	GetQueryMetricsTimeSeries(context.Context, *GetQueryMetricsTimeSeriesRequest) (*GetQueryMetricsTimeSeriesResponse, error)
+	ListPlansWithIssues(context.Context, *ListPlansWithIssuesRequest) (*ListPlansWithIssuesResponse, error)
 	mustEmbedUnimplementedQuerierAPIServer()
 }
 
@@ -144,6 +157,9 @@ func (UnimplementedQuerierAPIServer) ListQueryMetrics(context.Context, *ListQuer
 }
 func (UnimplementedQuerierAPIServer) GetQueryMetricsTimeSeries(context.Context, *GetQueryMetricsTimeSeriesRequest) (*GetQueryMetricsTimeSeriesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetQueryMetricsTimeSeries not implemented")
+}
+func (UnimplementedQuerierAPIServer) ListPlansWithIssues(context.Context, *ListPlansWithIssuesRequest) (*ListPlansWithIssuesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPlansWithIssues not implemented")
 }
 func (UnimplementedQuerierAPIServer) mustEmbedUnimplementedQuerierAPIServer() {}
 func (UnimplementedQuerierAPIServer) testEmbeddedByValue()                    {}
@@ -274,6 +290,24 @@ func _QuerierAPI_GetQueryMetricsTimeSeries_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _QuerierAPI_ListPlansWithIssues_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPlansWithIssuesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuerierAPIServer).ListPlansWithIssues(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuerierAPI_ListPlansWithIssues_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuerierAPIServer).ListPlansWithIssues(ctx, req.(*ListPlansWithIssuesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // QuerierAPI_ServiceDesc is the grpc.ServiceDesc for QuerierAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -304,6 +338,10 @@ var QuerierAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetQueryMetricsTimeSeries",
 			Handler:    _QuerierAPI_GetQueryMetricsTimeSeries_Handler,
+		},
+		{
+			MethodName: "ListPlansWithIssues",
+			Handler:    _QuerierAPI_ListPlansWithIssues_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

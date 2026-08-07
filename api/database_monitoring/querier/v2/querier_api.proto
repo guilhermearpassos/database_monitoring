@@ -14,6 +14,7 @@ service QuerierAPI {
   rpc GetSampleDetails(GetSampleDetailsRequest) returns (GetSampleDetailsResponse);
   rpc ListQueryMetrics(ListQueryMetricsRequest) returns (ListQueryMetricsResponse);
   rpc GetQueryMetricsTimeSeries(GetQueryMetricsTimeSeriesRequest) returns (GetQueryMetricsTimeSeriesResponse);
+  rpc ListPlansWithIssues(ListPlansWithIssuesRequest) returns (ListPlansWithIssuesResponse);
 }
 message GetQueryMetricsTimeSeriesRequest{
   google.protobuf.Timestamp start = 1;
@@ -25,6 +26,27 @@ message GetQueryMetricsTimeSeriesRequest{
 message GetQueryMetricsTimeSeriesResponse{
   repeated database_monitoring.v1.QueryMetric metrics = 1;
 }
+
+message ListPlansWithIssuesRequest {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  int32 page_size = 5;
+  int64 page_number = 6;
+
+}
+message ListPlansWithIssuesResponse {
+  repeated PlansWithIssues plans = 1;
+}
+
+message PlansWithIssues {
+  database_monitoring.v1.ParsedExecutionPlan parsed_plan = 1;
+  database_monitoring.v1.QuerySample latest_sample = 2;
+  int32 issue_count = 3;
+  int32 related_lock_count = 4;
+}
+
+
 message ListQueryMetricsRequest{
   google.protobuf.Timestamp start = 1;
   google.protobuf.Timestamp end = 2;

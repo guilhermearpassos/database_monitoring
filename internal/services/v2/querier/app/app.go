@@ -17,6 +17,7 @@ type Queries struct {
 	GetQueryMetricsSlice  query.GetQueryMetricsSliceHandler
 	ListQueryMetrics      query.ListQueryMetricsHandler
 	GetQuerySampleDetails query.GetQuerySampleDetailsHandler
+	ListPlansWithIssues   query.ListPlansWithIssuesHandler
 }
 
 type Commands struct {
@@ -32,6 +33,7 @@ func NewApplication(repo domain.SampleRepository, queryRepo domain.QueryMetricsR
 			GetQueryMetricsSlice:  query.NewGetQueryMetricsSliceHandler(queryRepo),
 			ListQueryMetrics:      query.NewListQueryMetricsHandler(queryRepo),
 			GetQuerySampleDetails: query.NewGetQuerySampleDetailsHandler(repo),
+			ListPlansWithIssues:   query.NewListPlansWithIssuesHandler(repo),
 		},
 	}
 }
