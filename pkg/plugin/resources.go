@@ -303,6 +303,9 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 		case "metrics_series":
 			res := a.queryMetricsTimeSeries(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
+		case "plan_analysis":
+			res := a.queryPlanAnalysis(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
 		}
 	}
 
@@ -450,6 +453,69 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 		data.NewField("avgDuration", nil, avgDuration),
 		data.NewField("maxDuration", nil, maxDuration),
 		data.NewField("waitsByType", nil, waitsByType),
+	)
+
+	// Set the RefID to match the query
+	frame.RefID = query.RefID
+
+	// Add metadata for proper visualization
+	frame.Meta = &data.FrameMeta{
+		Type: data.FrameTypeTimeSeriesWide,
+	}
+
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+// queryPlanAnalysis processes individual queries
+func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	// Implement your SQL query logic here
+	response := backend.DataResponse{}
+	q := struct {
+		Database string `json:"database"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	timeRange := query.TimeRange
+	from := timeRange.From
+	to := timeRange.To
+	r, err := a.client.ListPlansWithIssues(ctx, &querierv2.ListPlansWithIssuesRequest{
+		Start: timestamppb.New(from),
+		End:   timestamppb.New(to),
+		Host:  q.Database,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	size := len(r.GetPlans())
+	queries := make([]string, 0, size)
+	issues := make([]float64, 0, size)
+	occurrences := make([]float64, 0, size)
+	locks := make([]float64, 0, size)
+	times := make([]time.Time, 0, size)
+	snapIds := make([]string, 0, size)
+	sampleIds := make([]string, 0, size)
+	for _, p := range r.GetPlans() {
+		queries = append(queries, p.GetLatestSample().GetText())
+		issues = append(issues, float64(p.GetIssueCount()))
+		occurrences = append(occurrences, float64(p.GetOccurrences()))
+		locks = append(locks, float64(p.GetRelatedLockCount()))
+		times = append(times, p.GetLatestSample().GetSnapInfo().GetTimestamp().AsTime())
+		snapIds = append(snapIds, p.GetLatestSample().GetSnapInfo().GetId())
+		sampleIds = append(sampleIds, p.GetLatestSample().GetId())
+	}
+	frame := data.NewFrame("plans_with_issues",
+		data.NewField("lasSnapTime", nil, times),
+		data.NewField("text", nil, queries),
+		data.NewField("issues", nil, issues),
+		data.NewField("occurrences", nil, occurrences),
+		data.NewField("locks", nil, locks),
+		data.NewField("snapID", nil, snapIds),
+		data.NewField("id", nil, snapIds),
+		data.NewField("sampleId", nil, sampleIds),
 	)
 
 	// Set the RefID to match the query

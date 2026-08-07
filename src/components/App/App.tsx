@@ -1,6 +1,7 @@
 import React from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppRootProps } from '@grafana/data';
+import PagePlanAnalysis from "../../pages/PageTwo";
 // import { ROUTES } from '../../constants';
 const PageOne = React.lazy(() => import('../../pages/PageOne'));
 // const PageTwo = React.lazy(() => import('../../pages/PageTwo'));
@@ -17,7 +18,8 @@ function App(props: AppRootProps) {
       {/*<Route path={ROUTES.Four} element={<PageFour />} />*/}
 
       {/* Default page */}
-      <Route path="*" element={<PageOne />} />
+        <Route path="/snapshots" element={<PageOne />} />
+        <Route path="/plan_analysis" element={<PagePlanAnalysis />} />
     </Routes>
   );
 }

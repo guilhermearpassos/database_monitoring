@@ -35,6 +35,13 @@ services:
     enabled: true
     postgres:
       connstring: *pg_addr
+    retention:
+      snapshots:
+        retention: 2h
+        interval: 10s
+      metrics:
+        retention: 2h
+        interval: 10s
   querier:
     enabled: true
     postgres:

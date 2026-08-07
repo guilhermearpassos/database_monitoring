@@ -34,6 +34,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+tool github.com/golang-migrate/migrate/v4
+
 require (
 	github.com/apache/arrow-go/v18 v18.6.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

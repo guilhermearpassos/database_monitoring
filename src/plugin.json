@@ -44,10 +44,16 @@
     },
     {
       "type": "page",
-      "name": "Overview",
-      "path": "/a/%PLUGIN_ID%/one",
+      "name": "Snapshots",
+      "path": "/a/%PLUGIN_ID%/snapshots",
       "addToNav": true,
       "defaultNav": true
+    },
+    {
+      "type": "page",
+      "name": "Plan Analysis",
+      "path": "/a/%PLUGIN_ID%/plan_analysis",
+      "addToNav": true
     },
     {
       "type": "page",

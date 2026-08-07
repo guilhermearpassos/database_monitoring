@@ -3,7 +3,7 @@ import { ROUTES } from '../src/constants';
 
 test.describe('navigating app', () => {
   test('page one should render successfully', async ({ gotoPage, page }) => {
-    await gotoPage(`/${ROUTES.One}`);
+    await gotoPage(`/${ROUTES.Snapshots}`);
     await expect(page.getByText('SQL Database Monitoring')).toBeVisible();
   });
 
