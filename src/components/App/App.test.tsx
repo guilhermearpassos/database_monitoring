@@ -26,7 +26,7 @@ describe('Components/App', () => {
         jsonData: {},
       },
       query: {},
-      path: '',
+      path: '/snapshots',
       onNavChanged: jest.fn(),
     } as unknown as AppRootProps;
   });
