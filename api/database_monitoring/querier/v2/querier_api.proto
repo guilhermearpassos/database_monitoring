@@ -44,6 +44,7 @@ message PlansWithIssues {
   database_monitoring.v1.QuerySample latest_sample = 2;
   int32 issue_count = 3;
   int32 related_lock_count = 4;
+  int32 occurrences = 5;
 }
 
 

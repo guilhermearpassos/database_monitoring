@@ -17,8 +17,9 @@ type SampleRepository interface {
 	ListPlansWithIssues(ctx context.Context, ServerID string, Start, End time.Time, pageSize, pageNumber int) ([]*PlanWithIssue, error)
 }
 type PlanWithIssue struct {
-	ParsedPlan *parsers.ParsedExecutionPlan
-	Sample     *common_domain.QuerySample
-	IssueCount int
-	LockCount  int
+	ParsedPlan  *parsers.ParsedExecutionPlan
+	Sample      *common_domain.QuerySample
+	IssueCount  int
+	LockCount   int
+	Occurrences int
 }

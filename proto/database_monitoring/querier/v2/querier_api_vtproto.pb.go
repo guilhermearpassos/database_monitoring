@@ -300,6 +300,11 @@ func (m *PlansWithIssues) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Occurrences != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Occurrences))
+		i--
+		dAtA[i] = 0x28
+	}
 	if m.RelatedLockCount != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.RelatedLockCount))
 		i--
@@ -1376,6 +1381,9 @@ func (m *PlansWithIssues) SizeVT() (n int) {
 	}
 	if m.RelatedLockCount != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.RelatedLockCount))
+	}
+	if m.Occurrences != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Occurrences))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -2470,6 +2478,25 @@ func (m *PlansWithIssues) UnmarshalVT(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.RelatedLockCount |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Occurrences", wireType)
+			}
+			m.Occurrences = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Occurrences |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

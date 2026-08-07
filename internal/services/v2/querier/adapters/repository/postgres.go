@@ -391,6 +391,7 @@ where s.snap_time between $1 and $2
 			if blocker {
 				pwi.LockCount++
 			}
+			pwi.Occurrences++
 			continue
 		}
 		parsedPlan, err := parsers.ParseExecutionPlan(planXml)
@@ -408,10 +409,11 @@ where s.snap_time between $1 and $2
 			lc++
 		}
 		pwi := &domain.PlanWithIssue{
-			ParsedPlan: parsedPlan,
-			Sample:     domainSample,
-			IssueCount: issueCount,
-			LockCount:  lc,
+			ParsedPlan:  parsedPlan,
+			Sample:      domainSample,
+			IssueCount:  issueCount,
+			LockCount:   lc,
+			Occurrences: 1,
 		}
 		ret[planHandle] = pwi
 
