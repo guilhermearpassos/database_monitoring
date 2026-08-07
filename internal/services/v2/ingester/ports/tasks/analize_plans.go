@@ -52,6 +52,9 @@ func (c AnalizePlansTask) Run(ctx context.Context) error {
 		LargeTableScans := 0
 		for _, b := range parsedPlan.Batches {
 			for _, s := range b.Statements.StmtSimple {
+				if s.QueryPlan == nil {
+					continue
+				}
 				if x := s.QueryPlan.MissingIndexes; x != nil {
 
 					MissingIndexes += len(x.MissingIndexGroups)
