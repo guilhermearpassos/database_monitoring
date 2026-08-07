@@ -46,8 +46,7 @@
       "type": "page",
       "name": "Snapshots",
       "path": "/a/%PLUGIN_ID%/snapshots",
-      "addToNav": true,
-      "defaultNav": true
+      "addToNav": true
     },
     {
       "type": "page",
@@ -61,7 +60,8 @@
       "name": "Configuration",
       "path": "/plugins/%PLUGIN_ID%",
       "role": "Admin",
-      "addToNav": true
+      "addToNav": true,
+      "defaultNav": true
     }
   ],
   "dependencies": {

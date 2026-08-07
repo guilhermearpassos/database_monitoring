@@ -387,7 +387,6 @@ where s.snap_time between $1 and $2
 		}
 		issueCount := missingIndexes + implicitConversions + largeTableScans
 		if pwi, ok := ret[planHandle]; ok {
-			pwi.IssueCount += issueCount
 			if blocker {
 				pwi.LockCount++
 			}
