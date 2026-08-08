@@ -492,6 +492,7 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 	}
 	size := len(r.GetPlans())
 	queries := make([]string, 0, size)
+	databases := make([]string, 0, size)
 	issues := make([]float64, 0, size)
 	occurrences := make([]float64, 0, size)
 	locks := make([]float64, 0, size)
@@ -506,10 +507,12 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 		times = append(times, p.GetLatestSample().GetSnapInfo().GetTimestamp().AsTime())
 		snapIds = append(snapIds, p.GetLatestSample().GetSnapInfo().GetId())
 		sampleIds = append(sampleIds, p.GetLatestSample().GetId())
+		databases = append(databases, p.GetLatestSample().GetDb().GetDatabaseName())
 	}
 	frame := data.NewFrame("plans_with_issues",
-		data.NewField("lasSnapTime", nil, times),
+		data.NewField("lastSnapTime", nil, times),
 		data.NewField("text", nil, queries),
+		data.NewField("database", nil, databases),
 		data.NewField("issues", nil, issues),
 		data.NewField("occurrences", nil, occurrences),
 		data.NewField("locks", nil, locks),

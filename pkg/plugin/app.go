@@ -56,9 +56,18 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 	var client *grpc.ClientConn
 	var err error
 	if port[1] == "443" {
-		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})),
+
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(100*1024*1024),
+				grpc.MaxCallSendMsgSize(100*1024*1024),
+			))
 	} else {
-		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(100*1024*1024),
+				grpc.MaxCallSendMsgSize(100*1024*1024),
+			))
 
 	}
 	if err != nil {
