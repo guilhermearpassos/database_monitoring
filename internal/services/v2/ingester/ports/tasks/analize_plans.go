@@ -24,9 +24,9 @@ type AnalizePlansTask struct {
 
 func NewAnalizePlansTask(application app.Application, interval time.Duration, batchSize int, logger *slog.Logger) *AnalizePlansTask {
 	return &AnalizePlansTask{
-		interval: interval,
-		logger:   logger,
-		app:      application,
+		interval:  interval,
+		logger:    logger,
+		app:       application,
 		batchSize: batchSize,
 	}
 }
@@ -44,7 +44,7 @@ func (c AnalizePlansTask) Interval() time.Duration {
 func (c AnalizePlansTask) Run(ctx context.Context) error {
 	span := trace.SpanFromContext(ctx)
 
-	plansToAnalize, err := c.app.Query.GetUnanalizedPlans.Handle(ctx, 50)
+	plansToAnalize, err := c.app.Query.GetUnanalizedPlans.Handle(ctx, c.batchSize)
 	if err != nil {
 		return fmt.Errorf("get unanalized plans: %w", err)
 	}
