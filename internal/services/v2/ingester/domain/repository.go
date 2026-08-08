@@ -24,6 +24,7 @@ type SnapshotRepository interface {
 	GetMissingPlans(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error)
 	PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error
 	PurgeAllSnapshots(ctx context.Context) error
+	PurgeUnboundedPlans(ctx context.Context, batchSize int) error
 	GetUnanalizedPlans(ctx context.Context, size int) ([]*common_domain.ExecutionPlan, error)
 	SetPlanAnalisysBatch(ctx context.Context, results []PlanAnalisysBatchResult) error
 }

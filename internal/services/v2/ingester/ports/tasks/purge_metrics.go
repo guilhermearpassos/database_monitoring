@@ -16,14 +16,16 @@ type PurgeQueryMetricsTask struct {
 	retention time.Duration
 	logger    *slog.Logger
 	app       app.Application
+	batchSize int
 }
 
-func NewPurgeQueryMetricsTask(application app.Application, interval, retention time.Duration, logger *slog.Logger) *PurgeQueryMetricsTask {
+func NewPurgeQueryMetricsTask(application app.Application, interval, retention time.Duration, batchSize int, logger *slog.Logger) *PurgeQueryMetricsTask {
 	return &PurgeQueryMetricsTask{
 		interval:  interval,
 		retention: retention,
 		logger:    logger,
 		app:       application,
+		batchSize: batchSize,
 	}
 }
 
@@ -41,7 +43,7 @@ func (c PurgeQueryMetricsTask) Run(ctx context.Context) error {
 	err := c.app.Command.PurgeQueryMetrics.Handle(ctx, command.PurgeQueryMetrics{
 		Start:     time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 		End:       time.Now().Add(-c.retention),
-		BatchSize: 100,
+		BatchSize: c.batchSize,
 	})
 	if err != nil {
 		return fmt.Errorf("purging query metrics: %w", err)

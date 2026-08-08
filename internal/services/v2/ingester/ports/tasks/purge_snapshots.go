@@ -16,14 +16,16 @@ type PurgeSnapshotsTask struct {
 	retention time.Duration
 	logger    *slog.Logger
 	app       app.Application
+	batchSize int
 }
 
-func NewPurgeSnapshotsTask(application app.Application, interval, retention time.Duration, logger *slog.Logger) *PurgeSnapshotsTask {
+func NewPurgeSnapshotsTask(application app.Application, interval, retention time.Duration, batchSize int, logger *slog.Logger) *PurgeSnapshotsTask {
 	return &PurgeSnapshotsTask{
 		interval:  interval,
 		retention: retention,
 		logger:    logger,
 		app:       application,
+		batchSize: batchSize,
 	}
 }
 
@@ -41,7 +43,7 @@ func (c PurgeSnapshotsTask) Run(ctx context.Context) error {
 	err := c.app.Command.PurgeSnapshots.Handle(ctx, command.PurgeSnapshots{
 		Start:     time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 		End:       time.Now().Add(-c.retention),
-		BatchSize: 100,
+		BatchSize: c.batchSize,
 	})
 	if err != nil {
 		return fmt.Errorf("purging snapshots: %w", err)

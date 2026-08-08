@@ -7,12 +7,13 @@ import (
 )
 
 type Command struct {
-	SaveSnapshot       *command.SaveSnapshotStreamHandler
-	SaveExecutionPlans *command.SaveExecutionPlansStreamHandler
-	StoreQueryMetrics  *command.StoreQueryMetricsHandler
-	PurgeSnapshots     *command.PurgeSnapshotsHandler
-	PurgeQueryMetrics  *command.PurgeQueryMetricsHandler
-	SetPlanAnalisys    *command.SetPlanAnalisysHandler
+	SaveSnapshot        *command.SaveSnapshotStreamHandler
+	SaveExecutionPlans  *command.SaveExecutionPlansStreamHandler
+	StoreQueryMetrics   *command.StoreQueryMetricsHandler
+	PurgeSnapshots      *command.PurgeSnapshotsHandler
+	PurgeQueryMetrics   *command.PurgeQueryMetricsHandler
+	PurgeUnboundedPlans *command.PurgePlansHandler
+	SetPlanAnalisys     *command.SetPlanAnalisysHandler
 }
 type Query struct {
 	GetMissingChunks   *query.GetMissingChunksHandler
@@ -32,12 +33,13 @@ type Application struct {
 func NewApplicationWithAdapters(store domain.SessionStore, repo domain.SnapshotRepository, metricsRepo domain.QueryMetricsRepository) Application {
 	return Application{
 		Command: Command{
-			SaveSnapshot:       command.NewSaveSnapshotStreamHandler(store, repo),
-			SaveExecutionPlans: command.NewSaveExecutionPlansStreamHandler(repo),
-			StoreQueryMetrics:  command.NewStoreQueryMetricsHandler(metricsRepo),
-			PurgeSnapshots:     command.NewPurgeSnapshotsHandler(repo),
-			PurgeQueryMetrics:  command.NewPurgeQueryMetricsHandler(metricsRepo),
-			SetPlanAnalisys:    command.NewSetPlanAnalisysHandler(repo),
+			SaveSnapshot:        command.NewSaveSnapshotStreamHandler(store, repo),
+			SaveExecutionPlans:  command.NewSaveExecutionPlansStreamHandler(repo),
+			StoreQueryMetrics:   command.NewStoreQueryMetricsHandler(metricsRepo),
+			PurgeSnapshots:      command.NewPurgeSnapshotsHandler(repo),
+			PurgeQueryMetrics:   command.NewPurgeQueryMetricsHandler(metricsRepo),
+			SetPlanAnalisys:     command.NewSetPlanAnalisysHandler(repo),
+			PurgeUnboundedPlans: command.NewPurgePlansHandler(repo),
 		},
 		Query: Query{
 			GetMissingChunks:   query.NewGetMissingChunksHandler(store),

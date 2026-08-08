@@ -28,6 +28,7 @@ type IngesterConfig struct {
 	Retention struct {
 		Snapshots RetentionConfig `yaml:"snapshots" toml:"snapshots"`
 		Metrics   RetentionConfig `yaml:"metrics" toml:"metrics"`
+		Plans     RetentionConfig `yaml:"plans" toml:"plans"`
 	} `yaml:"retention" toml:"retention"`
 	PlanAnalysis PlanAnalysis `yaml:"plan_analysis" toml:"plan_analysis"`
 }
@@ -55,6 +56,14 @@ func (p *PlanAnalysis) GetBatchSize() int {
 type RetentionConfig struct {
 	Retention time.Duration `yaml:"retention" toml:"retention"`
 	Interval  time.Duration `yaml:"interval" toml:"interval"`
+	BatchSize int           `yaml:"batch_size" toml:"batch_size"`
+}
+
+func (r RetentionConfig) GetBatchSize() int {
+	if r.BatchSize == 0 {
+		return 1000
+	}
+	return r.BatchSize
 }
 
 func (r RetentionConfig) GetInterval() time.Duration {
@@ -91,8 +100,9 @@ func (c *IngesterConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chan
 	application := app.NewApplicationWithAdapters(store, repo, repo)
 	p := ports.NewService(application)
 	tsks := []runtimes.Task{
-		tasks.NewPurgeQueryMetricsTask(application, c.Retention.Metrics.GetInterval(), c.Retention.Metrics.GetRetention(), slog.Default()),
-		tasks.NewPurgeSnapshotsTask(application, c.Retention.Snapshots.GetInterval(), c.Retention.Snapshots.GetRetention(), slog.Default()),
+		tasks.NewPurgeQueryMetricsTask(application, c.Retention.Metrics.GetInterval(), c.Retention.Metrics.GetRetention(), c.Retention.Metrics.GetBatchSize(), slog.Default()),
+		tasks.NewPurgeSnapshotsTask(application, c.Retention.Snapshots.GetInterval(), c.Retention.Snapshots.GetRetention(), c.Retention.Snapshots.GetBatchSize(), slog.Default()),
+		tasks.NewPurgePlansTask(application, c.Retention.Plans.GetInterval(), c.Retention.Plans.GetBatchSize(), slog.Default()),
 	}
 	if !c.PlanAnalysis.Disabled {
 		tsks = append(tsks,

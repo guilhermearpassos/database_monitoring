@@ -594,3 +594,24 @@ truncate table snapshot cascade`
 	span.SetAttributes(attribute.Int64("rows_affected", rowsAffected))
 	return nil
 }
+
+func (p *PostgresRepo) PurgeUnboundedPlans(ctx context.Context, batchSize int) error {
+	ctx, span := p.tracer.Start(ctx, "PurgeUnboundedPlans")
+	defer span.End()
+	q := fmt.Sprintf(`
+delete from query_plans
+where plan_handle in (
+    select qp.plan_handle
+    from query_plans qp
+    left join query_samples qs on qs.plan_handle = qp.plan_handle
+    where qs.plan_handle is null
+    limit %d
+
+    )`, batchSize,
+	)
+	_, err := p.db.ExecContext(ctx, q)
+	if err != nil {
+		return fmt.Errorf("purgeUnboundedPlans: %w", err)
+	}
+	return nil
+}
