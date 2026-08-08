@@ -11,19 +11,23 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/app"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/ports/tasks/parsers"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type AnalizePlansTask struct {
-	interval time.Duration
-	logger   *slog.Logger
-	app      app.Application
+	interval  time.Duration
+	logger    *slog.Logger
+	app       app.Application
+	batchSize int
 }
 
-func NewAnalizePlansTask(application app.Application, interval time.Duration, logger *slog.Logger) *AnalizePlansTask {
+func NewAnalizePlansTask(application app.Application, interval time.Duration, batchSize int, logger *slog.Logger) *AnalizePlansTask {
 	return &AnalizePlansTask{
 		interval: interval,
 		logger:   logger,
 		app:      application,
+		batchSize: batchSize,
 	}
 }
 
@@ -38,10 +42,14 @@ func (c AnalizePlansTask) Interval() time.Duration {
 }
 
 func (c AnalizePlansTask) Run(ctx context.Context) error {
+	span := trace.SpanFromContext(ctx)
+
 	plansToAnalize, err := c.app.Query.GetUnanalizedPlans.Handle(ctx, 50)
 	if err != nil {
 		return fmt.Errorf("get unanalized plans: %w", err)
 	}
+	span.SetAttributes(attribute.Int("plan_count", len(plansToAnalize)))
+	var results []domain.PlanAnalisysBatchResult
 	for _, plan := range plansToAnalize {
 		parsedPlan, err2 := parsers.ParseExecutionPlan(plan.XmlData)
 		if err2 != nil {
@@ -62,12 +70,17 @@ func (c AnalizePlansTask) Run(ctx context.Context) error {
 				ImplicitConversions += len(s.QueryPlan.PlanAffectingConvert)
 			}
 		}
-		res := domain.PlanAnalisysResults{
-			MissingIndexes:      MissingIndexes,
-			ImplicitConversions: ImplicitConversions,
-			LargeTableScans:     LargeTableScans,
-		}
-		err2 = c.app.Command.SetPlanAnalisys.Handle(ctx, plan.PlanHandle, res)
+		results = append(results, domain.PlanAnalisysBatchResult{
+			PlanHandle: plan.PlanHandle,
+			Results: domain.PlanAnalisysResults{
+				MissingIndexes:      MissingIndexes,
+				ImplicitConversions: ImplicitConversions,
+				LargeTableScans:     LargeTableScans,
+			},
+		})
+	}
+	if len(results) > 0 {
+		err2 := c.app.Command.SetPlanAnalisys.Handle(ctx, results)
 		if err2 != nil {
 			err = errors.Join(err, err2)
 		}

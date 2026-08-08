@@ -14,7 +14,6 @@ func NewSetPlanAnalisysHandler(repo domain.SnapshotRepository) *SetPlanAnalisysH
 	return &SetPlanAnalisysHandler{repo: repo}
 }
 
-func (h *SetPlanAnalisysHandler) Handle(ctx context.Context, planHandle string, planAnalisysResults domain.PlanAnalisysResults) error {
-	return h.repo.SetPlanAnalisys(ctx, planHandle, planAnalisysResults)
-
+func (h *SetPlanAnalisysHandler) Handle(ctx context.Context, results []domain.PlanAnalisysBatchResult) error {
+	return h.repo.SetPlanAnalisysBatch(ctx, results)
 }

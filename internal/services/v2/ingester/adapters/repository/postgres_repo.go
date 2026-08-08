@@ -495,17 +495,69 @@ from query_plans qs
 	return plans, nil
 }
 
-func (p *PostgresRepo) SetPlanAnalisys(ctx context.Context, planHandle string, planAnalisysResults domain.PlanAnalisysResults) error {
-	q := `
-update query_plans set analyzed=true, missing_indexes=$1,implicit_conversions=$2,large_table_scans=$3, has_problems=$5
-where plan_handle=$4 and analyzed=false`
-	hasProblems := planAnalisysResults.HasProblems()
-	_, err := p.db.ExecContext(ctx, q, planAnalisysResults.MissingIndexes, planAnalisysResults.ImplicitConversions, planAnalisysResults.LargeTableScans, planHandle, hasProblems)
-	if err != nil {
-		return fmt.Errorf("query: %w", err)
+func (p *PostgresRepo) SetPlanAnalisysBatch(ctx context.Context, results []domain.PlanAnalisysBatchResult) error {
+	ctx, span := p.tracer.Start(ctx, "SetPlanAnalisysBatch")
+	defer span.End()
+	if len(results) == 0 {
+		return nil
 	}
-	return nil
 
+	tx, err := p.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create temporary table
+	_, err = tx.ExecContext(ctx, `
+		CREATE TEMPORARY TABLE temp_plan_analysis (
+			plan_handle TEXT,
+			missing_indexes INT,
+			implicit_conversions INT,
+			large_table_scans INT,
+			has_problems BOOLEAN
+		) ON COMMIT DROP
+	`)
+	if err != nil {
+		return fmt.Errorf("create temporary table: %w", err)
+	}
+
+	// Use COPY to populate temporary table
+	stmt, err := tx.PrepareContext(ctx, pq.CopyIn("temp_plan_analysis", "plan_handle", "missing_indexes", "implicit_conversions", "large_table_scans", "has_problems"))
+	if err != nil {
+		return fmt.Errorf("prepare copy: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, res := range results {
+		_, err = stmt.ExecContext(ctx, res.PlanHandle, res.Results.MissingIndexes, res.Results.ImplicitConversions, res.Results.LargeTableScans, res.Results.HasProblems())
+		if err != nil {
+			return fmt.Errorf("exec copy: %w", err)
+		}
+	}
+
+	_, err = stmt.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("finalize copy: %w", err)
+	}
+
+	// Batch update from temporary table
+	_, err = tx.ExecContext(ctx, `
+		UPDATE query_plans
+		SET 
+			analyzed = true,
+			missing_indexes = t.missing_indexes,
+			implicit_conversions = t.implicit_conversions,
+			large_table_scans = t.large_table_scans,
+			has_problems = t.has_problems
+		FROM temp_plan_analysis t
+		WHERE query_plans.plan_handle = t.plan_handle AND query_plans.analyzed = false
+	`)
+	if err != nil {
+		return fmt.Errorf("batch update: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 func (p *PostgresRepo) PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error {

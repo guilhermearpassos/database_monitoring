@@ -29,6 +29,27 @@ type IngesterConfig struct {
 		Snapshots RetentionConfig `yaml:"snapshots" toml:"snapshots"`
 		Metrics   RetentionConfig `yaml:"metrics" toml:"metrics"`
 	} `yaml:"retention" toml:"retention"`
+	PlanAnalysis PlanAnalysis `yaml:"plan_analysis" toml:"plan_analysis"`
+}
+
+type PlanAnalysis struct {
+	Disabled  bool          `yaml:"disabled" toml:"disabled"`
+	Interval  time.Duration `yaml:"interval" toml:"interval"`
+	BatchSize int           `yaml:"batchSize" toml:"batchSize"`
+}
+
+func (p *PlanAnalysis) GetInterval() time.Duration {
+	if p.Interval == 0 {
+		return 5 * time.Second
+	}
+	return p.Interval
+}
+
+func (p *PlanAnalysis) GetBatchSize() int {
+	if p.BatchSize == 0 {
+		return 1000
+	}
+	return p.BatchSize
 }
 
 type RetentionConfig struct {
@@ -72,7 +93,11 @@ func (c *IngesterConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chan
 	tsks := []runtimes.Task{
 		tasks.NewPurgeQueryMetricsTask(application, c.Retention.Metrics.GetInterval(), c.Retention.Metrics.GetRetention(), slog.Default()),
 		tasks.NewPurgeSnapshotsTask(application, c.Retention.Snapshots.GetInterval(), c.Retention.Snapshots.GetRetention(), slog.Default()),
-		tasks.NewAnalizePlansTask(application, 10*time.Second, slog.Default()),
+	}
+	if !c.PlanAnalysis.Disabled {
+		tsks = append(tsks,
+			tasks.NewAnalizePlansTask(application, c.PlanAnalysis.GetInterval(), c.PlanAnalysis.GetBatchSize(), slog.Default()),
+		)
 	}
 	return IngesterService{Port: p, Tasks: tsks}, nil
 }

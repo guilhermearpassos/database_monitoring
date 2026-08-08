@@ -25,7 +25,11 @@ type SnapshotRepository interface {
 	PurgeSnapshots(ctx context.Context, start time.Time, end time.Time, size int) error
 	PurgeAllSnapshots(ctx context.Context) error
 	GetUnanalizedPlans(ctx context.Context, size int) ([]*common_domain.ExecutionPlan, error)
-	SetPlanAnalisys(ctx context.Context, planHandle string, planAnalisysResults PlanAnalisysResults) error
+	SetPlanAnalisysBatch(ctx context.Context, results []PlanAnalisysBatchResult) error
+}
+type PlanAnalisysBatchResult struct {
+	PlanHandle string
+	Results    PlanAnalisysResults
 }
 type PlanAnalisysResults struct {
 	MissingIndexes      int
