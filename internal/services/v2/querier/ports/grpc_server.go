@@ -35,16 +35,18 @@ func (s GRPCServer) ListPlansWithIssues(ctx context.Context, in *querierv2.ListP
 	span.SetAttributes(
 		attribute.String("request.start", in.Start.AsTime().Format(time.RFC3339)),
 		attribute.String("request.end", in.End.AsTime().Format(time.RFC3339)),
-		attribute.String("request.server", in.Host),
-		attribute.Int("request.page_size", int(in.PageSize)),
-		attribute.Int("request.page_number", int(in.PageNumber)),
+		attribute.String("request.server", in.GetHost()),
+		attribute.StringSlice("request.databases", in.GetDatabases()),
+		attribute.Int("request.page_size", int(in.GetPageSize())),
+		attribute.Int("request.page_number", int(in.GetPageNumber())),
 	)
 	ret, err := s.app.Queries.ListPlansWithIssues.Handle(ctx, query.ListPlansWithIssuesQuery{
-		Start:      in.Start.AsTime(),
-		End:        in.End.AsTime(),
-		ServerID:   in.Host,
-		PageNumber: int(in.PageSize),
-		PageSize:   int(in.PageNumber),
+		Start:      in.GetStart().AsTime(),
+		End:        in.GetEnd().AsTime(),
+		ServerID:   in.GetHost(),
+		Databases: in.GetDatabases(),
+		PageNumber: int(in.GetPageNumber()),
+		PageSize:   int(in.GetPageSize()),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list plans with issues: %w", err)

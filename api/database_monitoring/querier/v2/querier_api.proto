@@ -31,6 +31,7 @@ message ListPlansWithIssuesRequest {
   google.protobuf.Timestamp start = 1;
   google.protobuf.Timestamp end = 2;
   string host = 3;
+  repeated string databases = 4;
   int32 page_size = 5;
   int64 page_number = 6;
 
