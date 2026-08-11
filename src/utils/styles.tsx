@@ -128,5 +128,8 @@ export const getStyles = (theme: GrafanaTheme2) => ({
   singleLine: css`
     white-space: nowrap;
     max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
   `
 });
