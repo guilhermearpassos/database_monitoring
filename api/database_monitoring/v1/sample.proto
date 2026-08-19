@@ -54,6 +54,7 @@ message SessionMetadata {
   google.protobuf.Timestamp last_request_end = 8;
   string connection_id = 9;
   string client_ip = 10;
+  ContextInfo context = 11;
 }
 
 message DBMetadata {
