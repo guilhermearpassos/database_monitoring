@@ -118,7 +118,7 @@ func (p *PostgresRepo) SaveSamples(ctx context.Context, snapshotID string, seq u
 		"query_samples",
 		"f_id", "snap_id", "sql_handle",
 		"blocked", "blocker", "plan_handle", "data", "wait_event", "wait_time",
-		"sid", "connection_id", "transaction_id", "block_ms", "block_count", "query_hash",
+		"sid", "connection_id", "transaction_id", "block_ms", "block_count", "query_hash", "trace_id",
 	))
 	if err != nil {
 		return fmt.Errorf("prepare COPY: %w", err)
@@ -152,6 +152,7 @@ func (p *PostgresRepo) SaveSamples(ctx context.Context, snapshotID string, seq u
 			blockCount = len(s.GetBlockInfo().GetBlockedSessions())
 		}
 
+		traceId := s.GetContext().GetTraceId()
 		_, err = stmt.ExecContext(ctx,
 			s.GetId(),         // f_id (row external id)
 			snapPK,            // snap_id (FK)
@@ -168,6 +169,7 @@ func (p *PostgresRepo) SaveSamples(ctx context.Context, snapshotID string, seq u
 			-1,                // block_ms (not tracked in v2; keep -1 like v1)
 			blockCount,        // block_count
 			s.GetQueryHash(),  // query_hash
+			traceId,
 		)
 		if err != nil {
 			return fmt.Errorf("copy exec: %w", err)

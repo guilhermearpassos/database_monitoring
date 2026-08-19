@@ -1,9 +1,11 @@
 package collector
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
@@ -19,6 +21,15 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// Since CONTEXT_INFO is a raw binary slab, adding a 4-byte signature allows your monitoring tool to distinguish trace data from other garbage or different uses of the context.
+// Proposed Structure (30 bytes total):
+// 1.Magic Header (4 bytes): 0x54505243 (ASCII for TPRC - Trace PaRent Context).
+// 2.Version (1 byte): 0x00 (Standard W3C version).
+// 3.Trace ID (16 bytes).
+// 4.Span ID (8 bytes).
+// 5.Flags (1 byte).
+var MagicTraceparent = []byte("TPRC")
 
 type SqlServerSnapshotter struct {
 	db     *sqlx.DB
@@ -36,10 +47,49 @@ func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlS
 
 var _ collector.Snapshotter = (*SqlServerSnapshotter)(nil)
 
+func parseContext(raw []byte) common_domain.ContextInfo {
+	//check if raw starts with MagicTraceparent
+	if bytes.HasPrefix(raw, MagicTraceparent) {
+		return common_domain.ContextInfo{
+			// Trace ID: 16 bytes starting at index 5
+			TraceId: hex.EncodeToString(raw[5:21]),
+			// Span ID: 8 bytes starting at index 21
+			SpanId:        hex.EncodeToString(raw[21:29]),
+			IsTraceParent: true,
+			Raw:           raw,
+		}
+	}
+	return common_domain.ContextInfo{Raw: raw}
+}
+func PackTraceContext(ctx context.Context) []byte {
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	buf := make([]byte, 128)
+	if !sc.IsValid() {
+		return buf
+	}
+
+	// 1. Add Magic Header 'TPRC'
+	copy(buf[0:4], MagicTraceparent)
+	// 2. Version
+	buf[4] = 0
+	// 3. TraceID (16 bytes)
+	tid := sc.TraceID()
+	copy(buf[5:21], tid[:])
+	// 4. SpanID (8 bytes)
+	sid := sc.SpanID()
+	copy(buf[21:29], sid[:])
+	// 5. Flags (1 byte)
+	buf[29] = byte(sc.TraceFlags())
+
+	return buf
+}
 func (s SqlServerSnapshotter) TakeSnapshot(ctx context.Context, databases []string) (*common_domain.DataBaseSnapshot, error) {
-	qDBName := `select database_id, name from sys.databases`
+	ctx, span := s.tracer.Start(ctx, "TakeSnapshot")
+	defer span.End()
+	traceContext := PackTraceContext(ctx)
+	qDBName := `SET CONTEXT_INFO ?;select database_id, name from sys.databases`
 	db := s.db
-	rowsDB, err := db.QueryContext(ctx, qDBName)
+	rowsDB, err := db.QueryContext(ctx, qDBName, traceContext)
 	if err != nil {
 		return nil, fmt.Errorf("queryDatabases: %w", err)
 	}
@@ -67,7 +117,7 @@ func (s SqlServerSnapshotter) TakeSnapshot(ctx context.Context, databases []stri
 	snapID := uuid.NewString()
 	snapTime := time.Now().In(time.UTC)
 	query := `
-SELECT s.session_id,
+SET CONTEXT_INFO ?;SELECT s.session_id,
        s.login_time,
        s.host_name,
        s.program_name,
@@ -90,16 +140,18 @@ SELECT s.session_id,
        p.wait_resource,
        p.status,
        sql_handle,
-  plan_handle,
+  	   plan_handle,
        text, p.request_id, p.transaction_id, p.connection_id, p.percent_complete, p.estimated_completion_time, s.transaction_isolation_level,
-       query_hash, isnull(c.client_net_address, '') as client_net_address
+       query_hash, isnull(c.client_net_address, '') as client_net_address,
+       p.context_info,
+       s.context_info
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
 left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
 	 where text is not null
 `
-	rows, err := db.QueryxContext(ctx, query)
+	rows, err := db.QueryxContext(ctx, query, traceContext)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +194,8 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 		var transactionIsolationLevel int
 		var queryHash []byte
 		var clientNetAddress string
+		var reqContext []byte
+		var sesContext []byte
 		err = rows.Scan(&sessionID,
 			&loginTime,
 			&hostName,
@@ -175,6 +229,8 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 			&transactionIsolationLevel,
 			&queryHash,
 			&clientNetAddress,
+			&reqContext,
+			&sesContext,
 		)
 		if err != nil {
 			return nil, err
@@ -213,6 +269,7 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 				LastRequestStartTime: lastRequestStartTime,
 				LastRequestEndTime:   lastRequestEndTime,
 				ConnectionId:         connectionId.String(),
+				Context:              parseContext(sesContext),
 			},
 			Database: common_domain.DataBaseMetadata{
 				DatabaseID:   strconv.Itoa(databaseId),
@@ -239,6 +296,7 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 				EstimatedCompletionTime: int64(estimatedCompletionTime),
 				PercentComplete:         percentComplete,
 			},
+			Context: parseContext(reqContext),
 		}
 		if _, ok := querySamplesByDB[strconv.Itoa(databaseId)]; !ok {
 			querySamplesByDB[strconv.Itoa(databaseId)] = make([]*common_domain.QuerySample, 0)

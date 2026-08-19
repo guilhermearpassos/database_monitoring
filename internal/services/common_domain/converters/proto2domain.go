@@ -26,6 +26,24 @@ func DatabaseSnapshotToDomain(p *dbmv1.DBSnapshot) common_domain.DataBaseSnapsho
 }
 
 func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
+	sesCtx := common_domain.ContextInfo{}
+	if sample.Session.Context != nil {
+		sesCtx = common_domain.ContextInfo{
+			IsTraceParent: sample.Session.Context.IsTraceParent,
+			TraceId:       sample.Session.Context.TraceId,
+			SpanId:        sample.Session.Context.SpanId,
+			Raw:           sample.Session.Context.Raw,
+		}
+	}
+	sampCtx := common_domain.ContextInfo{}
+	if sample.Context != nil {
+		sampCtx = common_domain.ContextInfo{
+			IsTraceParent: sample.Context.IsTraceParent,
+			TraceId:       sample.Context.TraceId,
+			SpanId:        sample.Context.SpanId,
+			Raw:           sample.Context.Raw,
+		}
+	}
 	return &common_domain.QuerySample{
 		Status:        sample.Status,
 		SqlHandle:     sample.SqlHandle,
@@ -45,6 +63,8 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 			LastRequestEndTime:   sample.Session.LastRequestEnd.AsTime(),
 			ConnectionId:         sample.Session.ConnectionId,
 			ClientIP:             sample.Session.ClientIp,
+
+			Context: sesCtx,
 		},
 		Database: common_domain.DataBaseMetadata{
 			DatabaseID:   sample.Db.DatabaseId,
@@ -68,6 +88,7 @@ func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
 		PlanHandle:      sample.PlanHandle,
 		Id:              sample.Id,
 		CommandMetadata: CommandMetaToDomain(sample.Command),
+		Context:         sampCtx,
 	}
 }
 

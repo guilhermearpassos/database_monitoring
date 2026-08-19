@@ -88,7 +88,7 @@ func (c *Client) streamUploadSamples(ctx context.Context, snap *common_domain.Da
 	// Pre-build proto samples and pack into chunks under MaxUncompressedBytes
 	protoSamples := make([]*dbmv1.QuerySample, 0, len(snap.Samples))
 	for _, s := range snap.Samples {
-		protoSamples = append(protoSamples, toProtoSample(s))
+		protoSamples = append(protoSamples, converters.SampleToProto(s))
 	}
 	// Use a reusable probe to compute vtproto size when tentatively appending the next item
 	probe := &ingestorv2.SampleChunk{ChunkSeq: 1}
@@ -176,48 +176,6 @@ func (c *Client) queryMissing(ctx context.Context, snapshotID string) (ingestorv
 
 func toProtoServer(s common_domain.ServerMeta) *dbmv1.ServerMetadata {
 	return &dbmv1.ServerMetadata{Host: s.Host, Type: s.Type}
-}
-
-func toProtoSample(s *common_domain.QuerySample) *dbmv1.QuerySample {
-	if s == nil {
-		return nil
-	}
-	qs := &dbmv1.QuerySample{
-		Status:            s.Status,
-		SqlHandle:         s.SqlHandle,
-		Text:              s.Text,
-		Blocked:           s.IsBlocked,
-		Blocker:           s.IsBlocker,
-		TimeElapsedMillis: s.TimeElapsedMs,
-		Session: &dbmv1.SessionMetadata{
-			SessionId:        s.Session.SessionID,
-			LoginTime:        timestamppb.New(s.Session.LoginTime),
-			Host:             s.Session.HostName,
-			ProgramName:      s.Session.ProgramName,
-			LoginName:        s.Session.LoginName,
-			Status:           s.Session.Status,
-			LastRequestStart: timestamppb.New(s.Session.LastRequestStartTime),
-			LastRequestEnd:   timestamppb.New(s.Session.LastRequestEndTime),
-			ConnectionId:     s.Session.ConnectionId,
-			ClientIp:         s.Session.ClientIP,
-		},
-		Db:         &dbmv1.DBMetadata{DatabaseId: s.Database.DatabaseID, DatabaseName: s.Database.DatabaseName},
-		BlockInfo:  &dbmv1.BlockMetadata{BlockedBy: s.Block.BlockedBy, BlockedSessions: append([]string(nil), s.Block.BlockedSessions...)},
-		WaitInfo:   &dbmv1.WaitMetadata{WaitType: valOrEmpty(s.Wait.WaitType), WaitTime: int64(s.Wait.WaitTime), LastWaitType: s.Wait.LastWaitType, WaitResource: s.Wait.WaitResource},
-		SnapInfo:   &dbmv1.SnapMetadata{Id: s.Snapshot.ID, Timestamp: timestamppb.New(s.Snapshot.Timestamp)},
-		PlanHandle: s.PlanHandle,
-		Id:         s.Id,
-		Command:    &dbmv1.CommandMetadata{TransactionId: s.CommandMetadata.TransactionId, RequestId: s.CommandMetadata.RequestId, EstimatedCompletionTime: s.CommandMetadata.EstimatedCompletionTime, PercentComplete: s.CommandMetadata.PercentComplete},
-		QueryHash:  s.QueryHash,
-	}
-	return qs
-}
-
-func valOrEmpty(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
 }
 
 // withAgentMeta attaches simple agent-version metadata to the stream for logs/tracing.

@@ -567,10 +567,12 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 	databases := make([]string, 0, size)
 	blockingOrSelf := make([]string, 0, size)
 	lockStatus := make([]string, 0, size)
+	traceIds := make([]string, 0, size)
 	for _, sample := range r.GetSnapshot().GetSamples() {
 		ids = append(ids, sample.Id)
 		sessionIDs = append(sessionIDs, sample.Session.SessionId)
 		statuses = append(statuses, sample.Status)
+		traceIds = append(traceIds, sample.GetContext().GetTraceId())
 		text = append(text, sample.Text)
 		users = append(users, sample.Session.LoginName)
 		waitEvents = append(waitEvents, sample.GetWaitInfo().GetWaitType())
@@ -613,6 +615,7 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 		data.NewField("", nil, lockStatus),
 		data.NewField("sessionID", nil, sessionIDs),
 		data.NewField("sampleID", nil, ids),
+		data.NewField("traceId", nil, traceIds),
 		data.NewField("text", nil, text),
 		data.NewField("Elapsed", nil, durations),
 		data.NewField("Blocking Impact", nil, blockingImpact),
