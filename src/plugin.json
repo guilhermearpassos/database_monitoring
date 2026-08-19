@@ -44,10 +44,15 @@
     },
     {
       "type": "page",
-      "name": "Overview",
-      "path": "/a/%PLUGIN_ID%/one",
-      "addToNav": true,
-      "defaultNav": true
+      "name": "Snapshots",
+      "path": "/a/%PLUGIN_ID%/snapshots",
+      "addToNav": true
+    },
+    {
+      "type": "page",
+      "name": "Plan Analysis",
+      "path": "/a/%PLUGIN_ID%/plan_analysis",
+      "addToNav": true
     },
     {
       "type": "page",
@@ -55,7 +60,8 @@
       "name": "Configuration",
       "path": "/plugins/%PLUGIN_ID%",
       "role": "Admin",
-      "addToNav": true
+      "addToNav": true,
+      "defaultNav": true
     }
   ],
   "dependencies": {

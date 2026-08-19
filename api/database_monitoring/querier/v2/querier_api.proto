@@ -1,0 +1,126 @@
+syntax = "proto3";
+package database_monitoring.v2;
+option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v2/querier;querierv2";
+
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/sample.proto";        // QuerySample
+import "database_monitoring/v1/snapshot.proto";      // ServerMetadata
+import "database_monitoring/v1/execution_plan.proto";
+
+service QuerierAPI {
+  rpc ListSnapshotSummaries(ListSnapshotSummariesRequest) returns (ListSnapshotSummariesResponse);
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+  rpc ListServerSummary(ListServerSummaryRequest) returns (ListServerSummaryResponse);
+  rpc GetSampleDetails(GetSampleDetailsRequest) returns (GetSampleDetailsResponse);
+  rpc ListQueryMetrics(ListQueryMetricsRequest) returns (ListQueryMetricsResponse);
+  rpc GetQueryMetricsTimeSeries(GetQueryMetricsTimeSeriesRequest) returns (GetQueryMetricsTimeSeriesResponse);
+  rpc ListPlansWithIssues(ListPlansWithIssuesRequest) returns (ListPlansWithIssuesResponse);
+}
+message GetQueryMetricsTimeSeriesRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  string sql_handle = 4;
+  string interval = 5;
+}
+message GetQueryMetricsTimeSeriesResponse{
+  repeated database_monitoring.v1.QueryMetric metrics = 1;
+}
+
+message ListPlansWithIssuesRequest {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  repeated string databases = 4;
+  int32 page_size = 5;
+  int64 page_number = 6;
+
+}
+message ListPlansWithIssuesResponse {
+  repeated PlansWithIssues plans = 1;
+}
+
+message PlansWithIssues {
+  database_monitoring.v1.ParsedExecutionPlan parsed_plan = 1;
+  database_monitoring.v1.QuerySample latest_sample = 2;
+  int32 issue_count = 3;
+  int32 related_lock_count = 4;
+  int32 occurrences = 5;
+}
+
+
+message ListQueryMetricsRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  string database = 4;
+  int32 page_size = 5;
+  int64 page_number = 6;
+
+}
+message ListQueryMetricsResponse{
+  repeated database_monitoring.v1.QueryMetric metrics = 1;
+}
+message GetSampleDetailsRequest {
+  string sample_id = 1;
+  string snap_id = 2;
+}
+message BlockChain{
+  message BlockingNode {
+    database_monitoring.v1.QuerySample query_sample = 1;
+    repeated BlockingNode child_nodes = 2;
+  }
+  repeated BlockingNode roots = 1;
+}
+
+message GetSampleDetailsResponse {
+  database_monitoring.v1.QuerySample query_sample = 1;
+  database_monitoring.v1.ParsedExecutionPlan parsed_plan = 2;
+  BlockChain block_chain = 3;
+}
+message ListSnapshotSummariesRequest {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string server = 3;
+}
+message SnapshotSummary {
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  database_monitoring.v1.ServerMetadata server = 3;
+  map<string, int64> connections_by_wait_event = 4;
+  map<string, int64> time_ms_by_wait_event = 5;
+  int32 connections = 6;
+  int32 waiters = 7;
+  int32 blockers = 8;
+  double wait_duration = 9;
+  double avg_duration = 10;
+  double max_duration = 11;
+}
+message ListSnapshotSummariesResponse {
+  repeated SnapshotSummary snap_summaries = 1;
+
+}
+message GetSnapshotRequest{
+  string id = 1;
+}
+message GetSnapshotResponse{
+  database_monitoring.v1.DBSnapshot snapshot = 1;
+}
+
+message ListServerSummaryRequest{
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+
+}
+
+message ServerSummary {
+  string name = 1;
+  string type = 2;
+  int32 connections = 3;
+  double request_rate = 4;
+  map<string, int32> connections_by_wait_group = 5;
+}
+
+message ListServerSummaryResponse{
+  repeated ServerSummary servers = 1;
+}

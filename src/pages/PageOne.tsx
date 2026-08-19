@@ -73,6 +73,13 @@ const getStyles = (theme: GrafanaTheme2) => ({
         margin-top: ${theme.spacing(2)};
         max-height: 400px;
         overflow-y: auto;
+        overflow-x: auto; /* prevent horizontal overflow */
+        width: 100%;
+    `,
+    drawerContent: css`
+        overflow-y: auto;
+        padding: ${theme.spacing(2)};
+        box-sizing: border-box;
     `,
     paginationContainer: css`
         display: flex;
@@ -489,7 +496,7 @@ const PageOne = () => {
                 <div>{sampleID && (<Drawer onClose={() => {
                         setSampleID(null)
                     }} size="lg">
-                        <div className={styles.section}>
+                        <div className={styles.drawerContent}>
                             <QueryDetailsComponent
                                 snapID={sampleID.snapId}
                                 sampleID={sampleID.sampleID}

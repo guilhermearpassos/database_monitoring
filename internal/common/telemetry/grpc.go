@@ -23,16 +23,20 @@ type GRPCClientConfig struct {
 }
 
 func OpenInstrumentedClientConn(endpoint string, maxSize int, tlsEnabled bool) (*grpc.ClientConn, error) {
-	opts := []grpc.DialOption{grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	// Shared dial options for both network and inproc
+	baseOpts := []grpc.DialOption{
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxSize),
 			grpc.MaxCallSendMsgSize(maxSize),
-		)}
+		),
+	}
+	// Network path (default): plaintext unless TLS enabled
+	opts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, baseOpts...)
 	if tlsEnabled {
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
 	}
-	return grpc.NewClient(endpoint, opts...)
+	return grpc.DialContext(context.Background(), endpoint, opts...)
 
 }
 

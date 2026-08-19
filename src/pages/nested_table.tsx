@@ -256,11 +256,14 @@ export function NestedTablesWithEventBus({
         });
 
 
-        // Add all summary fields with data links for 'id' field
-        summaryFrame.fields.forEach((field) => {
-            const fieldConfig = {...field.config};
+        // Add all summary fields with data links for 'id' and 'text' fields
+        const snapIdFieldIndexInSummary = summaryFrame.fields.findIndex((f) => f.name === 'snapID');
+        const sampleIdFieldIndexInSummary = summaryFrame.fields.findIndex((f) => f.name === 'sampleId');
 
-            // Add click handler to 'id' field
+        summaryFrame.fields.forEach((field) => {
+            const fieldConfig = { ...field.config } as any;
+
+            // Add click handler to 'id' field to toggle details row
             if (field.name === 'id') {
                 fieldConfig.links = [
                     {
@@ -272,6 +275,39 @@ export function NestedTablesWithEventBus({
                                 new TableRowClickEvent({
                                     id: snapshotId,
                                     rowIndex: event.origin.rowIndex,
+                                })
+                            );
+                        },
+                    },
+                ];
+            }
+
+            // Make the query text clickable to open the details drawer
+            if (field.name === 'text') {
+                const existingLinks = Array.isArray(fieldConfig.links) ? fieldConfig.links : [];
+                fieldConfig.links = [
+                    ...existingLinks,
+                    {
+                        title: 'Open query details',
+                        url: '',
+                        onClick: (event: any) => {
+                            const rowIndex = event.origin.rowIndex as number;
+                            const snapID = snapIdFieldIndexInSummary >= 0
+                                ? String(summaryFrame.fields[snapIdFieldIndexInSummary].values.get(rowIndex) ?? '')
+                                : '';
+                            const sampleID = sampleIdFieldIndexInSummary >= 0
+                                ? String(summaryFrame.fields[sampleIdFieldIndexInSummary].values.get(rowIndex) ?? '')
+                                : '';
+
+                            if (!snapID || !sampleID) {
+                                console.warn('Missing snapID or sampleID for row', rowIndex, { snapID, sampleID });
+                                return;
+                            }
+
+                            panelEventBus.publish(
+                                new SampleSelectedEvent({
+                                    snapID,
+                                    sampleID,
                                 })
                             );
                         },
