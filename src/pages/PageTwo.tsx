@@ -75,8 +75,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
         width: 100%;
     `,
     drawerContent: css`
-        width: min(900px, 90vw);
-        max-height: 80vh;
         overflow-y: auto;
         padding: ${theme.spacing(2)};
         box-sizing: border-box;

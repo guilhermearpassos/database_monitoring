@@ -101,6 +101,7 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     border-radius: ${theme.shape.radius.default};
     border: 1px solid ${theme.colors.border.weak};
     line-height: 1.5;
+    max-width: 60vw;
   `,
     metadata: css`
     display: flex;
