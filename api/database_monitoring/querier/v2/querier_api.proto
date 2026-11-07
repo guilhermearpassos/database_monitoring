@@ -46,6 +46,7 @@ message PlansWithIssues {
   int32 issue_count = 3;
   int32 related_lock_count = 4;
   int32 occurrences = 5;
+  repeated string issue_tag = 6;
 }
 
 
