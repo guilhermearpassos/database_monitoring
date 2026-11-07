@@ -45,6 +45,12 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 			LastRequestEnd:   timestamppb.New(sample.Session.LastRequestEndTime),
 			ConnectionId:     sample.Session.ConnectionId,
 			ClientIp:         sample.Session.ClientIP,
+			Context: &dbmv1.ContextInfo{
+				IsTraceParent: sample.Session.Context.IsTraceParent,
+				TraceId:       sample.Session.Context.TraceId,
+				SpanId:        sample.Session.Context.SpanId,
+				Raw:           sample.Session.Context.Raw,
+			},
 		},
 		Db: &dbmv1.DBMetadata{
 			DatabaseId:   sample.Database.DatabaseID,
@@ -67,6 +73,13 @@ func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
 		PlanHandle: sample.PlanHandle,
 		Id:         sample.Id,
 		Command:    CommandMetaToProto(&sample.CommandMetadata),
+
+		Context: &dbmv1.ContextInfo{
+			IsTraceParent: sample.Context.IsTraceParent,
+			TraceId:       sample.Context.TraceId,
+			SpanId:        sample.Context.SpanId,
+			Raw:           sample.Context.Raw,
+		},
 	}
 }
 

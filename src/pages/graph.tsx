@@ -171,15 +171,25 @@ export function MyGraph({
             onChangeTimeRange: (range: TimeRange) => {
                 onTimeRangeChange?.(range);
             },
-            onToggleSeriesVisibility: (label: string, mode: SeriesVisibilityChangeMode) => {
-                setVisibilityOverrides((prev) => {
-                    const updated = setSeriesHiddenInConfig(
-                        { defaults: {}, overrides: prev },
-                        label,
-                        mode
+            onToggleSeriesVisibility: (label: string | string[] | null,
+             mode: SeriesVisibilityChangeMode
+             ) => {
+      if (label == null) {
+        return;
+      }
+      const labels = Array.isArray(label) ? label : [label];
+                setVisibilityOverrides((overrides) => {
+                    const nextConfig = labels.reduce<FieldConfigSource<GraphFieldConfig>>(
+                        (nextCfg, seriesLabel) => setSeriesHiddenInConfig(nextCfg, seriesLabel, mode),
+                        {
+                            defaults: {},
+                            overrides,
+                        }
                     );
-                    return updated.overrides ?? [];
+
+                    return nextConfig.overrides ?? [];
                 });
+
             },
         }),
         [eventBus, onTimeRangeChange]

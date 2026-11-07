@@ -3,6 +3,7 @@ package runtimes
 import (
 	"context"
 	"fmt"
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
 	"github.com/guilhermearpassos/database-monitoring/internal/config"
 	"google.golang.org/grpc"
@@ -15,9 +16,10 @@ import (
 type GRPCServerRuntime struct {
 	lis    net.Listener
 	server *grpc.Server
+	inproc *inprocgrpc.Channel
 }
 
-func NewGRPCServerRuntime(cfg config.GRPCServerConfig) (*GRPCServerRuntime, error) {
+func NewGRPCServerRuntime(cfg config.GRPCServerConfig, inproc *inprocgrpc.Channel) (*GRPCServerRuntime, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -28,10 +30,15 @@ func NewGRPCServerRuntime(cfg config.GRPCServerConfig) (*GRPCServerRuntime, erro
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %s", cfg.Grpc.Url, err)
 	}
-	return &GRPCServerRuntime{server: server, lis: lis}, nil
+	return &GRPCServerRuntime{server: server, lis: lis, inproc: inproc}, nil
 }
 
 var _ Runtime = (*GRPCServerRuntime)(nil)
+
+func (r *GRPCServerRuntime) RegisterService(desc *grpc.ServiceDesc, ss any) {
+	r.server.RegisterService(desc, ss)
+	r.inproc.RegisterService(desc, ss)
+}
 
 func (r *GRPCServerRuntime) Type() RuntimeType {
 	return GRPCRuntime

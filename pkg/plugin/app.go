@@ -5,14 +5,15 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"net/http"
 	"strings"
+
+	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
-	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -37,8 +38,7 @@ type AppConfig struct {
 // App is an example app plugin with a backend which can respond to data queries.
 type App struct {
 	backend.CallResourceHandler
-	client        dbmv1.DBMApiClient
-	supportClient dbmv1.DBMSupportApiClient
+	client querierv2.QuerierAPIClient
 }
 
 // NewApp creates a new example *App instance.
@@ -56,16 +56,24 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 	var client *grpc.ClientConn
 	var err error
 	if port[1] == "443" {
-		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})),
+
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(100*1024*1024),
+				grpc.MaxCallSendMsgSize(100*1024*1024),
+			))
 	} else {
-		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		client, err = grpc.NewClient(cfg.APIURL, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(100*1024*1024),
+				grpc.MaxCallSendMsgSize(100*1024*1024),
+			))
 
 	}
 	if err != nil {
 		return nil, err
 	}
-	app.client = dbmv1.NewDBMApiClient(client)
-	app.supportClient = dbmv1.NewDBMSupportApiClient(client)
+	app.client = querierv2.NewQuerierAPIClient(client)
 	// Use a httpadapter (provided by the SDK) for resource calls. This allows us
 	// to use a *http.ServeMux for resource calls, so we can map multiple routes
 	// to CallResource without having to implement extra logic.

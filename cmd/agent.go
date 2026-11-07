@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"time"
@@ -20,7 +19,6 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	collectorv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1/collector"
 	"github.com/jmoiron/sqlx"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 )
 

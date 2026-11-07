@@ -1,0 +1,4 @@
+
+drop index query_plans_plan_handle_index;
+drop index query_samples_snap_id_plan_handle_index;
+drop index snapshot_target_id_snap_time_id_index;

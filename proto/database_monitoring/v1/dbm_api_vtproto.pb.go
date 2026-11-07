@@ -7,10 +7,10 @@ package dbmv1
 import (
 	binary "encoding/binary"
 	fmt "fmt"
-	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	protohelpers "github.com/planetscale/vtprotobuf/protohelpers"
 	timestamppb "github.com/planetscale/vtprotobuf/types/known/timestamppb"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb1 "google.golang.org/protobuf/types/known/timestamppb"
 	io "io"
 	math "math"
 )
@@ -2315,7 +2315,7 @@ func (m *ListSnapshotSummariesRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamp.Timestamp{}
+				m.Start = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -2351,7 +2351,7 @@ func (m *ListSnapshotSummariesRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamp.Timestamp{}
+				m.End = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -2502,7 +2502,7 @@ func (m *SnapshotSummary) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Timestamp == nil {
-				m.Timestamp = &timestamp.Timestamp{}
+				m.Timestamp = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Timestamp).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -3026,7 +3026,7 @@ func (m *ListQueryMetricsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamp.Timestamp{}
+				m.Start = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -3062,7 +3062,7 @@ func (m *ListQueryMetricsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamp.Timestamp{}
+				m.End = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -3336,7 +3336,7 @@ func (m *GetQueryMetricsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamp.Timestamp{}
+				m.Start = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -3372,7 +3372,7 @@ func (m *GetQueryMetricsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamp.Timestamp{}
+				m.End = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -3610,7 +3610,7 @@ func (m *GetQueryMetricsTimeSeriesRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamp.Timestamp{}
+				m.Start = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -3646,7 +3646,7 @@ func (m *GetQueryMetricsTimeSeriesRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamp.Timestamp{}
+				m.End = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -4084,7 +4084,7 @@ func (m *ListSnapshotsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamp.Timestamp{}
+				m.Start = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -4120,7 +4120,7 @@ func (m *ListSnapshotsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamp.Timestamp{}
+				m.End = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -4432,7 +4432,7 @@ func (m *ListServerSummaryRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamp.Timestamp{}
+				m.Start = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -4468,7 +4468,7 @@ func (m *ListServerSummaryRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamp.Timestamp{}
+				m.End = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -4640,7 +4640,7 @@ func (m *ListServersRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Start == nil {
-				m.Start = &timestamp.Timestamp{}
+				m.Start = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Start).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -4676,7 +4676,7 @@ func (m *ListServersRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.End == nil {
-				m.End = &timestamp.Timestamp{}
+				m.End = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.End).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -5618,7 +5618,7 @@ func (m *GetNormalizedQueryDetailsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.StartTime == nil {
-				m.StartTime = &timestamp.Timestamp{}
+				m.StartTime = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.StartTime).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -5654,7 +5654,7 @@ func (m *GetNormalizedQueryDetailsRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.EndTime == nil {
-				m.EndTime = &timestamp.Timestamp{}
+				m.EndTime = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.EndTime).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -5824,7 +5824,7 @@ func (m *GetNormalizedQueryRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.StartTime == nil {
-				m.StartTime = &timestamp.Timestamp{}
+				m.StartTime = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.StartTime).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -5860,7 +5860,7 @@ func (m *GetNormalizedQueryRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.EndTime == nil {
-				m.EndTime = &timestamp.Timestamp{}
+				m.EndTime = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.EndTime).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -6060,7 +6060,7 @@ func (m *GetNormalizedQueryResponse_ConnectionsDataPoint) UnmarshalVT(dAtA []byt
 				return io.ErrUnexpectedEOF
 			}
 			if m.Timestamp == nil {
-				m.Timestamp = &timestamp.Timestamp{}
+				m.Timestamp = &timestamppb1.Timestamp{}
 			}
 			if err := (*timestamppb.Timestamp)(m.Timestamp).UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

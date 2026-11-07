@@ -1,0 +1,347 @@
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.539" Build="15.0.4430.1">
+    <BatchSequence>
+        <Batch>
+            <Statements>
+                <StmtSimple
+                        StatementText="INSERT BULK trades ([strategy] varchar(50), [qty] decimal(24, 8), [price] decimal(24, 8), [account] varchar(50), [asset] varchar(100))"
+                        StatementId="1" StatementCompId="1" StatementType="BULK INSERT" RetrievedFromCache="false"
+                        StatementSubTreeCost="6.2912" StatementEstRows="10000" SecurityPolicyApplied="false"
+                        StatementOptmLevel="FULL" QueryHash="0xA94CC0EA42D56152" QueryPlanHash="0x6C7BB059E38945F2"
+                        CardinalityEstimationModelVersion="150">
+                    <StatementSetOptions QUOTED_IDENTIFIER="true" ARITHABORT="false" CONCAT_NULL_YIELDS_NULL="true"
+                                         ANSI_NULLS="true" ANSI_PADDING="true" ANSI_WARNINGS="true"
+                                         NUMERIC_ROUNDABORT="false"/>
+                    <QueryPlan CachedPlanSize="40" CompileTime="31" CompileCPU="9" CompileMemory="232">
+                        <MemoryGrantInfo SerialRequiredMemory="512" SerialDesiredMemory="3904" GrantedMemory="0"
+                                         MaxUsedMemory="0"/>
+                        <OptimizerHardwareDependentProperties EstimatedAvailableMemoryGrant="81132"
+                                                              EstimatedPagesCached="81132"
+                                                              EstimatedAvailableDegreeOfParallelism="8"
+                                                              MaxCompileMemory="3811912"/>
+                        <RelOp NodeId="0" PhysicalOp="Index Insert" LogicalOp="Insert" EstimateRows="10000"
+                               EstimateIO="1.09198" EstimateCPU="0.01" AvgRowSize="9" EstimatedTotalSubtreeCost="6.2912"
+                               Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                            <OutputList/>
+                            <Update DMLRequestSort="1">
+                                <Object Database="[master]" Schema="[dbo]" Table="[trades]"
+                                        Index="[trades_group_01_idx]" IndexKind="NonClustered" Storage="RowStore"/>
+                                <SetPredicate>
+                                    <ScalarOperator
+                                            ScalarString="[id1007] = [master].[dbo].[trades].[id],[strategy1008] = [master].[dbo].[trades].[strategy],[qty1009] = [master].[dbo].[trades].[qty],[account1010] = [master].[dbo].[trades].[account],[asset1011] = [master].[dbo].[trades].[asset]">
+                                        <ScalarExpressionList>
+                                            <ScalarOperator>
+                                                <MultipleAssign>
+                                                    <Assign>
+                                                        <ColumnReference Column="id1007"/>
+                                                        <ScalarOperator>
+                                                            <Identifier>
+                                                                <ColumnReference Database="[master]" Schema="[dbo]"
+                                                                                 Table="[trades]" Column="id"/>
+                                                            </Identifier>
+                                                        </ScalarOperator>
+                                                    </Assign>
+                                                    <Assign>
+                                                        <ColumnReference Column="strategy1008"/>
+                                                        <ScalarOperator>
+                                                            <Identifier>
+                                                                <ColumnReference Database="[master]" Schema="[dbo]"
+                                                                                 Table="[trades]" Column="strategy"/>
+                                                            </Identifier>
+                                                        </ScalarOperator>
+                                                    </Assign>
+                                                    <Assign>
+                                                        <ColumnReference Column="qty1009"/>
+                                                        <ScalarOperator>
+                                                            <Identifier>
+                                                                <ColumnReference Database="[master]" Schema="[dbo]"
+                                                                                 Table="[trades]" Column="qty"/>
+                                                            </Identifier>
+                                                        </ScalarOperator>
+                                                    </Assign>
+                                                    <Assign>
+                                                        <ColumnReference Column="account1010"/>
+                                                        <ScalarOperator>
+                                                            <Identifier>
+                                                                <ColumnReference Database="[master]" Schema="[dbo]"
+                                                                                 Table="[trades]" Column="account"/>
+                                                            </Identifier>
+                                                        </ScalarOperator>
+                                                    </Assign>
+                                                    <Assign>
+                                                        <ColumnReference Column="asset1011"/>
+                                                        <ScalarOperator>
+                                                            <Identifier>
+                                                                <ColumnReference Database="[master]" Schema="[dbo]"
+                                                                                 Table="[trades]" Column="asset"/>
+                                                            </Identifier>
+                                                        </ScalarOperator>
+                                                    </Assign>
+                                                </MultipleAssign>
+                                            </ScalarOperator>
+                                        </ScalarExpressionList>
+                                    </ScalarOperator>
+                                </SetPredicate>
+                                <RelOp NodeId="1" PhysicalOp="Sort" LogicalOp="Sort" EstimateRows="10000"
+                                       EstimateIO="0.0112613" EstimateCPU="0.60342" AvgRowSize="132"
+                                       EstimatedTotalSubtreeCost="5.18922" Parallel="0" EstimateRebinds="0"
+                                       EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                    <OutputList>
+                                        <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                         Column="id"/>
+                                        <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                         Column="strategy"/>
+                                        <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                         Column="qty"/>
+                                        <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                         Column="account"/>
+                                        <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                         Column="asset"/>
+                                    </OutputList>
+                                    <MemoryFractions Input="1" Output="1"/>
+                                    <Sort Distinct="0">
+                                        <OrderBy>
+                                            <OrderByColumn Ascending="1">
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="strategy"/>
+                                            </OrderByColumn>
+                                            <OrderByColumn Ascending="1">
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="asset"/>
+                                            </OrderByColumn>
+                                            <OrderByColumn Ascending="1">
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="account"/>
+                                            </OrderByColumn>
+                                            <OrderByColumn Ascending="1">
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="id"/>
+                                            </OrderByColumn>
+                                        </OrderBy>
+                                        <RelOp NodeId="2" PhysicalOp="Clustered Index Insert" LogicalOp="Insert"
+                                               EstimateRows="10000" EstimateIO="1.1992" EstimateCPU="0.01"
+                                               AvgRowSize="132" EstimatedTotalSubtreeCost="4.57454" Parallel="0"
+                                               EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                            <OutputList>
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="id"/>
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="strategy"/>
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="qty"/>
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="account"/>
+                                                <ColumnReference Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                                 Column="asset"/>
+                                            </OutputList>
+                                            <Update DMLRequestSort="1">
+                                                <Object Database="[master]" Schema="[dbo]" Table="[trades]"
+                                                        Index="[PK__trades__3213E83F36668621]" IndexKind="Clustered"
+                                                        Storage="RowStore"/>
+                                                <SetPredicate>
+                                                    <ScalarOperator
+                                                            ScalarString="[master].[dbo].[trades].[strategy] = RaiseIfNullInsert([!BulkInsert].[strategy]),[master].[dbo].[trades].[qty] = RaiseIfNullInsert([Expr1005]),[master].[dbo].[trades].[price] = RaiseIfNullInsert([Expr1006]),[master].[dbo].[trades].[account] = [!BulkInsert].[account],[master].[dbo].[trades].[asset] = [!BulkInsert].[asset],[master].[dbo].[trades].[id] = [Expr1004]">
+                                                        <ScalarExpressionList>
+                                                            <ScalarOperator>
+                                                                <MultipleAssign>
+                                                                    <Assign>
+                                                                        <ColumnReference Database="[master]"
+                                                                                         Schema="[dbo]" Table="[trades]"
+                                                                                         Column="strategy"/>
+                                                                        <ScalarOperator>
+                                                                            <Intrinsic FunctionName="RaiseIfNullInsert">
+                                                                                <ScalarOperator>
+                                                                                    <Identifier>
+                                                                                        <ColumnReference
+                                                                                                Table="[!BulkInsert]"
+                                                                                                Column="strategy"/>
+                                                                                    </Identifier>
+                                                                                </ScalarOperator>
+                                                                            </Intrinsic>
+                                                                        </ScalarOperator>
+                                                                    </Assign>
+                                                                    <Assign>
+                                                                        <ColumnReference Database="[master]"
+                                                                                         Schema="[dbo]" Table="[trades]"
+                                                                                         Column="qty"/>
+                                                                        <ScalarOperator>
+                                                                            <Intrinsic FunctionName="RaiseIfNullInsert">
+                                                                                <ScalarOperator>
+                                                                                    <Identifier>
+                                                                                        <ColumnReference
+                                                                                                Column="Expr1005"/>
+                                                                                    </Identifier>
+                                                                                </ScalarOperator>
+                                                                            </Intrinsic>
+                                                                        </ScalarOperator>
+                                                                    </Assign>
+                                                                    <Assign>
+                                                                        <ColumnReference Database="[master]"
+                                                                                         Schema="[dbo]" Table="[trades]"
+                                                                                         Column="price"/>
+                                                                        <ScalarOperator>
+                                                                            <Intrinsic FunctionName="RaiseIfNullInsert">
+                                                                                <ScalarOperator>
+                                                                                    <Identifier>
+                                                                                        <ColumnReference
+                                                                                                Column="Expr1006"/>
+                                                                                    </Identifier>
+                                                                                </ScalarOperator>
+                                                                            </Intrinsic>
+                                                                        </ScalarOperator>
+                                                                    </Assign>
+                                                                    <Assign>
+                                                                        <ColumnReference Database="[master]"
+                                                                                         Schema="[dbo]" Table="[trades]"
+                                                                                         Column="account"/>
+                                                                        <ScalarOperator>
+                                                                            <Identifier>
+                                                                                <ColumnReference Table="[!BulkInsert]"
+                                                                                                 Column="account"/>
+                                                                            </Identifier>
+                                                                        </ScalarOperator>
+                                                                    </Assign>
+                                                                    <Assign>
+                                                                        <ColumnReference Database="[master]"
+                                                                                         Schema="[dbo]" Table="[trades]"
+                                                                                         Column="asset"/>
+                                                                        <ScalarOperator>
+                                                                            <Identifier>
+                                                                                <ColumnReference Table="[!BulkInsert]"
+                                                                                                 Column="asset"/>
+                                                                            </Identifier>
+                                                                        </ScalarOperator>
+                                                                    </Assign>
+                                                                    <Assign>
+                                                                        <ColumnReference Database="[master]"
+                                                                                         Schema="[dbo]" Table="[trades]"
+                                                                                         Column="id"/>
+                                                                        <ScalarOperator>
+                                                                            <Identifier>
+                                                                                <ColumnReference Column="Expr1004"/>
+                                                                            </Identifier>
+                                                                        </ScalarOperator>
+                                                                    </Assign>
+                                                                </MultipleAssign>
+                                                            </ScalarOperator>
+                                                        </ScalarExpressionList>
+                                                    </ScalarOperator>
+                                                </SetPredicate>
+                                                <RelOp NodeId="3" PhysicalOp="Compute Scalar" LogicalOp="Compute Scalar"
+                                                       EstimateRows="10000" EstimateIO="0" EstimateCPU="0.001"
+                                                       AvgRowSize="145" EstimatedTotalSubtreeCost="3.36533" Parallel="0"
+                                                       EstimateRebinds="0" EstimateRewinds="0"
+                                                       EstimatedExecutionMode="Row">
+                                                    <OutputList>
+                                                        <ColumnReference Table="[!BulkInsert]" Column="strategy"/>
+                                                        <ColumnReference Table="[!BulkInsert]" Column="account"/>
+                                                        <ColumnReference Table="[!BulkInsert]" Column="asset"/>
+                                                        <ColumnReference Column="Expr1004"/>
+                                                        <ColumnReference Column="Expr1005"/>
+                                                        <ColumnReference Column="Expr1006"/>
+                                                    </OutputList>
+                                                    <ComputeScalar>
+                                                        <DefinedValues>
+                                                            <DefinedValue>
+                                                                <ColumnReference Column="Expr1005"/>
+                                                                <ScalarOperator
+                                                                        ScalarString="CONVERT_IMPLICIT(decimal(24,8),[!BulkInsert].[qty],0)">
+                                                                    <Convert DataType="decimal" Precision="24" Scale="8"
+                                                                             Style="0" Implicit="1">
+                                                                        <ScalarOperator>
+                                                                            <Identifier>
+                                                                                <ColumnReference Table="[!BulkInsert]"
+                                                                                                 Column="qty"/>
+                                                                            </Identifier>
+                                                                        </ScalarOperator>
+                                                                    </Convert>
+                                                                </ScalarOperator>
+                                                            </DefinedValue>
+                                                            <DefinedValue>
+                                                                <ColumnReference Column="Expr1006"/>
+                                                                <ScalarOperator
+                                                                        ScalarString="CONVERT_IMPLICIT(decimal(24,8),[!BulkInsert].[price],0)">
+                                                                    <Convert DataType="decimal" Precision="24" Scale="8"
+                                                                             Style="0" Implicit="1">
+                                                                        <ScalarOperator>
+                                                                            <Identifier>
+                                                                                <ColumnReference Table="[!BulkInsert]"
+                                                                                                 Column="price"/>
+                                                                            </Identifier>
+                                                                        </ScalarOperator>
+                                                                    </Convert>
+                                                                </ScalarOperator>
+                                                            </DefinedValue>
+                                                        </DefinedValues>
+                                                        <RelOp NodeId="4" PhysicalOp="Compute Scalar"
+                                                               LogicalOp="Compute Scalar" EstimateRows="10000"
+                                                               EstimateIO="0" EstimateCPU="0.001" AvgRowSize="145"
+                                                               EstimatedTotalSubtreeCost="3.36433" Parallel="0"
+                                                               EstimateRebinds="0" EstimateRewinds="0"
+                                                               EstimatedExecutionMode="Row">
+                                                            <OutputList>
+                                                                <ColumnReference Table="[!BulkInsert]"
+                                                                                 Column="strategy"/>
+                                                                <ColumnReference Table="[!BulkInsert]" Column="qty"/>
+                                                                <ColumnReference Table="[!BulkInsert]" Column="price"/>
+                                                                <ColumnReference Table="[!BulkInsert]"
+                                                                                 Column="account"/>
+                                                                <ColumnReference Table="[!BulkInsert]" Column="asset"/>
+                                                                <ColumnReference Column="Expr1004"/>
+                                                            </OutputList>
+                                                            <ComputeScalar ComputeSequence="1">
+                                                                <DefinedValues>
+                                                                    <DefinedValue>
+                                                                        <ColumnReference Column="Expr1004"/>
+                                                                        <ScalarOperator
+                                                                                ScalarString="getidentity((327672215),(1),NULL)">
+                                                                            <Intrinsic FunctionName="getidentity">
+                                                                                <ScalarOperator>
+                                                                                    <Const ConstValue="(327672215)"/>
+                                                                                </ScalarOperator>
+                                                                                <ScalarOperator>
+                                                                                    <Const ConstValue="(1)"/>
+                                                                                </ScalarOperator>
+                                                                                <ScalarOperator>
+                                                                                    <Const ConstValue="NULL"/>
+                                                                                </ScalarOperator>
+                                                                            </Intrinsic>
+                                                                        </ScalarOperator>
+                                                                    </DefinedValue>
+                                                                </DefinedValues>
+                                                                <RelOp NodeId="5" PhysicalOp="Remote Scan"
+                                                                       LogicalOp="Remote Scan" EstimateRows="10000"
+                                                                       EstimateIO="0" EstimateCPU="3.36333"
+                                                                       AvgRowSize="141"
+                                                                       EstimatedTotalSubtreeCost="3.36333" Parallel="0"
+                                                                       EstimateRebinds="0" EstimateRewinds="0"
+                                                                       EstimatedExecutionMode="Row">
+                                                                    <OutputList>
+                                                                        <ColumnReference Table="[!BulkInsert]"
+                                                                                         Column="strategy"/>
+                                                                        <ColumnReference Table="[!BulkInsert]"
+                                                                                         Column="qty"/>
+                                                                        <ColumnReference Table="[!BulkInsert]"
+                                                                                         Column="price"/>
+                                                                        <ColumnReference Table="[!BulkInsert]"
+                                                                                         Column="account"/>
+                                                                        <ColumnReference Table="[!BulkInsert]"
+                                                                                         Column="asset"/>
+                                                                    </OutputList>
+                                                                    <RemoteScan RemoteObject="STREAM"/>
+                                                                </RelOp>
+                                                            </ComputeScalar>
+                                                        </RelOp>
+                                                    </ComputeScalar>
+                                                </RelOp>
+                                            </Update>
+                                        </RelOp>
+                                    </Sort>
+                                </RelOp>
+                            </Update>
+                        </RelOp>
+                    </QueryPlan>
+                </StmtSimple>
+            </Statements>
+        </Batch>
+    </BatchSequence>
+</ShowPlanXML>

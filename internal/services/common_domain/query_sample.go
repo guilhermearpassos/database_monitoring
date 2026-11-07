@@ -2,6 +2,12 @@ package common_domain
 
 import "time"
 
+type ContextInfo struct {
+	TraceId       string
+	SpanId        string
+	IsTraceParent bool
+	Raw           []byte
+}
 type QuerySample struct {
 	Id              string
 	Status          string
@@ -19,6 +25,7 @@ type QuerySample struct {
 	Snapshot        SnapshotMetadata
 	TimeElapsedMs   int64
 	CommandMetadata CommandMetadata
+	Context         ContextInfo
 }
 
 func (q *QuerySample) SetBlockedIds(sessionIds []string) {
@@ -53,6 +60,7 @@ type SessionMetadata struct {
 	LastRequestEndTime   time.Time
 	ConnectionId         string
 	ClientIP             string
+	Context              ContextInfo
 }
 
 type DataBaseMetadata struct {

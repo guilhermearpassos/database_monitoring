@@ -4,13 +4,13 @@ services:
       file: .config/docker-compose-base.yaml
       service: grafana
     depends_on:
-      - grpc
-#    environment:
-#      - GF_SECURITY_ADMIN_USER=admin
-#      - GF_SECURITY_ADMIN_PASSWORD=password
+      - sqlsights
+  #    environment:
+  #      - GF_SECURITY_ADMIN_USER=admin
+  #      - GF_SECURITY_ADMIN_PASSWORD=password
 
   #    extra_hosts:
-#      - "host.docker.internal:host-gateway"
+  #      - "host.docker.internal:host-gateway"
 
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2019-latest
@@ -22,7 +22,7 @@ services:
       - "1433:1433"
 
   load_gen:
-#    container_name: sqlsights-grpc
+    #    container_name: sqlsights-grpc
     image: guilhermearpassos/sql-sight:v1.0.28
     build: .
 
@@ -34,65 +34,22 @@ services:
     depends_on:
       - sqlserver
 
-  migrate:
-    container_name: sqlsights-migrate
-    image: guilhermearpassos/sql-sight:v1.0.28
+  sqlsights:
+    container_name: sqlsights
+    image: guilhermearpassos/sql-sight:v2.0.0-b23
     command:
-      - "migrate"
-      - "--pg-addr=postgres://postgres:example@postgres:5432/postgres?sslmode=disable"
+      - "all"
+      - "--config=/v2.yaml"
     volumes:
-      - "./local/docker/collector.toml:/collector.toml"
-    depends_on:
-      - postgres
-  collector:
-    container_name: sqlsights-collector
-    image: guilhermearpassos/sql-sight:v1.0.28
-    command:
-      - "collector"
-      - "--config=/collector.toml"
-    volumes:
-      - "./local/docker/collector.toml:/collector.toml"
-    depends_on:
-      - migrate
-      - postgres
-
-  agent:
-    container_name: sqlsights-agent
-    image: guilhermearpassos/sql-sight:v1.0.28
-    command:
-      - "agent"
-      - "--config=/agent.toml"
-    volumes:
-      - "./local/docker/agent.toml:/agent.toml"
+      - "./local/docker/v2.yaml:/v2.yaml"
     ports:
-      - "9009:9009"
+      - "9014:9014"
+      - "9015:9015"
+      - "9016:9016"
     depends_on:
-      - collector
+      - postgres
       - sqlserver
 
-
-  grpc:
-    container_name: sqlsights-grpc
-    image: guilhermearpassos/sql-sight:v1.0.28
-#    build: .
-    command:
-      - "grpc"
-      - "--config=/cfg/grpc.toml"
-    volumes:
-      - "./local/docker:/cfg"
-    depends_on:
-      - migrate
-#
-  ui:
-    image: guilhermearpassos/sql-sight:v1.0.28
-    command:
-      - "ui"
-      - "--grpc-addr=grpc:8082"
-      - "--frontend-addr=0.0.0.0:8080"
-    depends_on:
-      - grpc
-    ports:
-      - "9080:8080"
   postgres:
     image: postgres:17-alpine
     ports:

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
+	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
@@ -73,7 +74,7 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 	if snapID == "" {
 		http.Error(w, "snapId is required", http.StatusBadRequest)
 	}
-	resp, err := a.client.GetSampleDetails(r.Context(), &dbmv1.GetSampleDetailsRequest{
+	resp, err := a.client.GetSampleDetails(r.Context(), &querierv2.GetSampleDetailsRequest{
 		SampleId: sampleID,
 		SnapId:   snapID,
 	})
@@ -114,7 +115,7 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func blockChainFromProto(chain *dbmv1.BlockChain) (domain.BlockChain, error) {
+func blockChainFromProto(chain *querierv2.BlockChain) (domain.BlockChain, error) {
 	roots := make([]domain.BlockingNode, len(chain.Roots))
 	for i, root := range chain.Roots {
 		node, err2 := nodeFromProto(root, i)
@@ -173,7 +174,7 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) 
 	return dSample, nil
 }
 
-func nodeFromProto(root *dbmv1.BlockChain_BlockingNode, i int) (domain.BlockingNode, error) {
+func nodeFromProto(root *querierv2.BlockChain_BlockingNode, i int) (domain.BlockingNode, error) {
 	ds, err := protoSampleToDomain(root.QuerySample)
 	if err != nil {
 		return domain.BlockingNode{}, err
@@ -302,6 +303,9 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 		case "metrics_series":
 			res := a.queryMetricsTimeSeries(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
+		case "plan_analysis":
+			res := a.queryPlanAnalysis(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
 		}
 	}
 
@@ -341,7 +345,7 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 	timeRange := query.TimeRange
 	from := timeRange.From
 	to := timeRange.To
-	r, err := a.client.ListSnapshotSummaries(ctx, &dbmv1.ListSnapshotSummariesRequest{
+	r, err := a.client.ListSnapshotSummaries(ctx, &querierv2.ListSnapshotSummariesRequest{
 		Start:  timestamppb.New(from),
 		End:    timestamppb.New(to),
 		Server: q.Database,
@@ -404,7 +408,7 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 	timeRange := query.TimeRange
 	from := timeRange.From
 	to := timeRange.To
-	r, err := a.client.ListSnapshotSummaries(ctx, &dbmv1.ListSnapshotSummariesRequest{
+	r, err := a.client.ListSnapshotSummaries(ctx, &querierv2.ListSnapshotSummariesRequest{
 		Start:  timestamppb.New(from),
 		End:    timestamppb.New(to),
 		Server: q.Database,
@@ -463,6 +467,72 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 	return response
 }
 
+// queryPlanAnalysis processes individual queries
+func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	// Implement your SQL query logic here
+	response := backend.DataResponse{}
+	q := struct {
+		Database string `json:"database"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	timeRange := query.TimeRange
+	from := timeRange.From
+	to := timeRange.To
+	r, err := a.client.ListPlansWithIssues(ctx, &querierv2.ListPlansWithIssuesRequest{
+		Start: timestamppb.New(from),
+		End:   timestamppb.New(to),
+		Host:  q.Database,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	size := len(r.GetPlans())
+	queries := make([]string, 0, size)
+	databases := make([]string, 0, size)
+	issues := make([]float64, 0, size)
+	occurrences := make([]float64, 0, size)
+	locks := make([]float64, 0, size)
+	times := make([]time.Time, 0, size)
+	snapIds := make([]string, 0, size)
+	sampleIds := make([]string, 0, size)
+	for _, p := range r.GetPlans() {
+		queries = append(queries, p.GetLatestSample().GetText())
+		issues = append(issues, float64(p.GetIssueCount()))
+		occurrences = append(occurrences, float64(p.GetOccurrences()))
+		locks = append(locks, float64(p.GetRelatedLockCount()))
+		times = append(times, p.GetLatestSample().GetSnapInfo().GetTimestamp().AsTime())
+		snapIds = append(snapIds, p.GetLatestSample().GetSnapInfo().GetId())
+		sampleIds = append(sampleIds, p.GetLatestSample().GetId())
+		databases = append(databases, p.GetLatestSample().GetDb().GetDatabaseName())
+	}
+	frame := data.NewFrame("plans_with_issues",
+		data.NewField("lastSnapTime", nil, times),
+		data.NewField("text", nil, queries),
+		data.NewField("database", nil, databases),
+		data.NewField("issues", nil, issues),
+		data.NewField("occurrences", nil, occurrences),
+		data.NewField("locks", nil, locks),
+		data.NewField("snapID", nil, snapIds),
+		data.NewField("id", nil, snapIds),
+		data.NewField("sampleId", nil, sampleIds),
+	)
+
+	// Set the RefID to match the query
+	frame.RefID = query.RefID
+
+	// Add metadata for proper visualization
+	frame.Meta = &data.FrameMeta{
+		Type: data.FrameTypeTimeSeriesWide,
+	}
+
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
 // querySnap processes individual queries
 func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	// Implement your SQL query logic here
@@ -478,7 +548,7 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 	//timeRange := query.TimeRange
 	//from := timeRange.From
 	//to := timeRange.To
-	r, err := a.client.GetSnapshot(ctx, &dbmv1.GetSnapshotRequest{
+	r, err := a.client.GetSnapshot(ctx, &querierv2.GetSnapshotRequest{
 		Id: q.SnapID,
 	})
 	if err != nil {
@@ -497,10 +567,12 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 	databases := make([]string, 0, size)
 	blockingOrSelf := make([]string, 0, size)
 	lockStatus := make([]string, 0, size)
+	traceIds := make([]string, 0, size)
 	for _, sample := range r.GetSnapshot().GetSamples() {
 		ids = append(ids, sample.Id)
 		sessionIDs = append(sessionIDs, sample.Session.SessionId)
 		statuses = append(statuses, sample.Status)
+		traceIds = append(traceIds, sample.GetContext().GetTraceId())
 		text = append(text, sample.Text)
 		users = append(users, sample.Session.LoginName)
 		waitEvents = append(waitEvents, sample.GetWaitInfo().GetWaitType())
@@ -543,6 +615,7 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 		data.NewField("", nil, lockStatus),
 		data.NewField("sessionID", nil, sessionIDs),
 		data.NewField("sampleID", nil, ids),
+		data.NewField("traceId", nil, traceIds),
 		data.NewField("text", nil, text),
 		data.NewField("Elapsed", nil, durations),
 		data.NewField("Blocking Impact", nil, blockingImpact),
@@ -577,7 +650,7 @@ func (a *App) queryMetrics(ctx context.Context, pCtx backend.PluginContext, quer
 	timeRange := query.TimeRange
 	from := timeRange.From
 	to := timeRange.To
-	resp, err := a.client.ListQueryMetrics(ctx, &dbmv1.ListQueryMetricsRequest{
+	resp, err := a.client.ListQueryMetrics(ctx, &querierv2.ListQueryMetricsRequest{
 		Start:      timestamppb.New(from),
 		End:        timestamppb.New(to),
 		Host:       q.Database,
@@ -660,7 +733,7 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 	if to.Sub(from) > 15*time.Hour {
 		interval = "30m"
 	}
-	resp, err := a.client.GetQueryMetricsTimeSeries(ctx, &dbmv1.GetQueryMetricsTimeSeriesRequest{
+	resp, err := a.client.GetQueryMetricsTimeSeries(ctx, &querierv2.GetQueryMetricsTimeSeriesRequest{
 		Start:     timestamppb.New(from),
 		End:       timestamppb.New(to),
 		Host:      q.Database,
@@ -780,7 +853,7 @@ func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
 
 // getDatabaseOptions fetches available databases
 func (a *App) getDatabaseOptions(ctx context.Context, startTimestamp time.Time, endTimestamp time.Time) ([]DropdownOption, error) {
-	resp, err := a.client.ListServerSummary(ctx, &dbmv1.ListServerSummaryRequest{
+	resp, err := a.client.ListServerSummary(ctx, &querierv2.ListServerSummaryRequest{
 		Start: timestamppb.New(startTimestamp),
 		End:   timestamppb.New(endTimestamp),
 	})
