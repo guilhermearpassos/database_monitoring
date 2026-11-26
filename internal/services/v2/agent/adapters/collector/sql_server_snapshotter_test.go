@@ -4,6 +4,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"testing"
+	"time"
+
+	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 )
 
 func TestPlanHandleValidation(t *testing.T) {
@@ -87,5 +90,21 @@ func TestComputeQueryMetricDelta(t *testing.T) {
 	delta, emit = computeQueryMetricDelta(curr, resetCurr)
 	if !emit || delta["executionCount"] != 2 || delta["totalWorkerTime"] != 400 {
 		t.Fatalf("expected plan cache reset to emit positive fresh counters, got emit=%v delta=%v", emit, delta)
+	}
+}
+
+func TestPruneStaleQueryCounters(t *testing.T) {
+	ss := NewSqlServerSnapshotter(nil, common_domain.ServerMeta{Host: "localhost", Type: "mssql"})
+	now := time.Now().UTC()
+	ss.lastQueryCounters["old"] = queryCounterState{counters: map[string]int64{"executionCount": 1}, lastSeen: now.Add(-20 * time.Minute)}
+	ss.lastQueryCounters["fresh"] = queryCounterState{counters: map[string]int64{"executionCount": 2}, lastSeen: now.Add(-5 * time.Minute)}
+
+	ss.pruneStaleQueryCounters(now, 15*time.Minute)
+
+	if _, exists := ss.lastQueryCounters["old"]; exists {
+		t.Fatalf("expected stale query counter entry to be pruned")
+	}
+	if _, exists := ss.lastQueryCounters["fresh"]; !exists {
+		t.Fatalf("expected fresh query counter entry to remain")
 	}
 }

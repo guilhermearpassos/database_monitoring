@@ -33,12 +33,17 @@ import (
 // 5.Flags (1 byte).
 var MagicTraceparent = []byte("TPRC")
 
+type queryCounterState struct {
+	counters map[string]int64
+	lastSeen time.Time
+}
+
 type SqlServerSnapshotter struct {
 	db                *sqlx.DB
 	Server            common_domain.ServerMeta
 	tracer            trace.Tracer
 	metricsMu         *sync.Mutex
-	lastQueryCounters map[string]map[string]int64
+	lastQueryCounters map[string]queryCounterState
 }
 
 func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlServerSnapshotter {
@@ -47,7 +52,7 @@ func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlS
 		tracer:            otel.Tracer("SQLServerSnapshotter"),
 		Server:            server,
 		metricsMu:         &sync.Mutex{},
-		lastQueryCounters: make(map[string]map[string]int64),
+		lastQueryCounters: make(map[string]queryCounterState),
 	}
 }
 
@@ -989,8 +994,13 @@ OPTION (MAXDOP 1)
 		var prev map[string]int64
 		if s.metricsMu != nil {
 			s.metricsMu.Lock()
-			prev = s.lastQueryCounters[counterKey]
-			s.lastQueryCounters[counterKey] = counters
+			if state, ok := s.lastQueryCounters[counterKey]; ok {
+				prev = state.counters
+			}
+			s.lastQueryCounters[counterKey] = queryCounterState{
+				counters: counters,
+				lastSeen: collectionTime,
+			}
 			s.metricsMu.Unlock()
 		}
 
@@ -1015,5 +1025,20 @@ OPTION (MAXDOP 1)
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("collecting query metrics - rows.Err: %w", err)
 	}
+	s.pruneStaleQueryCounters(collectionTime, 15*time.Minute)
 	return ret, nil
+}
+
+func (s SqlServerSnapshotter) pruneStaleQueryCounters(now time.Time, maxAge time.Duration) {
+	if s.metricsMu == nil {
+		return
+	}
+	cutoff := now.Add(-maxAge)
+	s.metricsMu.Lock()
+	for k, state := range s.lastQueryCounters {
+		if state.lastSeen.Before(cutoff) {
+			delete(s.lastQueryCounters, k)
+		}
+	}
+	s.metricsMu.Unlock()
 }
