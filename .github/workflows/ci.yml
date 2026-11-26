@@ -154,7 +154,8 @@ jobs:
       matrix:
         GRAFANA_IMAGE: ${{fromJson(needs.resolve-versions.outputs.matrix)}}
     name: e2e test ${{ matrix.GRAFANA_IMAGE.name }}@${{ matrix.GRAFANA_IMAGE.VERSION }}
-    runs-on: ubuntu-latest
+    # Pinned to ubuntu-24.04 because Playwright 1.52.x does not support ubuntu26.04-x64
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
         with:
