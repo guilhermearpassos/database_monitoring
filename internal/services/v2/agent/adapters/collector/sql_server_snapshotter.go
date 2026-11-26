@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -88,11 +89,18 @@ func encodeValidPlanHandle(raw []byte) string {
 	return base64.StdEncoding.EncodeToString(raw)
 }
 
+const (
+	monitoringSessionPrefix = "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET DEADLOCK_PRIORITY LOW; SET LOCK_TIMEOUT 2000; "
+	maxPlansPerFetch        = 50
+)
+
 func isInvalidPlanHandleErr(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(strings.ToLower(err.Error()), "handle that was passed to dm_exec_query_plan was invalid")
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "handle that was passed to dm_exec_query_plan was invalid") ||
+		strings.Contains(msg, "handle that was passed to dm_exec_text_query_plan was invalid")
 }
 
 func PackTraceContext(ctx context.Context) []byte {
@@ -121,7 +129,7 @@ func (s SqlServerSnapshotter) TakeSnapshot(ctx context.Context, databases []stri
 	ctx, span := s.tracer.Start(ctx, "TakeSnapshot")
 	defer span.End()
 	traceContext := PackTraceContext(ctx)
-	qDBName := `SET CONTEXT_INFO ?;select database_id, name from sys.databases`
+	qDBName := monitoringSessionPrefix + `SET CONTEXT_INFO ?;select database_id, name from sys.databases OPTION (MAXDOP 1)`
 	db := s.db
 	rowsDB, err := db.QueryContext(ctx, qDBName, traceContext)
 	if err != nil {
@@ -150,7 +158,7 @@ func (s SqlServerSnapshotter) TakeSnapshot(ctx context.Context, databases []stri
 	_ = rowsDB.Close()
 	snapID := uuid.NewString()
 	snapTime := time.Now().In(time.UTC)
-	query := `
+	query := monitoringSessionPrefix + `
 SET CONTEXT_INFO ?;SELECT s.session_id,
        s.login_time,
        s.host_name,
@@ -181,9 +189,10 @@ SET CONTEXT_INFO ?;SELECT s.session_id,
        s.context_info
 FROM sys.dm_exec_sessions s
          inner join sys.dm_exec_requests  p on p.session_id = s.session_id
-left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
+left JOIN sys.dm_exec_connections AS c on p.connection_id = c.connection_id
          CROSS APPLY sys.dm_exec_sql_text(sql_handle)
 	 where text is not null
+OPTION (MAXDOP 1)
 `
 	rows, err := db.QueryxContext(ctx, query, traceContext)
 	if err != nil {
@@ -395,7 +404,7 @@ func (s SqlServerSnapshotter) getSleepingBlockingSessions(ctx context.Context, i
 		args[i] = id
 	}
 
-	query := fmt.Sprintf(`
+	query := fmt.Sprintf(monitoringSessionPrefix+`
 SELECT s.session_id,
        s.login_time,
        s.host_name,
@@ -434,12 +443,11 @@ FROM sys.dm_exec_sessions s
 INNER JOIN sys.dm_exec_connections c
     ON s.session_id = c.session_id
 CROSS APPLY sys.dm_exec_sql_text(c.most_recent_sql_handle) t
-LEFT JOIN sys.dm_exec_query_stats qs
-    ON c.most_recent_sql_handle = qs.sql_handle
 WHERE s.status = 'sleeping'
   AND c.most_recent_sql_handle IS NOT NULL
   AND t.text IS NOT NULL
-    AND s.session_id IN (%s)`, strings.Join(placeholders, ","))
+    AND s.session_id IN (%s)
+OPTION (MAXDOP 1)`, strings.Join(placeholders, ","))
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -579,6 +587,18 @@ WHERE s.status = 'sleeping'
 	return result, nil
 }
 
+func encodePlanHandlesJSON(rawHandles [][]byte) (string, error) {
+	hexHandles := make([]string, len(rawHandles))
+	for i, raw := range rawHandles {
+		hexHandles[i] = "0x" + hex.EncodeToString(raw)
+	}
+	b, err := json.Marshal(hexHandles)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles []string) (*collector.ExecPlanChunk, error) {
 	ctx, span := s.tracer.Start(ctx, "GetPlanHandles")
 	defer span.End()
@@ -588,9 +608,12 @@ func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles [
 		raw     []byte
 	}
 	seen := make(map[string]struct{}, len(handles))
-	validHandles := make([]validHandle, 0, len(handles))
-	handles2 := make([]interface{}, 0, len(handles))
+	validHandles := make([]validHandle, 0, min(len(handles), maxPlansPerFetch))
+	rawHandles := make([][]byte, 0, min(len(handles), maxPlansPerFetch))
 	for _, handle := range handles {
+		if len(validHandles) >= maxPlansPerFetch {
+			break
+		}
 		if handle == "" {
 			continue
 		}
@@ -603,18 +626,18 @@ func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles [
 		}
 		seen[handle] = struct{}{}
 		validHandles = append(validHandles, validHandle{encoded: handle, raw: decoded})
-		handles2 = append(handles2, decoded)
+		rawHandles = append(rawHandles, decoded)
 	}
-	if len(handles2) == 0 {
+	if len(rawHandles) == 0 {
 		return &collector.ExecPlanChunk{Server: s.Server}, nil
 	}
 
-	ret, err3 := s.batchFetchPlanHandles(ctx, s.db, handles2, s.Server)
+	ret, err3 := s.batchFetchPlanHandles(ctx, s.db, rawHandles, s.Server)
 	if err3 != nil {
 		span.RecordError(err3)
 		ret = make(map[string]*common_domain.ExecutionPlan)
-		// Fallback to 1-by-1 strategy if tempdb or a single invalid handle broke the batch.
-		query := "select query_plan from sys.dm_exec_query_plan(?)"
+		// Fallback to 1-by-1 strategy if OPENJSON is unavailable (e.g. compat level < 130) or a single invalid handle broke the batch.
+		query := monitoringSessionPrefix + "select query_plan from sys.dm_exec_text_query_plan(?, 0, -1) OPTION (MAXDOP 1)"
 		for _, h := range validHandles {
 			row := s.db.QueryRowContext(ctx, query, h.raw)
 			if err := row.Err(); err != nil {
@@ -648,38 +671,19 @@ func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles [
 	return &collector.ExecPlanChunk{Server: s.Server, Plans: ret}, nil
 }
 
-func (s SqlServerSnapshotter) batchFetchPlanHandles(ctx context.Context, db *sqlx.DB, handles2 []interface{}, server common_domain.ServerMeta) (map[string]*common_domain.ExecutionPlan, error) {
-
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadUncommitted})
+func (s SqlServerSnapshotter) batchFetchPlanHandles(ctx context.Context, db *sqlx.DB, rawHandles [][]byte, server common_domain.ServerMeta) (map[string]*common_domain.ExecutionPlan, error) {
+	handlesJSON, err := encodePlanHandlesJSON(rawHandles)
 	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
+		return nil, fmt.Errorf("encode handles json: %w", err)
 	}
-	defer func(tx *sql.Tx) {
-		_ = tx.Rollback()
-	}(tx)
-	createTempTable := `
-create table #temp_plans (handle varbinary(64) not null)`
-	_, err = tx.ExecContext(ctx, createTempTable)
-	if err != nil {
-		return nil, fmt.Errorf("create id table: %w", err)
-	}
-	const maxInsertBatch = 500
-	for start := 0; start < len(handles2); start += maxInsertBatch {
-		end := min(start+maxInsertBatch, len(handles2))
-		chunk := handles2[start:end]
-		insertIds := fmt.Sprintf(`
-insert into #temp_plans (handle) values %s
-`, strings.Join(slices.Repeat([]string{"(?)"}, len(chunk)), ","))
-		_, err = tx.ExecContext(ctx, insertIds, chunk...)
-		if err != nil {
-			return nil, fmt.Errorf("insert ids: %w", err)
-		}
-	}
-	query := `
-select handle, query_plan from #temp_plans
-    cross apply sys.dm_exec_query_plan(handle)
+	query := monitoringSessionPrefix + `
+select h.handle, p.query_plan
+from OPENJSON(?) j
+cross apply (select CONVERT(varbinary(64), j.[value], 1) as handle) h
+cross apply sys.dm_exec_text_query_plan(h.handle, 0, -1) p
+OPTION (MAXDOP 1)
 `
-	rows, err2 := tx.QueryContext(ctx, query)
+	rows, err2 := db.QueryContext(ctx, query, handlesJSON)
 	if err2 != nil {
 		return nil, fmt.Errorf("fetch plans: %w", err2)
 	}
@@ -763,7 +767,7 @@ func (s SqlServerSnapshotter) CollectQueryMetrics(ctx context.Context, databases
 	defer span.End()
 
 	collectionTime := time.Now().UTC()
-	query := `
+	query := monitoringSessionPrefix + `
 with qstats as (
     select query_hash,
            plan_handle,
@@ -888,6 +892,7 @@ select qas.query_hash,
 from qstats_aggr_split qas
          cross apply sys.dm_exec_sql_text(qas.plan_handle) st
 where st.text is not null
+OPTION (MAXDOP 1)
 `
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {

@@ -36,10 +36,24 @@ func TestPlanHandleValidation(t *testing.T) {
 
 func TestIsInvalidPlanHandleErr(t *testing.T) {
 	if !isInvalidPlanHandleErr(errors.New("mssql: The handle that was passed to dm_exec_query_plan was invalid.")) {
-		t.Fatalf("expected invalid plan handle error to be recognized")
+		t.Fatalf("expected invalid dm_exec_query_plan handle error to be recognized")
+	}
+	if !isInvalidPlanHandleErr(errors.New("mssql: The handle that was passed to dm_exec_text_query_plan was invalid.")) {
+		t.Fatalf("expected invalid dm_exec_text_query_plan handle error to be recognized")
 	}
 	if isInvalidPlanHandleErr(errors.New("connection reset by peer")) {
 		t.Fatalf("did not expect unrelated error to match")
+	}
+}
+
+func TestEncodePlanHandlesJSON(t *testing.T) {
+	got, err := encodePlanHandlesJSON([][]byte{{0x06, 0x00, 0xAB}, {0x05, 0xFF}})
+	if err != nil {
+		t.Fatalf("encodePlanHandlesJSON error: %v", err)
+	}
+	want := `["0x0600ab","0x05ff"]`
+	if got != want {
+		t.Fatalf("encodePlanHandlesJSON = %s, want %s", got, want)
 	}
 }
 
