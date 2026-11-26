@@ -35,6 +35,9 @@ interface Props {
 
     width?: number;
     height?: number;
+    drawStyle?: GraphDrawStyle;
+    stacked?: boolean;
+    unit?: string;
 }
 
 function setSeriesHiddenInConfig(
@@ -79,11 +82,15 @@ export function MyGraph({
                             eventBus,
                             timeRange,
                             onTimeRangeChange,
+                            height: customHeight,
+                            drawStyle = GraphDrawStyle.Bars,
+                            stacked = true,
+                            unit = "short",
                         }: Props) {
     const theme = useTheme2();
 
     const containerRef = React.useRef<HTMLDivElement>(null);
-    const [dimensions, setDimensions] = useState({ width: 800, height: 400});
+    const [dimensions, setDimensions] = useState({ width: 800, height: customHeight ?? 400});
 
     // Update dimensions when container resizes
     useEffect(() => {
@@ -140,24 +147,24 @@ export function MyGraph({
             defaults: {
                 min: undefined,
                 max: undefined,
-                unit: "short",
+                unit,
                 color: {
                     mode: FieldColorModeId.PaletteClassic,
                 },
                 custom: {
                     pointSize: 5,
-                    drawStyle: GraphDrawStyle.Bars,
+                    drawStyle,
                     stacking: {
-                        mode: StackingMode.Normal,
+                        mode: stacked ? StackingMode.Normal : StackingMode.None,
                         group: "A",
                     },
-                    fillOpacity: 100,
+                    fillOpacity: drawStyle === GraphDrawStyle.Bars ? 100 : 18,
                     axisSoftMin: 0,
                 },
             },
             overrides: [...colorOverrides, ...visibilityOverrides],
         };
-    }, [data, visibilityOverrides]);
+    }, [data, visibilityOverrides, drawStyle, stacked, unit]);
 
     const panelContext: PanelContext = useMemo(
         () => ({
@@ -171,15 +178,25 @@ export function MyGraph({
             onChangeTimeRange: (range: TimeRange) => {
                 onTimeRangeChange?.(range);
             },
-            onToggleSeriesVisibility: (label: string, mode: SeriesVisibilityChangeMode) => {
-                setVisibilityOverrides((prev) => {
-                    const updated = setSeriesHiddenInConfig(
-                        { defaults: {}, overrides: prev },
-                        label,
-                        mode
+            onToggleSeriesVisibility: (label: string | string[] | null,
+             mode: SeriesVisibilityChangeMode
+             ) => {
+      if (label == null) {
+        return;
+      }
+      const labels = Array.isArray(label) ? label : [label];
+                setVisibilityOverrides((overrides) => {
+                    const nextConfig = labels.reduce<FieldConfigSource<GraphFieldConfig>>(
+                        (nextCfg, seriesLabel) => setSeriesHiddenInConfig(nextCfg, seriesLabel, mode),
+                        {
+                            defaults: {},
+                            overrides,
+                        }
                     );
-                    return updated.overrides ?? [];
+
+                    return nextConfig.overrides ?? [];
                 });
+
             },
         }),
         [eventBus, onTimeRangeChange]
@@ -231,7 +248,7 @@ export function MyGraph({
         })
     };
     return (
-        <div ref={containerRef} style={{ width: '95%', height: '40vh' }}>
+        <div ref={containerRef} style={{ width: '100%', height: customHeight ? `${customHeight}px` : '40vh' }}>
         <PanelContextProvider value={panelContext}>
             <PanelRenderer
                 title="My Graph"

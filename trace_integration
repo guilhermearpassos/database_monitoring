@@ -1,0 +1,22 @@
+func PackTraceContext(ctx context.Context) []byte {
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	buf := make([]byte, 128)
+	if !sc.IsValid() {
+		return buf
+	}
+
+	// 1. Add Magic Header 'TPRC'
+	copy(buf[0:4], []byte("TPRC"))
+	// 2. Version
+	buf[4] = 0
+	// 3. TraceID (16 bytes)
+	tid := sc.TraceID()
+	copy(buf[5:21], tid[:])
+	// 4. SpanID (8 bytes)
+	sid := sc.SpanID()
+	copy(buf[21:29], sid[:])
+	// 5. Flags (1 byte)
+	buf[29] = byte(sc.TraceFlags())
+
+	return buf
+}

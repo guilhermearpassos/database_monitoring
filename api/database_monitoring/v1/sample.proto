@@ -20,6 +20,14 @@ message QuerySample {
   string id = 13;
   CommandMetadata command = 14;
   string query_hash = 15;
+  ContextInfo context = 16;
+}
+
+message ContextInfo {
+  bool is_trace_parent = 1;
+  string trace_id  = 2;
+  string span_id = 3;
+  bytes raw = 4;
 }
 
 message CommandMetadata {
@@ -46,6 +54,7 @@ message SessionMetadata {
   google.protobuf.Timestamp last_request_end = 8;
   string connection_id = 9;
   string client_ip = 10;
+  ContextInfo context = 11;
 }
 
 message DBMetadata {

@@ -36,8 +36,8 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   }),
 });
 
-// Mock getBoundingClientRect for better component testing
-Element.prototype.getBoundingClientRect = jest.fn(() => ({
+// Mock getBoundingClientRect for better component testing (plain function so jest.resetAllMocks() does not wipe it)
+Element.prototype.getBoundingClientRect = () => ({
   width: 100,
   height: 20,
   top: 0,
@@ -47,4 +47,4 @@ Element.prototype.getBoundingClientRect = jest.fn(() => ({
   x: 0,
   y: 0,
   toJSON: () => {},
-}));
+});

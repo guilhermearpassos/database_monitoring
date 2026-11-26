@@ -1,315 +1,368 @@
-import React, {useCallback, useEffect, useMemo, useState} from "react";
-import {ExecutionPlanViewer} from "../ExecutionPlanTree/plan";
-import {Alert, Card, Grid, Tooltip, useTheme2} from "@grafana/ui";
-import {lastValueFrom, Observable} from "rxjs";
-import Prism from 'prismjs';
-import {FetchResponse, getBackendSrv, getDataSourceSrv} from "@grafana/runtime";
-import {BlockingChainComponent} from "./blockingChain";
-import {QueryDetails} from "./types";
+import React, { useCallback, useEffect, useState } from 'react';
+import { css } from '@emotion/css';
 import {
-    CoreApp,
-    DataFrame,
-    dataFrameFromJSON,
-    DataQueryRequest,
-    DataSourceApi, EventBusSrv,
-    LoadingState,
-    TimeRange
-} from "@grafana/data";
-import {MyQuery} from "../../nested-datasource/types";
-import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
-import {MyGraph} from "../../pages/graph";
-import {formatSQL} from "../../utils/formatters";
-import {getStyles} from "../../utils/styles";
+  Alert,
+  Button,
+  Card,
+  Grid,
+  LoadingPlaceholder,
+  Tab,
+  TabsBar,
+  useStyles2,
+} from '@grafana/ui';
+import { lastValueFrom, Observable } from 'rxjs';
+import { FetchResponse, getBackendSrv } from '@grafana/runtime';
+import { GrafanaTheme2, TimeRange } from '@grafana/data';
+import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
+import { ExecutionPlanViewer } from '../ExecutionPlanTree/plan';
+import { BlockingChainComponent } from './blockingChain';
+import { QueryDetails } from './types';
+import { TempoTraceLink } from '../TempoTraceLink';
+import { QueryHistoryChart } from '../QueryMetrics/QueryHistoryChart';
+import { SqlQueryCard } from '../SqlQueryCard';
 
+export type DetailsTabId = 'overview' | 'plan' | 'blocking' | 'history';
+
+const getDrawerStyles = (theme: GrafanaTheme2) => ({
+  headerBar: css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: ${theme.spacing(1)};
+    margin-bottom: ${theme.spacing(2)};
+  `,
+  headerActions: css`
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(1)};
+    flex-wrap: wrap;
+  `,
+  tabContent: css`
+    margin-top: ${theme.spacing(2)};
+  `,
+  metaLabel: css`
+    color: ${theme.colors.text.secondary};
+    font-size: ${theme.typography.bodySmall.fontSize};
+    margin: 0 0 2px 0;
+  `,
+  metaValue: css`
+    color: ${theme.colors.text.primary};
+    font-family: ${theme.typography.fontFamilyMonospace};
+    font-size: ${theme.typography.bodySmall.fontSize};
+    word-break: break-all;
+    margin: 0 0 ${theme.spacing(1)} 0;
+  `,
+  sectionGap: css`
+    margin-bottom: ${theme.spacing(2)};
+  `,
+  kpiRow: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: ${theme.spacing(1.5)};
+    margin-bottom: ${theme.spacing(2)};
+  `,
+  kpiPill: css`
+    padding: ${theme.spacing(1, 1.5)};
+    background: ${theme.colors.background.secondary};
+    border: 1px solid ${theme.colors.border.weak};
+    border-radius: ${theme.shape.radius.default};
+    min-width: 110px;
+  `,
+});
 
 export const QueryDetailsComponent: React.FC<{
-    sampleID: string,
-    snapID: string,
-    timeRange: TimeRange,
-    server: string
-}> = ({sampleID, snapID, timeRange, server}) => {
-    const theme = useTheme2();
-    const styles = getStyles(theme);
+  sampleID: string;
+  snapID: string;
+  timeRange: TimeRange;
+  server: string;
+  initialTab?: DetailsTabId;
+  onSelectSample?: (snapId: string, sampleId: string) => void;
+  onOpenSnapshot?: (snapId: string) => void;
+  onOpenQueryMetrics?: (queryHash: string) => void;
+}> = ({
+  sampleID,
+  snapID,
+  timeRange,
+  server,
+  initialTab = 'overview',
+  onSelectSample,
+  onOpenSnapshot,
+  onOpenQueryMetrics,
+}) => {
+  const styles = useStyles2(getDrawerStyles);
 
-    const panelEventBus = useMemo(() => new EventBusSrv(), []);
-    const [queryDetails, setQueryDetails] = useState<QueryDetails | null>(null);
-    const [sample] = useState<string>(sampleID);
-    const [snap] = useState<string>(snapID);
+  const [historyStack, setHistoryStack] = useState<Array<{ snapId: string; sampleId: string }>>([]);
+  const [activeTarget, setActiveTarget] = useState<{ snapId: string; sampleId: string }>({
+    snapId: snapID,
+    sampleId: sampleID,
+  });
+  const [activeTab, setActiveTab] = useState<DetailsTabId>(initialTab);
+  const [queryDetails, setQueryDetails] = useState<QueryDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
 
-    const [chartFrames, setChartFrames] = useState<DataFrame[]>([]);
-    const [chartLoading, setChartLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  // Sync when external selection changes
+  useEffect(() => {
+    setActiveTarget({ snapId: snapID, sampleId: sampleID });
+    setHistoryStack([]);
+    setActiveTab(initialTab);
+  }, [snapID, sampleID, initialTab]);
 
-    const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
+  const fetchDetails = useCallback(async () => {
+    if (!activeTarget.sampleId || !activeTarget.snapId) {
+      return;
+    }
+    try {
+      setDetailsLoading(true);
+      setDetailsError(null);
+      const params = new URLSearchParams({
+        sampleId: activeTarget.sampleId,
+        snapId: activeTarget.snapId,
+      });
+      const response: Observable<FetchResponse<QueryDetails>> = getBackendSrv().fetch({
+        url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/getQueryDetails?${params.toString()}`,
+      });
+      const result = await lastValueFrom(response);
+      setQueryDetails(result.data);
+    } catch (err) {
+      setDetailsError(err instanceof Error ? err.message : 'Failed to load query details');
+      setQueryDetails(null);
+    } finally {
+      setDetailsLoading(false);
+    }
+  }, [activeTarget.sampleId, activeTarget.snapId]);
 
-    // Initialize datasource
-    useEffect(() => {
-        const initDatasource = async () => {
-            try {
-                // Get the first available datasource of our type
-                const ds = await getDataSourceSrv().get({type: 'guilhermearpassos-sqlsights-datasource'});
-                setDatasource(ds);
-            } catch (err) {
-                console.error('Failed to initialize datasource:', err);
-                // Fallback to direct API calls if datasource is not available
-            }
-        };
-        initDatasource();
-    }, []);
+  useEffect(() => {
+    fetchDetails();
+  }, [fetchDetails]);
 
-    const processResponse = (result: DataQueryResponse): DataFrame[] => {
-        const transformedFrames: DataFrame[] = [];
+  const handleNavigateInChain = (nextSnapId: string, nextSampleId: string) => {
+    setHistoryStack((prev) => [...prev, activeTarget]);
+    setActiveTarget({ snapId: nextSnapId, sampleId: nextSampleId });
+    onSelectSample?.(nextSnapId, nextSampleId);
+  };
 
-        result.data.forEach((rawFrame: any) => {
-            try {
-                // Try to use Grafana's utility to convert from JSON
-                const frame = dataFrameFromJSON({
-                    schema: rawFrame.schema,
-                    data: rawFrame.data
-                });
-                transformedFrames.push(frame);
-            } catch (error) {
-                console.error('Failed to convert frame:', error);
-                // Fallback to manual transformation if needed
-            }
-        });
+  const handleBack = () => {
+    if (historyStack.length === 0) {
+      return;
+    }
+    const prevTarget = historyStack[historyStack.length - 1];
+    setHistoryStack((prev) => prev.slice(0, -1));
+    setActiveTarget(prevTarget);
+    onSelectSample?.(prevTarget.snapId, prevTarget.sampleId);
+  };
 
-        return transformedFrames
-    };
-    // Load chart data using the datasource
-    const loadChartData = useCallback(async (qd: QueryDetails, timeRange: TimeRange, server: string) => {
-        if (!datasource) {
-            console.warn('Datasource not available');
-            setChartFrames([]);
-            return;
-        }
+  const warningsCount = queryDetails?.plan?.warnings?.length ?? 0;
+  const blockingRootsCount = queryDetails?.blocking_chain?.roots?.length ?? 0;
+  const sample = queryDetails?.query_sample;
 
-        try {
-            setChartLoading(true);
-            setError(null);
+  return (
+    <div>
+      <div className={styles.headerBar}>
+        <div className={styles.headerActions}>
+          {historyStack.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={handleBack}>
+              <ArrowLeft size={14} />
+              <span style={{ marginLeft: 4 }}>Back</span>
+            </Button>
+          )}
+          {sample?.trace_id && <TempoTraceLink traceId={sample.trace_id} timeRange={timeRange} />}
+        </div>
+        <div className={styles.headerActions}>
+          {onOpenSnapshot && activeTarget.snapId && (
+            <Button size="sm" variant="secondary" fill="outline" onClick={() => onOpenSnapshot(activeTarget.snapId)}>
+              <ExternalLink size={13} />
+              <span style={{ marginLeft: 4 }}>Open Snapshot</span>
+            </Button>
+          )}
+          <Button size="sm" variant="secondary" fill="outline" onClick={fetchDetails} disabled={detailsLoading}>
+            <RefreshCw size={13} />
+            <span style={{ marginLeft: 4 }}>Refresh</span>
+          </Button>
+        </div>
+      </div>
 
-            const query: MyQuery = {
-                refId: 'A',
-                database: server,
-                hide: false,
-                datasource: {
-                    type: datasource.type,
-                    uid: datasource.uid
-                },
-                queryType: "metrics_series",
-                queryHash: qd.query_sample.query_hash,
-                metrics: ["executionCount"]
-            };
+      {detailsError && (
+        <Alert title="Error loading sample details" severity="error" className={styles.sectionGap}>
+          <div>{detailsError}</div>
+          <Button size="sm" variant="secondary" onClick={fetchDetails} style={{ marginTop: 8 }}>
+            Retry
+          </Button>
+        </Alert>
+      )}
 
-            const queryRequest: DataQueryRequest<MyQuery> = {
-                app: CoreApp.Explore,
-                requestId: `explore_${Date.now()}`,
-                timezone: 'browser',
-                panelId: 1,
-                dashboardUID: '',
-                range: timeRange,
-                timeInfo: '',
-                interval: '1m',
-                intervalMs: 60000,
-                targets: [query],
-                maxDataPoints: 1000,
-                scopedVars: {},
-                startTime: Date.now(),
-                liveStreaming: false
-            };
+      {detailsLoading && !queryDetails && <LoadingPlaceholder text="Loading sample details..." />}
 
-            const resultObservable = datasource.query(queryRequest);
-            let result: DataQueryResponse;
-            if (resultObservable instanceof Observable) {
-                result = await lastValueFrom(resultObservable);
-            } else {
-                result = await resultObservable;
-            }
+      {queryDetails && sample && (
+        <>
+          <TabsBar>
+            <Tab label="Overview" active={activeTab === 'overview'} onChangeTab={() => setActiveTab('overview')} />
+            <Tab
+              label="Execution Plan"
+              counter={warningsCount > 0 ? warningsCount : undefined}
+              active={activeTab === 'plan'}
+              onChangeTab={() => setActiveTab('plan')}
+            />
+            <Tab
+              label="Blocking Chain"
+              counter={blockingRootsCount > 0 ? blockingRootsCount : undefined}
+              active={activeTab === 'blocking'}
+              onChangeTab={() => setActiveTab('blocking')}
+            />
+            <Tab label="History" active={activeTab === 'history'} onChangeTab={() => setActiveTab('history')} />
+          </TabsBar>
 
-            if (result.data && Array.isArray(result.data)) {
-                const transformedFrames: DataFrame[] = processResponse(result);
-                setChartFrames(transformedFrames);
-            } else {
-                setChartFrames([]);
-            }
-        } catch (err) {
-            console.error('Query failed:', err);
-            setError(err instanceof Error ? err.message : 'Query failed');
-            setChartFrames([]);
-        } finally {
-            setChartLoading(false);
-        }
-    }, [datasource]);
-
-    useEffect(() => {
-        if (!queryDetails) {
-            return;
-        }
-        loadChartData(queryDetails, timeRange, server)
-    }, [queryDetails, timeRange, server, loadChartData]);
-    // Function to fetch HTML content from backend
-    useEffect(() => {
-        const fetchPlan = async () => {
-            if (!sample) {
-                return;
-            }
-            try {
-                let response: Observable<FetchResponse<QueryDetails>>;
-                response = await getBackendSrv().fetch({
-                    url: '/api/plugins/guilhermearpassos-sqlsights-app/resources/getQueryDetails?sampleId=' + sample + '&snapId=' + snap,
-                });
-                // Get the response as text since it's HTML
-                const textResponse: { data: QueryDetails } = await lastValueFrom(response);
-                setQueryDetails(textResponse.data);
-            } catch (err) {
-                throw new Error(`Failed to fetch: ${err}`);
-            }
-        };
-        fetchPlan()
-    }, [sample, snap]);
-    return (<Card>
-        <Card.Heading>Sample Details</Card.Heading>
-        <Card.Description>
-            {error && (
-                <Alert title="Error" severity="error">
-                    {error}
-                </Alert>
-            )}
-            {queryDetails && (
-                <div>
-                    <Card>
-                        <Card.Heading>Query Information</Card.Heading>
-                        <Card.Description>
-                            <Grid columns={3}>
-                                <div>
-                                    <p className={styles.label}>Status</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.status}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Time Elapsed</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.execution_time}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Query Hash</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.query_hash}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Database</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.database}</p>
-                                </div>
-                            </Grid>
-                            <Grid columns={1}>
-
-                                <div>
-                                    <p className={styles.label}>Snapshot</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.snap_id}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>SQL Handle</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.sql_handle}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Sample</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.sample_id}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>SQL Text</p>
-                                    <Tooltip interactive={true} content={(
-                                        <div className={styles.tooltipContent}>
-                                            <div className={styles.formattedSQL}
-                                                 dangerouslySetInnerHTML={{__html: formatSQL(queryDetails.query_sample.query)}}>
-                                            </div>
-                                        </div>)} placement="right">
-                                <pre className={styles.singleLine}
-                                     dangerouslySetInnerHTML={{__html: Prism.highlight(queryDetails.query_sample.query, Prism.languages.sql, 'sql')}}>
-
-                                </pre>
-                                    </Tooltip>
-                                </div>
-                            </Grid>
-
-                        </Card.Description>
-                    </Card>
-                    <br/>
-                    <Card>
-                        <Card.Heading>Session Information</Card.Heading>
-                        <Card.Description>
-                            <Grid columns={3}>
-                                <div>
-                                    <p className={styles.label}>Session ID</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.sid}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Session Status</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.session_status}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>User Name</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.user}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Host</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.session_host}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Ip</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.session_client_ip}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Program Name</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.session_program_name}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Session Login Time</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.session_login_time}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Last Request Start</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.session_last_request_start}</p>
-                                </div>
-                                <div>
-                                    <p className={styles.label}>Last Request End</p>
-                                    <p className={styles.sessionId}>{queryDetails.query_sample.session_last_request_end}</p>
-                                </div>
-                            </Grid>
-                        </Card.Description>
-                    </Card>
+          <div className={styles.tabContent}>
+            {activeTab === 'overview' && (
+              <div>
+                <div className={styles.kpiRow}>
+                  <div className={styles.kpiPill}>
+                    <p className={styles.metaLabel}>Database</p>
+                    <p className={styles.metaValue} style={{ marginBottom: 0 }}>
+                      {sample.database || '-'}
+                    </p>
+                  </div>
+                  <div className={styles.kpiPill}>
+                    <p className={styles.metaLabel}>Status</p>
+                    <p className={styles.metaValue} style={{ marginBottom: 0 }}>
+                      {sample.status || '-'}
+                    </p>
+                  </div>
+                  <div className={styles.kpiPill}>
+                    <p className={styles.metaLabel}>Elapsed</p>
+                    <p className={styles.metaValue} style={{ marginBottom: 0 }}>
+                      {sample.execution_time || '-'}
+                    </p>
+                  </div>
+                  <div className={styles.kpiPill}>
+                    <p className={styles.metaLabel}>Wait Event</p>
+                    <p className={styles.metaValue} style={{ marginBottom: 0 }}>
+                      {sample.wait_event || 'CPU / Running'}
+                    </p>
+                  </div>
+                  <div className={styles.kpiPill}>
+                    <p className={styles.metaLabel}>Session ID</p>
+                    <p className={styles.metaValue} style={{ marginBottom: 0 }}>
+                      {sample.sid}
+                    </p>
+                  </div>
                 </div>
+
+                <SqlQueryCard sql={sample.query} heading="SQL Query" className={styles.sectionGap} />
+
+                <Card className={styles.sectionGap}>
+                  <Card.Heading>Session & Client Metadata</Card.Heading>
+                  <Card.Description>
+                    <Grid columns={3}>
+                      <div>
+                        <p className={styles.metaLabel}>Login</p>
+                        <p className={styles.metaValue}>{sample.user || '-'}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>Program Name</p>
+                        <p className={styles.metaValue}>{sample.session_program_name || '-'}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>Session Status</p>
+                        <p className={styles.metaValue}>{sample.session_status || '-'}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>Client Host</p>
+                        <p className={styles.metaValue}>{sample.session_host || '-'}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>Client IP</p>
+                        <p className={styles.metaValue}>{sample.session_client_ip || '-'}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>Login Time</p>
+                        <p className={styles.metaValue}>{sample.session_login_time || '-'}</p>
+                      </div>
+                    </Grid>
+                  </Card.Description>
+                </Card>
+
+                <Card>
+                  <Card.Heading>Identifiers</Card.Heading>
+                  <Card.Description>
+                    <Grid columns={2}>
+                      <div>
+                        <p className={styles.metaLabel}>Snapshot ID</p>
+                        <p className={styles.metaValue}>{sample.snap_id}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>Sample ID</p>
+                        <p className={styles.metaValue}>{sample.sample_id}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>Query Hash</p>
+                        <p className={styles.metaValue}>{sample.query_hash || '-'}</p>
+                      </div>
+                      <div>
+                        <p className={styles.metaLabel}>SQL Handle</p>
+                        <p className={styles.metaValue}>{sample.sql_handle || '-'}</p>
+                      </div>
+                    </Grid>
+                  </Card.Description>
+                </Card>
+              </div>
             )}
-            {chartFrames && chartFrames.length && chartFrames[0].length && (<Card>
-                <Card.Heading>Executions over time</Card.Heading>
+
+            {activeTab === 'plan' && (
+              <div>
+                {queryDetails.plan ? (
+                  <ExecutionPlanViewer executionPlan={queryDetails.plan} />
+                ) : (
+                  <Alert title="No Execution Plan" severity="info">
+                    No execution plan was found for this sample.
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'blocking' && (
+              <div>
+                {queryDetails.blocking_chain && blockingRootsCount > 0 ? (
+                  <BlockingChainComponent
+                    chain={queryDetails.blocking_chain}
+                    currentSampleId={activeTarget.sampleId}
+                    timeRange={timeRange}
+                    onSelectSample={handleNavigateInChain}
+                  />
+                ) : (
+                  <Alert title="No Blocking Chain" severity="info">
+                    This sample is neither blocking other sessions nor blocked by another session.
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'history' && (
+              <Card>
+                <Card.Heading>Executions &amp; Performance History</Card.Heading>
                 <Card.Description>
-                    <div style={{maxWidth: '50vw'}}>
-                        <MyGraph
-                            data={chartFrames}
-                            loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
-                            eventBus={panelEventBus}
-                            timeRange={timeRange}
-                            onTimeRangeChange={range => {
-                            }}
-                        />
-                    </div>
+                  {sample.query_hash ? (
+                    <QueryHistoryChart
+                      server={server}
+                      queryHash={sample.query_hash}
+                      timeRange={timeRange}
+                      initialMetric="execution_count"
+                      height={260}
+                      onOpenQueryMetrics={onOpenQueryMetrics}
+                    />
+                  ) : (
+                    <Alert title="No Query Hash" severity="info">
+                      This sample does not have a SQL Server query hash (for example, a sleeping session or utility
+                      command), so execution counter history is unavailable.
+                    </Alert>
+                  )}
                 </Card.Description>
-            </Card>)}
-            {queryDetails && queryDetails.blocking_chain && (queryDetails.blocking_chain.roots.length > 0) && (
-                <Card>
-                    <Card.Heading>Blocking Chain</Card.Heading>
-                    <Card.Description>
-                        <BlockingChainComponent
-                            chain={queryDetails.blocking_chain}
-                            currentSampleId={sample}
-                        />
-                    </Card.Description>
-                </Card>
+              </Card>
             )}
-            {queryDetails && queryDetails.plan && (
-                <Card>
-                    <Card.Heading>Execution Plan</Card.Heading>
-                    <Card.Description>
-                        <ExecutionPlanViewer executionPlan={queryDetails.plan}/>
-                    </Card.Description>
-                </Card>
-            )}
-        </Card.Description>
-    </Card>)
-}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};

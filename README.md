@@ -24,28 +24,46 @@ It includes a datasource plugin bundled and will include pre-built pages for eas
 
 # Grafana Sqlsights datasource
 ## Configuration
+
+Configure the Sqlsights Grafana app plugin under **Apps → Sqlsights → Configuration**:
+- **API Url**: `host:port` of your Sqlsights Querier gRPC endpoint (e.g., `sqlsights:9014`).
+- **Tempo Datasource** *(optional)*: Select a Grafana Tempo datasource to enable one-click navigation from SQL samples carrying a `trace_id` directly into Grafana Explore.
+
+## Distributed Trace Correlation (Tempo)
+
+Sqlsights can correlate SQL Server session snapshots, blocking chains, and problematic execution plans with OpenTelemetry distributed traces using SQL Server's `CONTEXT_INFO` register (`TPRC` binary header) and Grafana Tempo.
+
+- Local `docker-compose.yml` includes a pre-configured **Tempo** service (`tempo.yaml`), OTel Collector fan-out (`otel-collector-config.yaml`), and auto-provisioned Grafana Tempo datasource (`provisioning/datasources/datasources.yml`).
+- See [docs/trace_correlation.md](docs/trace_correlation.md) for the binary payload specification, Go / .NET / Node.js instrumentation examples, connection-pooling best practices, and verification steps.
 for now, configure the app plugin with host:port to your sqlsights instance
 ![img_4.png](src/docs/img_4.png)
 
-## Query types
+## Query types (Explore & Dashboards)
 
-### Block chart
+The bundled **SQL Sights Data source** can be used in Grafana **Explore** and custom **Dashboards** (with full `$variable` interpolation and clickable Data Links into the Sqlsights app pages):
 
-queries-by-wait-type chart data
-![chart.png](src/docs/chart.png)
-### Snapshots
-lists snapshot summaries
-![snapshot-list.png](src/docs/snapshot-list.png)
-### Snapshot Samples
-given a snapshot id, shows the query samples that were running at that time
-![snap-samples.png](src/docs/snap-samples.png)
+| Query Type | Value | Best Visualization | Description |
+| :--- | :--- | :--- | :--- |
+| **Activity by Wait Event** | `chart` | Stacked Bar / Time Series | Active connections or wait time (ms) grouped by wait event over time (supports optional wait event filter). |
+| **Connections & Blocking** | `blocking_timeseries` | Time Series / Stat | Active connections, blockers, waiters, and wait duration (s) over time. |
+| **Wait Events Summary** | `wait_breakdown` | Pie Chart / Bar Gauge / Table | Total connections, wait time (ms), and share % per wait event across the selected range. |
+| **Snapshots List** | `snapshot-list` | Table | Snapshot summaries (optional `Only Blocking` & wait event filters) with click-through to Sqlsights Snapshots. |
+| **Snapshot Samples** | `snapshot` | Table | Active queries inside a snapshot ID (supports `$var`, database, and blocking filters). |
+| **Bad Execution Plans** | `plan_analysis` | Table | Problematic plans filtered by database(s), issue type (`seek_plan_convert`, `missing_index`, `cardinality_convert`), lock involvement, min impact %, and search. |
+| **Plan Analysis KPIs** | `plan_analysis_summary` | Stat / Bar Gauge | Single-row KPI counts (`totalPlans`, `seekPlanConversions`, `cardinalityConversions`, `missingIndexes`, `relatedLocks`, `maxImpact`) for executive/team dashboards. |
+| **Monitored Servers** | `servers` | Table / Stat | Overview of all active SQL Server instances in the selected time range. |
+| **Query Metrics Summary / Series** | `metrics` / `metrics_series` | Table / Time Series | Per-query execution counters and time-series trends by Query Hash. |
+
+### Dashboard Query Variables
+Configure Grafana Dashboard variables of type **Query** using the Sqlsights datasource:
+- `servers` — lists monitored SQL Server instances
+- `databases($server)` — lists databases observed on `$server`
+- `snapshots($server)` — lists recent snapshot IDs on `$server`
+- `issue_tags` — lists execution plan issue tags (`seek_plan_convert`, `missing_index`, etc.)
 
 ## Example dashboard
 dashboard combining the queries, with a data link on snapshot id so we can navigate between the snapshots
 ![dash.png](src/docs/dash.png)
-
-## Configuration
-
 
 ## Contributing
 

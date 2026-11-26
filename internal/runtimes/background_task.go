@@ -3,7 +3,13 @@ package runtimes
 import (
 	"context"
 	"fmt"
+
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"log/slog"
 	"runtime/debug"
 	"sync"
@@ -61,24 +67,34 @@ type Task interface {
 	Opts() TaskOpts
 }
 type BackGroundTaskRuntime struct {
-	tasks   []Task
+	tasks   map[string]Task
 	wg      sync.WaitGroup
 	started bool
 	cancel  context.CancelFunc
 	logger  *slog.Logger
+	tracer  trace.Tracer
 }
 
 func NewBackGroundTaskRuntime(logger *slog.Logger) *BackGroundTaskRuntime {
 	return &BackGroundTaskRuntime{
-		tasks:   make([]Task, 0),
+		tasks:   make(map[string]Task, 0),
 		wg:      sync.WaitGroup{},
 		started: false,
 		cancel:  nil,
 		logger:  logger,
+		tracer:  otel.Tracer("BackgroundTaskRuntime"),
 	}
 }
 
 var _ Runtime = (*BackGroundTaskRuntime)(nil)
+
+func (b *BackGroundTaskRuntime) RegisterTask(task Task) error {
+	if _, ok := b.tasks[task.Name()]; ok {
+		return fmt.Errorf("task %s already exists", task.Name())
+	}
+	b.tasks[task.Name()] = task
+	return nil
+}
 
 func (b *BackGroundTaskRuntime) Start(ctx context.Context) error {
 	if b == nil {
@@ -154,6 +170,10 @@ func (b *BackGroundTaskRuntime) runTaskLoop(ctx context.Context, task Task) {
 
 }
 func (b *BackGroundTaskRuntime) runTask(ctx context.Context, task Task) {
+	ctx, span := b.tracer.Start(ctx, "RunBackgroundTask", trace.WithAttributes(
+		attribute.String("task_name", task.Name()),
+	))
+	defer span.End()
 	start := time.Now()
 	success := false
 
@@ -175,6 +195,8 @@ func (b *BackGroundTaskRuntime) runTask(ctx context.Context, task Task) {
 	success = err == nil
 	if err != nil {
 		b.logger.Error(fmt.Sprintf("running task %s: %s", task.Name(), err.Error()))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 	}
 	return
 }

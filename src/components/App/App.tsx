@@ -1,24 +1,26 @@
-import React from 'react';
-import { Route, Routes } from 'react-router-dom';
+import React, { Suspense } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppRootProps } from '@grafana/data';
-// import { ROUTES } from '../../constants';
+import { LoadingPlaceholder } from '@grafana/ui';
+import PagePlanAnalysis from '../../pages/PageTwo';
+import PageQueryMetrics from '../../pages/PageThree';
+import { AppPluginJsonData, AppSettingsProvider } from '../../context/AppSettingsContext';
+
 const PageOne = React.lazy(() => import('../../pages/PageOne'));
-// const PageTwo = React.lazy(() => import('../../pages/PageTwo'));
-// const PageThree = React.lazy(() => import('../../pages/PageThree'));
-// const PageFour = React.lazy(() => import('../../pages/PageFour'));
 
-function App(props: AppRootProps) {
+function App(props: AppRootProps<AppPluginJsonData>) {
   return (
-    <Routes>
-      {/*<Route path={ROUTES.Two} element={<PageTwo />} />*/}
-      {/*<Route path={`${ROUTES.Three}/:id?`} element={<PageThree />} />*/}
-
-      {/*/!* Full-width page (this page will have no side navigation) *!/*/}
-      {/*<Route path={ROUTES.Four} element={<PageFour />} />*/}
-
-      {/* Default page */}
-      <Route path="*" element={<PageOne />} />
-    </Routes>
+    <AppSettingsProvider jsonData={props.meta?.jsonData}>
+      <Suspense fallback={<LoadingPlaceholder text="Loading..." />}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/snapshots" replace />} />
+          <Route path="*" element={<Navigate to="/snapshots" replace />} />
+          <Route path="/snapshots" element={<PageOne />} />
+          <Route path="/plan_analysis" element={<PagePlanAnalysis />} />
+          <Route path="/query_metrics" element={<PageQueryMetrics />} />
+        </Routes>
+      </Suspense>
+    </AppSettingsProvider>
   );
 }
 

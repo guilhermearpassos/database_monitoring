@@ -4,17 +4,27 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/BurntSushi/toml"
-	config2 "github.com/guilhermearpassos/database-monitoring/internal/common/config"
-	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
-	_ "github.com/guilhermearpassos/database-monitoring/internal/services/agent/adapters/metrics"
-	"github.com/jmoiron/sqlx"
-	mssql "github.com/microsoft/go-mssqldb"
-	"github.com/spf13/cobra"
 	"math/rand"
 	"os"
 	"sync"
+
+	"github.com/BurntSushi/toml"
+	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
+	"github.com/jmoiron/sqlx"
+	mssql "github.com/microsoft/go-mssqldb"
+	"github.com/spf13/cobra"
 )
+
+type loadGenTargetConfig struct {
+	Alias      string `toml:"alias"`
+	Driver     string `toml:"driver"`
+	ConnString string `toml:"conn_string"`
+}
+
+type loadGenConfig struct {
+	TargetHosts []loadGenTargetConfig     `toml:"target_hosts"`
+	Telemetry   telemetry.TelemetryConfig `toml:"telemetry"`
+}
 
 var (
 	LoadGenCmd = &cobra.Command{
@@ -33,7 +43,7 @@ func init() {
 
 func StartLoadGen(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
-	var config config2.AgentConfig
+	var config loadGenConfig
 	// Check if file exists
 	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
 		panic(fmt.Errorf("config file does not exist: %s", configFileName))
