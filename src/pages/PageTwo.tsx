@@ -17,7 +17,7 @@ import {
 } from '@grafana/ui';
 import { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { css } from '@emotion/css';
-import { Activity, RefreshCw, Search, X } from 'lucide-react';
+import { Activity, BarChart3, RefreshCw, Search, X } from 'lucide-react';
 import { QueryDetailsComponent } from '../components/QueryDetails/Details';
 import { PlanAnalysisItem, PlanAnalysisResponse } from '../components/PlanAnalysis/types';
 import { PlanAnalysisTable, PlanSortField, SortDirection } from '../components/PlanAnalysis/PlanAnalysisTable';
@@ -324,6 +324,14 @@ const PageTwo = () => {
             <Activity size={14} />
             <span style={{ marginLeft: 6 }}>Snapshots View</span>
           </Button>
+          <Button
+            variant="secondary"
+            fill="outline"
+            onClick={() => navigate(`${prefixRoute(ROUTES.QueryMetrics)}${buildPreservedNavSearch(searchParams)}`)}
+          >
+            <BarChart3 size={14} />
+            <span style={{ marginLeft: 6 }}>Query Metrics</span>
+          </Button>
           <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
             <RefreshCw size={14} />
           </Button>
@@ -485,6 +493,9 @@ const PageTwo = () => {
                 })}`
               )
             }
+            onOpenQueryMetrics={(queryHash) =>
+              navigate(`${prefixRoute(ROUTES.QueryMetrics)}${buildPreservedNavSearch(searchParams, { queryHash })}`)
+            }
             timeRange={timeRange}
           />
         </>
@@ -516,6 +527,9 @@ const PageTwo = () => {
               }
               onOpenSnapshot={(snapId) =>
                 navigate(`${prefixRoute(ROUTES.Snapshots)}${buildPreservedNavSearch(searchParams, { snapId })}`)
+              }
+              onOpenQueryMetrics={(queryHash) =>
+                navigate(`${prefixRoute(ROUTES.QueryMetrics)}${buildPreservedNavSearch(searchParams, { queryHash })}`)
               }
             />
           </div>

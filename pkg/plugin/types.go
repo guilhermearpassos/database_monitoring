@@ -246,3 +246,60 @@ type SnapshotSampleDTO struct {
 	ClientIP        string   `json:"client_ip"`
 	SessionStatus   string   `json:"session_status"`
 }
+
+type QueryMetricItemDTO struct {
+	QueryHash           string    `json:"query_hash"`
+	Text                string    `json:"text"`
+	Database            string    `json:"database"`
+	LastExecutionTime   time.Time `json:"last_execution_time"`
+	LastElapsedMs       float64   `json:"last_elapsed_ms"`
+	ExecutionCount      int64     `json:"execution_count"`
+	TotalElapsedMs      float64   `json:"total_elapsed_ms"`
+	AvgElapsedMs        float64   `json:"avg_elapsed_ms"`
+	TotalWorkerMs       float64   `json:"total_worker_ms"`
+	AvgWorkerMs         float64   `json:"avg_worker_ms"`
+	TotalClrMs          float64   `json:"total_clr_ms"`
+	TotalLogicalReads   int64     `json:"total_logical_reads"`
+	AvgLogicalReads     float64   `json:"avg_logical_reads"`
+	TotalPhysicalReads  int64     `json:"total_physical_reads"`
+	AvgPhysicalReads    float64   `json:"avg_physical_reads"`
+	TotalLogicalWrites  int64     `json:"total_logical_writes"`
+	AvgLogicalWrites    float64   `json:"avg_logical_writes"`
+	TotalRows           int64     `json:"total_rows"`
+	AvgRows             float64   `json:"avg_rows"`
+	TotalSpills         int64     `json:"total_spills"`
+	AvgSpills           float64   `json:"avg_spills"`
+	TotalGrantKb        int64     `json:"total_grant_kb"`
+	AvgGrantKb          float64   `json:"avg_grant_kb"`
+	AvgUsedGrantKb      float64   `json:"avg_used_grant_kb"`
+	AvgIdealGrantKb     float64   `json:"avg_ideal_grant_kb"`
+	MemoryGrantWastePct float64   `json:"memory_grant_waste_pct"`
+	AvgDop              float64   `json:"avg_dop"`
+	CpuSharePct         float64   `json:"cpu_share_pct"`
+	ElapsedSharePct     float64   `json:"elapsed_share_pct"`
+	ReadsSharePct       float64   `json:"reads_share_pct"`
+	IssueFlags          []string  `json:"issue_flags"`
+}
+
+type QueryMetricsResponse struct {
+	Metrics            []QueryMetricItemDTO `json:"metrics"`
+	AvailableDatabases []string             `json:"available_databases"`
+}
+
+type QueryMetricsSeriesPointDTO struct {
+	Timestamp         time.Time `json:"timestamp"`
+	ExecutionCount    int64     `json:"execution_count"`
+	TotalElapsedMs    float64   `json:"total_elapsed_ms"`
+	AvgElapsedMs      float64   `json:"avg_elapsed_ms"`
+	TotalWorkerMs     float64   `json:"total_worker_ms"`
+	AvgWorkerMs       float64   `json:"avg_worker_ms"`
+	TotalLogicalReads int64     `json:"total_logical_reads"`
+	AvgLogicalReads   float64   `json:"avg_logical_reads"`
+	AvgPhysicalReads  float64   `json:"avg_physical_reads"`
+	AvgLogicalWrites  float64   `json:"avg_logical_writes"`
+	AvgRows           float64   `json:"avg_rows"`
+	TotalSpills       int64     `json:"total_spills"`
+	AvgSpills         float64   `json:"avg_spills"`
+	AvgGrantKb        float64   `json:"avg_grant_kb"`
+	AvgUsedGrantKb    float64   `json:"avg_used_grant_kb"`
+}

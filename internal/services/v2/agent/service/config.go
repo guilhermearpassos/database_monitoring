@@ -20,12 +20,13 @@ import (
 )
 
 type TargetConfig struct {
-	Alias          string         `yaml:"alias" toml:"alias"`
-	Driver         string         `yaml:"driver" toml:"driver"`
-	ConnString     string         `yaml:"conn_string" toml:"conn_string"`
-	SnapInterval   time.Duration  `yaml:"snap_interval" toml:"snap_interval"`
-	Interval       time.Duration  `yaml:"interval" toml:"interval"`
-	PlanCollection PlanCollection `yaml:"plan" toml:"plan"`
+	Alias             string            `yaml:"alias" toml:"alias"`
+	Driver            string            `yaml:"driver" toml:"driver"`
+	ConnString        string            `yaml:"conn_string" toml:"conn_string"`
+	SnapInterval      time.Duration     `yaml:"snap_interval" toml:"snap_interval"`
+	Interval          time.Duration     `yaml:"interval" toml:"interval"`
+	PlanCollection    PlanCollection    `yaml:"plan" toml:"plan"`
+	MetricsCollection MetricsCollection `yaml:"metrics" toml:"metrics"`
 }
 
 func (cfg *TargetConfig) GetSnapInterval() time.Duration {
@@ -42,6 +43,18 @@ type PlanCollection struct {
 	Disabled bool          `yaml:"disabled" toml:"disabled"`
 	Interval time.Duration `yaml:"interval" toml:"interval"`
 	Lookback time.Duration `yaml:"lookback" toml:"lookback"`
+}
+
+type MetricsCollection struct {
+	Disabled bool          `yaml:"disabled" toml:"disabled"`
+	Interval time.Duration `yaml:"interval" toml:"interval"`
+}
+
+func (cfg *MetricsCollection) GetMetricsInterval() time.Duration {
+	if cfg.Interval == 0 {
+		return 30 * time.Second
+	}
+	return cfg.Interval
 }
 
 func (cfg *PlanCollection) GetPlanInterval() time.Duration {
@@ -104,6 +117,11 @@ func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel
 		if !planCfg.Disabled {
 			t2 := tasks.NewCollectExecutionPlansTask(target.Alias, server, []string{}, planCfg.GetPlanInterval(), planCfg.GetPlanLookback(), ss, ic, logger)
 			tsks[t2.Name()] = t2
+		}
+		metricsCfg := target.MetricsCollection
+		if !metricsCfg.Disabled {
+			t3 := tasks.NewCollectQueryMetricsTask(target.Alias, server, []string{}, metricsCfg.GetMetricsInterval(), ss, ic, logger)
+			tsks[t3.Name()] = t3
 		}
 	}
 	return AgentService{Tasks: tsks}, nil

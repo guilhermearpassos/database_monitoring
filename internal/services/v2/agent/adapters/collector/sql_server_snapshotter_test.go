@@ -42,3 +42,36 @@ func TestIsInvalidPlanHandleErr(t *testing.T) {
 		t.Fatalf("did not expect unrelated error to match")
 	}
 }
+
+func TestComputeQueryMetricDelta(t *testing.T) {
+	// First observation with large count (>30) is skipped to avoid startup spike
+	if _, emit := computeQueryMetricDelta(nil, map[string]int64{"executionCount": 500, "totalWorkerTime": 10000}); emit {
+		t.Fatalf("expected first observation >30 executions to be skipped as baseline only")
+	}
+
+	// First observation with small count (<=30) emits immediately
+	delta, emit := computeQueryMetricDelta(nil, map[string]int64{"executionCount": 5, "totalWorkerTime": 1000})
+	if !emit || delta["executionCount"] != 5 || delta["totalWorkerTime"] != 1000 {
+		t.Fatalf("expected small initial count to emit, got emit=%v delta=%v", emit, delta)
+	}
+
+	// Normal delta
+	prev := map[string]int64{"executionCount": 5, "totalWorkerTime": 1000, "totalSpills": 1}
+	curr := map[string]int64{"executionCount": 8, "totalWorkerTime": 2500, "totalSpills": 3}
+	delta, emit = computeQueryMetricDelta(prev, curr)
+	if !emit || delta["executionCount"] != 3 || delta["totalWorkerTime"] != 1500 || delta["totalSpills"] != 2 {
+		t.Fatalf("unexpected delta: emit=%v delta=%v", emit, delta)
+	}
+
+	// Zero delta (idle query) is skipped
+	if _, emit := computeQueryMetricDelta(curr, curr); emit {
+		t.Fatalf("expected zero-delta query to be skipped")
+	}
+
+	// Plan cache reset (curr < prev) with small count emits fresh counts without negatives
+	resetCurr := map[string]int64{"executionCount": 2, "totalWorkerTime": 400}
+	delta, emit = computeQueryMetricDelta(curr, resetCurr)
+	if !emit || delta["executionCount"] != 2 || delta["totalWorkerTime"] != 400 {
+		t.Fatalf("expected plan cache reset to emit positive fresh counters, got emit=%v delta=%v", emit, delta)
+	}
+}

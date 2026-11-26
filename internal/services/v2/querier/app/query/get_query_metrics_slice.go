@@ -24,24 +24,60 @@ func (h GetQueryMetricsSliceHandler) Handle(ctx context.Context, start time.Time
 	if len(slice) == 0 {
 		return []*common_domain.QueryMetric{}, nil
 	}
-	points := end.Sub(start).Seconds()/interval.Seconds() + 1
-	ret := make([]*common_domain.QueryMetric, int(points))
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	spanSec := end.Sub(start).Seconds()
+	if spanSec < 0 {
+		spanSec = 0
+	}
+	numBuckets := int(spanSec/interval.Seconds()) + 1
+	if numBuckets < 1 {
+		numBuckets = 1
+	}
+
+	buckets := make([]*common_domain.QueryMetric, numBuckets)
 	for _, m := range slice {
-		m.Text = ""
+		if m == nil {
+			continue
+		}
 		idx := int(m.CollectionTime.Sub(start).Seconds() / interval.Seconds())
-		mm := ret[idx]
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= numBuckets {
+			idx = numBuckets - 1
+		}
+		mm := buckets[idx]
 		if mm == nil {
-			ret[idx] = m
+			countersCopy := make(map[string]int64, len(m.Counters))
+			for k, v := range m.Counters {
+				countersCopy[k] = v
+			}
+			buckets[idx] = &common_domain.QueryMetric{
+				QueryHash:         m.QueryHash,
+				Database:          m.Database,
+				LastExecutionTime: m.LastExecutionTime,
+				LastElapsedTime:   m.LastElapsedTime,
+				Counters:          countersCopy,
+				CollectionTime:    start.Add(time.Duration(idx) * interval),
+			}
 		} else {
-			for k := range m.Counters {
-				mm.Counters[k] += mm.Counters[k]
+			for k, v := range m.Counters {
+				mm.Counters[k] += v
 			}
 			if mm.LastExecutionTime.Before(m.LastExecutionTime) {
 				mm.LastExecutionTime = m.LastExecutionTime
 				mm.LastElapsedTime = m.LastElapsedTime
 			}
 		}
+	}
 
+	ret := make([]*common_domain.QueryMetric, 0, len(slice))
+	for _, b := range buckets {
+		if b != nil {
+			ret = append(ret, b)
+		}
 	}
 	return ret, nil
 }

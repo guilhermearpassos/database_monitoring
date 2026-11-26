@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { Button, Tooltip, useStyles2 } from '@grafana/ui';
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Copy, Download, ExternalLink, Lock } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, BarChart3, Check, Copy, Download, ExternalLink, Lock } from 'lucide-react';
 import { PlanAnalysisItem } from './types';
 import { buildMissingIndexDDL, copyToClipboard, downloadTextFile, getIssueTagMeta } from '../../utils/sqlHelpers';
 import { TempoTraceLink } from '../TempoTraceLink';
@@ -195,8 +195,9 @@ export const PlanAnalysisTable: React.FC<{
   onSortChange: (field: PlanSortField) => void;
   onSelectPlan: (item: PlanAnalysisItem) => void;
   onOpenSnapshot: (snapId: string, sampleId: string) => void;
+  onOpenQueryMetrics?: (queryHash: string) => void;
   timeRange: TimeRange;
-}> = ({ plans, sortField, sortDir, onSortChange, onSelectPlan, onOpenSnapshot, timeRange }) => {
+}> = ({ plans, sortField, sortDir, onSortChange, onSelectPlan, onOpenSnapshot, onOpenQueryMetrics, timeRange }) => {
   const styles = useStyles2(getStyles);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -429,6 +430,18 @@ export const PlanAnalysisTable: React.FC<{
                         </Tooltip>
                       )}
                       {item.trace_id && <TempoTraceLink traceId={item.trace_id} timeRange={timeRange} compact />}
+                      {onOpenQueryMetrics && item.query_hash && (
+                        <Tooltip content="Open Query Metrics & execution history for this query">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            fill="outline"
+                            onClick={() => onOpenQueryMetrics(item.query_hash)}
+                          >
+                            <BarChart3 size={12} />
+                          </Button>
+                        </Tooltip>
+                      )}
                       <Tooltip content="Open this sample inside its Snapshot view">
                         <Button
                           size="sm"

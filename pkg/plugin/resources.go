@@ -59,6 +59,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/planAnalysis", a.handlePlanAnalysis)
 	mux.HandleFunc("/snapshotSummaries", a.handleSnapshotSummaries)
 	mux.HandleFunc("/snapshotSamples", a.handleSnapshotSamples)
+	mux.HandleFunc("/queryMetrics", a.handleQueryMetrics)
+	mux.HandleFunc("/queryMetricsSeries", a.handleQueryMetricsSeries)
 }
 
 func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
@@ -1108,41 +1110,67 @@ func (a *App) queryMetrics(ctx context.Context, pCtx backend.PluginContext, quer
 		response.Error = err
 		return response
 	}
-	text := make([]string, 0, len(resp.GetMetrics()))
-	lastExecutionTime := make([]time.Time, 0, len(resp.GetMetrics()))
-	queryHash := make([]string, 0, len(resp.GetMetrics()))
-	databaseName := make([]string, 0, len(resp.GetMetrics()))
-	executionCount := make([]float64, 0, len(resp.GetMetrics()))
-	rates := make(map[string][]float64)
-	for _, m := range resp.GetMetrics() {
-		text = append(text, m.Text)
-		lastExecutionTime = append(lastExecutionTime, m.LastExecutionTime.AsTime())
-		queryHash = append(queryHash, m.QueryHash)
-		databaseName = append(databaseName, m.Db.DatabaseName)
-
-		execCount, ok := m.Counters["executionCount"]
-		executionCount = append(executionCount, float64(execCount))
-		if ok && execCount != 0 {
-			for k, v := range m.Counters {
-				if !strings.HasPrefix(k, "total") {
-					continue
-				}
-				avgName := strings.Replace(k, "total", "avg", 1)
-				rates[avgName] = append(rates[avgName], float64(v)/float64(execCount))
+	metrics := resp.GetMetrics()
+	avgKeySet := make(map[string]struct{})
+	for _, m := range metrics {
+		for k := range m.GetCounters() {
+			if strings.HasPrefix(k, "total") {
+				avgKeySet[strings.Replace(k, "total", "avg", 1)] = struct{}{}
 			}
 		}
 	}
+	avgKeys := make([]string, 0, len(avgKeySet))
+	for k := range avgKeySet {
+		avgKeys = append(avgKeys, k)
+	}
+	slices.Sort(avgKeys)
 
+	text := make([]string, 0, len(metrics))
+	lastExecutionTime := make([]time.Time, 0, len(metrics))
+	queryHash := make([]string, 0, len(metrics))
+	databaseName := make([]string, 0, len(metrics))
+	executionCount := make([]float64, 0, len(metrics))
+	rates := make(map[string][]float64, len(avgKeys))
+	for _, k := range avgKeys {
+		rates[k] = make([]float64, 0, len(metrics))
+	}
+	for _, m := range metrics {
+		text = append(text, m.GetText())
+		lastExecutionTime = append(lastExecutionTime, m.GetLastExecutionTime().AsTime())
+		queryHash = append(queryHash, m.GetQueryHash())
+		databaseName = append(databaseName, m.GetDb().GetDatabaseName())
+
+		counters := m.GetCounters()
+		execCount := counters["executionCount"]
+		executionCount = append(executionCount, float64(execCount))
+		for _, avgName := range avgKeys {
+			totalName := strings.Replace(avgName, "avg", "total", 1)
+			val := 0.0
+			if execCount > 0 {
+				val = float64(counters[totalName]) / float64(execCount)
+			}
+			rates[avgName] = append(rates[avgName], val)
+		}
+	}
+
+	textField := data.NewField("text", nil, text)
+	textField.Config = &data.FieldConfig{
+		Links: []data.DataLink{
+			{
+				Title: "Inspect in Sqlsights Query Metrics",
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/query_metrics?server=%s&queryHash=${__data.fields.queryHash}&from=${__from}&to=${__to}", q.Database),
+			},
+		},
+	}
 	frame := data.NewFrame("metrics",
-		data.NewField("text", nil, text),
+		textField,
 		data.NewField("lastExecutionTime", nil, lastExecutionTime),
 		data.NewField("queryHash", nil, queryHash),
 		data.NewField("databaseName", nil, databaseName),
 		data.NewField("executionCount", nil, executionCount),
 	)
-	for k, rate := range rates {
-		frame.Fields = append(frame.Fields, data.NewField(k, nil, rate))
-
+	for _, k := range avgKeys {
+		frame.Fields = append(frame.Fields, data.NewField(k, nil, rates[k]))
 	}
 
 	// Set the RefID to match the query
@@ -1190,22 +1218,39 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 		response.Error = err
 		return response
 	}
-	collectedAt := make([]time.Time, 0, len(resp.GetMetrics()))
-	executionCount := make([]float64, 0, len(resp.GetMetrics()))
-	rates := make(map[string][]float64)
-	for _, m := range resp.GetMetrics() {
-		collectedAt = append(collectedAt, m.GetCollectedAt().AsTime())
-
-		execCount, ok := m.Counters["executionCount"]
-		executionCount = append(executionCount, float64(execCount))
-		if ok && execCount != 0 {
-			for k, v := range m.Counters {
-				if !strings.HasPrefix(k, "total") {
-					continue
-				}
-				avgName := strings.Replace(k, "total", "avg", 1)
-				rates[avgName] = append(rates[avgName], float64(v)/float64(execCount))
+	seriesMetrics := resp.GetMetrics()
+	avgKeySet := make(map[string]struct{})
+	for _, m := range seriesMetrics {
+		for k := range m.GetCounters() {
+			if strings.HasPrefix(k, "total") {
+				avgKeySet[strings.Replace(k, "total", "avg", 1)] = struct{}{}
 			}
+		}
+	}
+	avgKeys := make([]string, 0, len(avgKeySet))
+	for k := range avgKeySet {
+		avgKeys = append(avgKeys, k)
+	}
+	slices.Sort(avgKeys)
+
+	collectedAt := make([]time.Time, 0, len(seriesMetrics))
+	executionCount := make([]float64, 0, len(seriesMetrics))
+	rates := make(map[string][]float64, len(avgKeys))
+	for _, k := range avgKeys {
+		rates[k] = make([]float64, 0, len(seriesMetrics))
+	}
+	for _, m := range seriesMetrics {
+		collectedAt = append(collectedAt, m.GetCollectedAt().AsTime())
+		counters := m.GetCounters()
+		execCount := counters["executionCount"]
+		executionCount = append(executionCount, float64(execCount))
+		for _, avgName := range avgKeys {
+			totalName := strings.Replace(avgName, "avg", "total", 1)
+			val := 0.0
+			if execCount > 0 {
+				val = float64(counters[totalName]) / float64(execCount)
+			}
+			rates[avgName] = append(rates[avgName], val)
 		}
 	}
 
@@ -1215,9 +1260,9 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 	if len(q.Metrics) == 0 || slices.Contains(q.Metrics, "executionCount") {
 		frame.Fields = append(frame.Fields, data.NewField("executionCount", nil, executionCount))
 	}
-	for k, rate := range rates {
+	for _, k := range avgKeys {
 		if len(q.Metrics) == 0 || slices.Contains(q.Metrics, k) {
-			frame.Fields = append(frame.Fields, data.NewField(k, nil, rate))
+			frame.Fields = append(frame.Fields, data.NewField(k, nil, rates[k]))
 		}
 	}
 
@@ -1664,6 +1709,241 @@ func (a *App) handleSnapshotSamples(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(samples); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func buildQueryMetricItems(raw []*dbmv1.QueryMetric, dbFilter []string) ([]QueryMetricItemDTO, []string) {
+	dbSet := make(map[string]struct{})
+	items := make([]QueryMetricItemDTO, 0, len(raw))
+
+	var grandTotalWorkerMs, grandTotalElapsedMs float64
+	var grandTotalReads int64
+
+	for _, m := range raw {
+		dbName := m.GetDb().GetDatabaseName()
+		if dbName != "" {
+			dbSet[dbName] = struct{}{}
+		}
+		if len(dbFilter) > 0 && !slices.Contains(dbFilter, dbName) {
+			continue
+		}
+		c := m.GetCounters()
+		execCount := c["executionCount"]
+		denom := float64(execCount)
+		if denom <= 0 {
+			denom = 1
+		}
+
+		// SQL Server dm_exec_query_stats stores worker/elapsed/clr time in microseconds.
+		totalElapsedMs := float64(c["totalElapsedTime"]) / 1000.0
+		totalWorkerMs := float64(c["totalWorkerTime"]) / 1000.0
+		totalClrMs := float64(c["totalClrTime"]) / 1000.0
+		avgElapsedMs := totalElapsedMs / denom
+		avgWorkerMs := totalWorkerMs / denom
+
+		totalLogicalReads := c["totalLogicalReads"]
+		avgLogicalReads := float64(totalLogicalReads) / denom
+		totalPhysicalReads := c["totalPhysicalReads"]
+		avgPhysicalReads := float64(totalPhysicalReads) / denom
+		totalLogicalWrites := c["totalLogicalWrites"]
+		avgLogicalWrites := float64(totalLogicalWrites) / denom
+		totalRows := c["totalRows"]
+		avgRows := float64(totalRows) / denom
+		totalSpills := c["totalSpills"]
+		avgSpills := float64(totalSpills) / denom
+		totalGrantKb := c["totalGrantKb"]
+		avgGrantKb := float64(totalGrantKb) / denom
+		avgUsedGrantKb := float64(c["totalUsedGrantKb"]) / denom
+		avgIdealGrantKb := float64(c["totalIdealGrantKb"]) / denom
+		avgDop := float64(c["totalDop"]) / denom
+
+		memWastePct := 0.0
+		if avgGrantKb > 0 && avgUsedGrantKb >= 0 && avgGrantKb > avgUsedGrantKb {
+			memWastePct = ((avgGrantKb - avgUsedGrantKb) / avgGrantKb) * 100.0
+		}
+
+		flags := make([]string, 0, 2)
+		if totalSpills > 0 {
+			flags = append(flags, "spills")
+		}
+		if avgGrantKb >= 10240 && memWastePct >= 80 {
+			flags = append(flags, "memory_overgrant")
+		}
+
+		grandTotalWorkerMs += totalWorkerMs
+		grandTotalElapsedMs += totalElapsedMs
+		grandTotalReads += totalLogicalReads
+
+		items = append(items, QueryMetricItemDTO{
+			QueryHash:           m.GetQueryHash(),
+			Text:                m.GetText(),
+			Database:            dbName,
+			LastExecutionTime:   m.GetLastExecutionTime().AsTime(),
+			LastElapsedMs:       float64(m.GetLastElapsedTimeMicros()) / 1000.0,
+			ExecutionCount:      execCount,
+			TotalElapsedMs:      totalElapsedMs,
+			AvgElapsedMs:        avgElapsedMs,
+			TotalWorkerMs:       totalWorkerMs,
+			AvgWorkerMs:         avgWorkerMs,
+			TotalClrMs:          totalClrMs,
+			TotalLogicalReads:   totalLogicalReads,
+			AvgLogicalReads:     avgLogicalReads,
+			TotalPhysicalReads:  totalPhysicalReads,
+			AvgPhysicalReads:    avgPhysicalReads,
+			TotalLogicalWrites:  totalLogicalWrites,
+			AvgLogicalWrites:    avgLogicalWrites,
+			TotalRows:           totalRows,
+			AvgRows:             avgRows,
+			TotalSpills:         totalSpills,
+			AvgSpills:           avgSpills,
+			TotalGrantKb:        totalGrantKb,
+			AvgGrantKb:          avgGrantKb,
+			AvgUsedGrantKb:      avgUsedGrantKb,
+			AvgIdealGrantKb:     avgIdealGrantKb,
+			MemoryGrantWastePct: memWastePct,
+			AvgDop:              avgDop,
+			IssueFlags:          flags,
+		})
+	}
+
+	for i := range items {
+		if grandTotalWorkerMs > 0 {
+			items[i].CpuSharePct = (items[i].TotalWorkerMs / grandTotalWorkerMs) * 100.0
+		}
+		if grandTotalElapsedMs > 0 {
+			items[i].ElapsedSharePct = (items[i].TotalElapsedMs / grandTotalElapsedMs) * 100.0
+		}
+		if grandTotalReads > 0 {
+			items[i].ReadsSharePct = (float64(items[i].TotalLogicalReads) / float64(grandTotalReads)) * 100.0
+		}
+	}
+
+	availDBs := make([]string, 0, len(dbSet))
+	for db := range dbSet {
+		availDBs = append(availDBs, db)
+	}
+	slices.Sort(availDBs)
+	return items, availDBs
+}
+
+func (a *App) handleQueryMetrics(w http.ResponseWriter, r *http.Request) {
+	server := r.URL.Query().Get("server")
+	if server == "" {
+		http.Error(w, "server is required", http.StatusBadRequest)
+		return
+	}
+	start, err := time.Parse(time.RFC3339, r.URL.Query().Get("start"))
+	if err != nil {
+		start = time.Now().Add(-1 * time.Hour)
+	}
+	end, err := time.Parse(time.RFC3339, r.URL.Query().Get("end"))
+	if err != nil {
+		end = time.Now()
+	}
+	var dbFilter []string
+	if raw := strings.TrimSpace(r.URL.Query().Get("databases")); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				dbFilter = append(dbFilter, trimmed)
+			}
+		}
+	}
+
+	resp, err := a.client.ListQueryMetrics(r.Context(), &querierv2.ListQueryMetricsRequest{
+		Start: timestamppb.New(start),
+		End:   timestamppb.New(end),
+		Host:  server,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	items, availDBs := buildQueryMetricItems(resp.GetMetrics(), dbFilter)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(QueryMetricsResponse{
+		Metrics:            items,
+		AvailableDatabases: availDBs,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *App) handleQueryMetricsSeries(w http.ResponseWriter, r *http.Request) {
+	server := r.URL.Query().Get("server")
+	queryHash := r.URL.Query().Get("queryHash")
+	if server == "" || queryHash == "" {
+		http.Error(w, "server and queryHash are required", http.StatusBadRequest)
+		return
+	}
+	start, err := time.Parse(time.RFC3339, r.URL.Query().Get("start"))
+	if err != nil {
+		start = time.Now().Add(-1 * time.Hour)
+	}
+	end, err := time.Parse(time.RFC3339, r.URL.Query().Get("end"))
+	if err != nil {
+		end = time.Now()
+	}
+
+	interval := "5m"
+	dur := end.Sub(start)
+	if dur <= 30*time.Minute {
+		interval = "1m"
+	} else if dur > 15*time.Hour {
+		interval = "30m"
+	} else if dur > 6*time.Hour {
+		interval = "15m"
+	}
+
+	resp, err := a.client.GetQueryMetricsTimeSeries(r.Context(), &querierv2.GetQueryMetricsTimeSeriesRequest{
+		Start:     timestamppb.New(start),
+		End:       timestamppb.New(end),
+		Host:      server,
+		SqlHandle: queryHash,
+		Interval:  interval,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	points := make([]QueryMetricsSeriesPointDTO, 0, len(resp.GetMetrics()))
+	for _, m := range resp.GetMetrics() {
+		c := m.GetCounters()
+		execCount := c["executionCount"]
+		denom := float64(execCount)
+		if denom <= 0 {
+			denom = 1
+		}
+		totalElapsedMs := float64(c["totalElapsedTime"]) / 1000.0
+		totalWorkerMs := float64(c["totalWorkerTime"]) / 1000.0
+		totalReads := c["totalLogicalReads"]
+		totalSpills := c["totalSpills"]
+
+		points = append(points, QueryMetricsSeriesPointDTO{
+			Timestamp:         m.GetCollectedAt().AsTime(),
+			ExecutionCount:    execCount,
+			TotalElapsedMs:    totalElapsedMs,
+			AvgElapsedMs:      totalElapsedMs / denom,
+			TotalWorkerMs:     totalWorkerMs,
+			AvgWorkerMs:       totalWorkerMs / denom,
+			TotalLogicalReads: totalReads,
+			AvgLogicalReads:   float64(totalReads) / denom,
+			AvgPhysicalReads:  float64(c["totalPhysicalReads"]) / denom,
+			AvgLogicalWrites:  float64(c["totalLogicalWrites"]) / denom,
+			AvgRows:           float64(c["totalRows"]) / denom,
+			TotalSpills:       totalSpills,
+			AvgSpills:         float64(totalSpills) / denom,
+			AvgGrantKb:        float64(c["totalGrantKb"]) / denom,
+			AvgUsedGrantKb:    float64(c["totalUsedGrantKb"]) / denom,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(points); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

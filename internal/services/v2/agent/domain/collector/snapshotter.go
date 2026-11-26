@@ -9,6 +9,7 @@ import (
 type Snapshotter interface {
 	TakeSnapshot(ctx context.Context, databases []string) (*common_domain.DataBaseSnapshot, error)
 	FetchExecutionPlans(ctx context.Context, handles []string) (*ExecPlanChunk, error)
+	CollectQueryMetrics(ctx context.Context, databases []string) ([]*common_domain.QueryMetric, error)
 }
 type ExecPlanChunk struct {
 	Plans  map[string]*common_domain.ExecutionPlan

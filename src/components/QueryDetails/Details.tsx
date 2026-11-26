@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { css } from '@emotion/css';
 import {
   Alert,
@@ -11,28 +11,15 @@ import {
   useStyles2,
 } from '@grafana/ui';
 import { lastValueFrom, Observable } from 'rxjs';
-import { FetchResponse, getBackendSrv, getDataSourceSrv } from '@grafana/runtime';
-import {
-  CoreApp,
-  DataFrame,
-  dataFrameFromJSON,
-  DataQueryRequest,
-  DataSourceApi,
-  EventBusSrv,
-  GrafanaTheme2,
-  LoadingState,
-  TimeRange,
-} from '@grafana/data';
-import { DataQueryResponse } from '@grafana/data/dist/types/types/datasource';
-import { ArrowLeft, Check, Copy, ExternalLink, RefreshCw } from 'lucide-react';
+import { FetchResponse, getBackendSrv } from '@grafana/runtime';
+import { GrafanaTheme2, TimeRange } from '@grafana/data';
+import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
 import { ExecutionPlanViewer } from '../ExecutionPlanTree/plan';
 import { BlockingChainComponent } from './blockingChain';
 import { QueryDetails } from './types';
-import { MyQuery } from '../../nested-datasource/types';
-import { MyGraph } from '../../pages/graph';
-import { formatSQL } from '../../utils/formatters';
-import { copyToClipboard, formatSQLPlain } from '../../utils/sqlHelpers';
 import { TempoTraceLink } from '../TempoTraceLink';
+import { QueryHistoryChart } from '../QueryMetrics/QueryHistoryChart';
+import { SqlQueryCard } from '../SqlQueryCard';
 
 export type DetailsTabId = 'overview' | 'plan' | 'blocking' | 'history';
 
@@ -53,20 +40,6 @@ const getDrawerStyles = (theme: GrafanaTheme2) => ({
   `,
   tabContent: css`
     margin-top: ${theme.spacing(2)};
-  `,
-  sqlBox: css`
-    position: relative;
-    background: ${theme.colors.background.canvas};
-    border: 1px solid ${theme.colors.border.weak};
-    border-radius: ${theme.shape.radius.default};
-    padding: ${theme.spacing(1.5)};
-    font-family: ${theme.typography.fontFamilyMonospace};
-    font-size: ${theme.typography.bodySmall.fontSize};
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 320px;
-    overflow: auto;
-    line-height: 1.5;
   `,
   metaLabel: css`
     color: ${theme.colors.text.secondary};
@@ -106,9 +79,18 @@ export const QueryDetailsComponent: React.FC<{
   initialTab?: DetailsTabId;
   onSelectSample?: (snapId: string, sampleId: string) => void;
   onOpenSnapshot?: (snapId: string) => void;
-}> = ({ sampleID, snapID, timeRange, server, initialTab = 'overview', onSelectSample, onOpenSnapshot }) => {
+  onOpenQueryMetrics?: (queryHash: string) => void;
+}> = ({
+  sampleID,
+  snapID,
+  timeRange,
+  server,
+  initialTab = 'overview',
+  onSelectSample,
+  onOpenSnapshot,
+  onOpenQueryMetrics,
+}) => {
   const styles = useStyles2(getDrawerStyles);
-  const panelEventBus = useMemo(() => new EventBusSrv(), []);
 
   const [historyStack, setHistoryStack] = useState<Array<{ snapId: string; sampleId: string }>>([]);
   const [activeTarget, setActiveTarget] = useState<{ snapId: string; sampleId: string }>({
@@ -119,11 +101,6 @@ export const QueryDetailsComponent: React.FC<{
   const [queryDetails, setQueryDetails] = useState<QueryDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
-  const [copiedSql, setCopiedSql] = useState(false);
-
-  const [chartFrames, setChartFrames] = useState<DataFrame[]>([]);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
 
   // Sync when external selection changes
   useEffect(() => {
@@ -131,22 +108,6 @@ export const QueryDetailsComponent: React.FC<{
     setHistoryStack([]);
     setActiveTab(initialTab);
   }, [snapID, sampleID, initialTab]);
-
-  useEffect(() => {
-    const initDatasource = async () => {
-      try {
-        const dsSrv = getDataSourceSrv();
-        if (!dsSrv) {
-          return;
-        }
-        const ds = await dsSrv.get({ type: 'guilhermearpassos-sqlsights-datasource' });
-        setDatasource(ds);
-      } catch {
-        // optional for history chart
-      }
-    };
-    initDatasource();
-  }, []);
 
   const fetchDetails = useCallback(async () => {
     if (!activeTarget.sampleId || !activeTarget.snapId) {
@@ -176,71 +137,6 @@ export const QueryDetailsComponent: React.FC<{
     fetchDetails();
   }, [fetchDetails]);
 
-  const loadHistoryChart = useCallback(
-    async (qd: QueryDetails) => {
-      if (!datasource || !qd.query_sample.query_hash || !server) {
-        setChartFrames([]);
-        return;
-      }
-      try {
-        setChartLoading(true);
-        const query: MyQuery = {
-          refId: 'A',
-          database: server,
-          hide: false,
-          datasource: { type: datasource.type, uid: datasource.uid },
-          queryType: 'metrics_series',
-          queryHash: qd.query_sample.query_hash,
-          metrics: ['executionCount'],
-        };
-        const queryRequest: DataQueryRequest<MyQuery> = {
-          app: CoreApp.Explore,
-          requestId: `details_${Date.now()}`,
-          timezone: 'browser',
-          panelId: 1,
-          dashboardUID: '',
-          range: timeRange,
-          timeInfo: '',
-          interval: '1m',
-          intervalMs: 60000,
-          targets: [query],
-          maxDataPoints: 1000,
-          scopedVars: {},
-          startTime: Date.now(),
-          liveStreaming: false,
-        };
-        const resultObservable = datasource.query(queryRequest);
-        const result: DataQueryResponse =
-          resultObservable instanceof Observable ? await lastValueFrom(resultObservable) : await resultObservable;
-        if (result.data && Array.isArray(result.data)) {
-          const frames = result.data
-            .map((rawFrame: any) => {
-              try {
-                return dataFrameFromJSON({ schema: rawFrame.schema, data: rawFrame.data });
-              } catch {
-                return null;
-              }
-            })
-            .filter((f): f is DataFrame => f !== null);
-          setChartFrames(frames);
-        } else {
-          setChartFrames([]);
-        }
-      } catch {
-        setChartFrames([]);
-      } finally {
-        setChartLoading(false);
-      }
-    },
-    [datasource, server, timeRange]
-  );
-
-  useEffect(() => {
-    if (queryDetails && activeTab === 'history') {
-      loadHistoryChart(queryDetails);
-    }
-  }, [queryDetails, activeTab, loadHistoryChart]);
-
   const handleNavigateInChain = (nextSnapId: string, nextSampleId: string) => {
     setHistoryStack((prev) => [...prev, activeTarget]);
     setActiveTarget({ snapId: nextSnapId, sampleId: nextSampleId });
@@ -255,17 +151,6 @@ export const QueryDetailsComponent: React.FC<{
     setHistoryStack((prev) => prev.slice(0, -1));
     setActiveTarget(prevTarget);
     onSelectSample?.(prevTarget.snapId, prevTarget.sampleId);
-  };
-
-  const handleCopySql = async () => {
-    if (!queryDetails?.query_sample?.query) {
-      return;
-    }
-    const formatted = formatSQLPlain(queryDetails.query_sample.query);
-    if (await copyToClipboard(formatted)) {
-      setCopiedSql(true);
-      setTimeout(() => setCopiedSql(false), 1800);
-    }
   };
 
   const warningsCount = queryDetails?.plan?.warnings?.length ?? 0;
@@ -364,21 +249,7 @@ export const QueryDetailsComponent: React.FC<{
                   </div>
                 </div>
 
-                <Card className={styles.sectionGap}>
-                  <Card.Heading>SQL Query</Card.Heading>
-                  <Card.Actions>
-                    <Button size="sm" variant="secondary" fill="outline" onClick={handleCopySql}>
-                      {copiedSql ? <Check size={13} /> : <Copy size={13} />}
-                      <span style={{ marginLeft: 4 }}>{copiedSql ? 'Copied' : 'Copy Formatted SQL'}</span>
-                    </Button>
-                  </Card.Actions>
-                  <Card.Description>
-                    <div
-                      className={styles.sqlBox}
-                      dangerouslySetInnerHTML={{ __html: formatSQL(sample.query) }}
-                    />
-                  </Card.Description>
-                </Card>
+                <SqlQueryCard sql={sample.query} heading="SQL Query" className={styles.sectionGap} />
 
                 <Card className={styles.sectionGap}>
                   <Card.Heading>Session & Client Metadata</Card.Heading>
@@ -469,23 +340,21 @@ export const QueryDetailsComponent: React.FC<{
 
             {activeTab === 'history' && (
               <Card>
-                <Card.Heading>Executions Over Time</Card.Heading>
+                <Card.Heading>Executions &amp; Performance History</Card.Heading>
                 <Card.Description>
-                  {chartLoading ? (
-                    <LoadingPlaceholder text="Loading execution history..." />
-                  ) : chartFrames.length > 0 && chartFrames[0].length > 0 ? (
-                    <div style={{ width: '100%' }}>
-                      <MyGraph
-                        data={chartFrames}
-                        loadingState={LoadingState.Done}
-                        eventBus={panelEventBus}
-                        timeRange={timeRange}
-                        onTimeRangeChange={() => {}}
-                      />
-                    </div>
+                  {sample.query_hash ? (
+                    <QueryHistoryChart
+                      server={server}
+                      queryHash={sample.query_hash}
+                      timeRange={timeRange}
+                      initialMetric="execution_count"
+                      height={260}
+                      onOpenQueryMetrics={onOpenQueryMetrics}
+                    />
                   ) : (
-                    <Alert title="No Execution History Available" severity="info">
-                      No query execution counter time-series data was found for this query hash in the selected time range.
+                    <Alert title="No Query Hash" severity="info">
+                      This sample does not have a SQL Server query hash (for example, a sleeping session or utility
+                      command), so execution counter history is unavailable.
                     </Alert>
                   )}
                 </Card.Description>

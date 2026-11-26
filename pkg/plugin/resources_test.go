@@ -138,6 +138,67 @@ func (m *mockQuerierService) GetSnapshot(_ context.Context, req *querierv2.GetSn
 	}, nil
 }
 
+func (m *mockQuerierService) ListQueryMetrics(_ context.Context, _ *querierv2.ListQueryMetricsRequest) (*querierv2.ListQueryMetricsResponse, error) {
+	now := timestamppb.Now()
+	return &querierv2.ListQueryMetricsResponse{
+		Metrics: []*dbmv1.QueryMetric{
+			{
+				QueryHash:             "hash-spill",
+				Text:                  "SELECT * FROM orders ORDER BY created_at",
+				Db:                    &dbmv1.DBMetadata{DatabaseName: "orders_db"},
+				LastExecutionTime:     now,
+				LastElapsedTimeMicros: 250000,
+				Counters: map[string]int64{
+					"executionCount":     10,
+					"totalElapsedTime":   2500000, // 2500ms total -> 250ms avg (slow_query)
+					"totalWorkerTime":    1200000, // 1200ms total -> 120ms avg (high_cpu)
+					"totalLogicalReads":  25000,   // 2500 avg (high_reads)
+					"totalPhysicalReads": 600,     // 60 avg (physical_io)
+					"totalSpills":        4,       // spills
+					"totalGrantKb":       204800,  // 20480KB (20MB) avg
+					"totalUsedGrantKb":   10240,   // 1024KB (1MB) avg -> 95% waste (memory_overgrant)
+					"totalRows":          1000,
+				},
+			},
+			{
+				QueryHash:         "hash-zero",
+				Text:              "SELECT 1",
+				Db:                &dbmv1.DBMetadata{DatabaseName: "users_db"},
+				LastExecutionTime: now,
+				Counters: map[string]int64{
+					"executionCount": 0,
+				},
+			},
+		},
+	}, nil
+}
+
+func (m *mockQuerierService) GetQueryMetricsTimeSeries(_ context.Context, req *querierv2.GetQueryMetricsTimeSeriesRequest) (*querierv2.GetQueryMetricsTimeSeriesResponse, error) {
+	t0 := time.Now().Add(-10 * time.Minute)
+	return &querierv2.GetQueryMetricsTimeSeriesResponse{
+		Metrics: []*dbmv1.QueryMetric{
+			{
+				QueryHash:   req.GetSqlHandle(),
+				CollectedAt: timestamppb.New(t0),
+				Counters: map[string]int64{
+					"executionCount":    4,
+					"totalElapsedTime":  800000,
+					"totalWorkerTime":   400000,
+					"totalLogicalReads": 4000,
+					"totalSpills":       2,
+				},
+			},
+			{
+				QueryHash:   req.GetSqlHandle(),
+				CollectedAt: timestamppb.New(t0.Add(5 * time.Minute)),
+				Counters: map[string]int64{
+					"executionCount": 0,
+				},
+			},
+		},
+	}, nil
+}
+
 var testServerAddress string
 
 func TestMain(m *testing.M) {
@@ -317,6 +378,62 @@ func TestCallResourceAndHealth(t *testing.T) {
 		require.Len(t, resp.Responses["D"].Frames, 1)
 		require.Equal(t, 1, resp.Responses["D"].Frames[0].Rows())
 		require.Equal(t, "localhost", resp.Responses["D"].Frames[0].Fields[0].At(0))
+	})
+
+	t.Run("queryMetrics and queryMetricsSeries return computed flags and time series", func(t *testing.T) {
+		var r1 mockCallResourceResponseSender
+		err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			URL:    "queryMetrics?server=localhost&databases=orders_db",
+			Path:   "queryMetrics",
+		}, &r1)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r1.response.Status)
+
+		var parsed QueryMetricsResponse
+		require.NoError(t, json.Unmarshal(r1.response.Body, &parsed))
+		require.Equal(t, []string{"orders_db", "users_db"}, parsed.AvailableDatabases)
+		require.Len(t, parsed.Metrics, 1)
+		m := parsed.Metrics[0]
+		require.Equal(t, "hash-spill", m.QueryHash)
+		require.InDelta(t, 250.0, m.AvgElapsedMs, 0.01)
+		require.InDelta(t, 120.0, m.AvgWorkerMs, 0.01)
+		require.Equal(t, []string{"spills", "memory_overgrant"}, m.IssueFlags)
+
+		var r2 mockCallResourceResponseSender
+		err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			URL:    "queryMetricsSeries?server=localhost&queryHash=hash-spill",
+			Path:   "queryMetricsSeries",
+		}, &r2)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r2.response.Status)
+
+		var pts []QueryMetricsSeriesPointDTO
+		require.NoError(t, json.Unmarshal(r2.response.Body, &pts))
+		require.Len(t, pts, 2)
+		require.Equal(t, int64(4), pts[0].ExecutionCount)
+		require.InDelta(t, 200.0, pts[0].AvgElapsedMs, 0.01)
+
+		// Also verify QueryData("metrics") and QueryData("metrics_series") have uniform field lengths even with 0-exec rows
+		now := time.Now()
+		tr := backend.TimeRange{From: now.Add(-1 * time.Hour), To: now}
+		qdResp, err := app.QueryData(context.Background(), &backend.QueryDataRequest{
+			Queries: []backend.DataQuery{
+				{RefID: "M1", QueryType: "metrics", TimeRange: tr, JSON: []byte(`{"database":"localhost"}`)},
+				{RefID: "M2", QueryType: "metrics_series", TimeRange: tr, JSON: []byte(`{"database":"localhost","queryHash":"hash-spill"}`)},
+			},
+		})
+		require.NoError(t, err)
+		for _, ref := range []string{"M1", "M2"} {
+			require.NoError(t, qdResp.Responses[ref].Error)
+			frame := qdResp.Responses[ref].Frames[0]
+			expectedRows := frame.Fields[0].Len()
+			require.Equal(t, 2, expectedRows)
+			for _, f := range frame.Fields {
+				require.Equal(t, expectedRows, f.Len(), "field %s length mismatch in %s", f.Name, ref)
+			}
+		}
 	})
 
 	t.Run("datasource-options supports server-databases, snapshots, and issue-tags", func(t *testing.T) {

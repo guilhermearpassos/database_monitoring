@@ -55,19 +55,30 @@ order by q.collected_at desc
 	if err != nil {
 		return nil, fmt.Errorf("getting query stats rowserr: %w", err)
 	}
-	retList := make([]*common_domain.QueryMetric, 0)
+	retList := make([]*common_domain.QueryMetric, 0, len(ret))
 	for _, v := range ret {
 		base := v[0]
-		for i, m := range v {
-			if i == 0 {
-				continue
-			}
-			rates := base.Counters
-			for k1, v1 := range m.Counters {
-				rates[k1] += v1
-			}
-			base.Counters = rates
+		mergedCounters := make(map[string]int64, len(base.Counters))
+		for k, val := range base.Counters {
+			mergedCounters[k] = val
 		}
+		for i := 1; i < len(v); i++ {
+			m := v[i]
+			for k1, v1 := range m.Counters {
+				mergedCounters[k1] += v1
+			}
+			if m.LastExecutionTime.After(base.LastExecutionTime) {
+				base.LastExecutionTime = m.LastExecutionTime
+				base.LastElapsedTime = m.LastElapsedTime
+			}
+			if base.Database.DatabaseName == "" && m.Database.DatabaseName != "" {
+				base.Database = m.Database
+			}
+			if base.Text == "" && m.Text != "" {
+				base.Text = m.Text
+			}
+		}
+		base.Counters = mergedCounters
 		retList = append(retList, base)
 	}
 	return retList, nil
@@ -79,6 +90,7 @@ inner join query_stat_sample qss on q.id = qss.snap_id
          inner join target t on q.target_id = t.id
 where q.collected_at between $1 and $2 and t.host = $3
 and qss.sql_handle = $4
+order by q.collected_at asc
 `
 	queryHash := sampleID
 	rows, err := p.db.QueryContext(ctx, q, start, end, serverID, queryHash)

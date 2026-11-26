@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,16 +33,20 @@ import (
 var MagicTraceparent = []byte("TPRC")
 
 type SqlServerSnapshotter struct {
-	db     *sqlx.DB
-	Server common_domain.ServerMeta
-	tracer trace.Tracer
+	db                *sqlx.DB
+	Server            common_domain.ServerMeta
+	tracer            trace.Tracer
+	metricsMu         *sync.Mutex
+	lastQueryCounters map[string]map[string]int64
 }
 
 func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlServerSnapshotter {
 	return &SqlServerSnapshotter{
-		db:     db,
-		tracer: otel.Tracer("SQLServerSnapshotter"),
-		Server: server,
+		db:                db,
+		tracer:            otel.Tracer("SQLServerSnapshotter"),
+		Server:            server,
+		metricsMu:         &sync.Mutex{},
+		lastQueryCounters: make(map[string]map[string]int64),
 	}
 }
 
@@ -703,6 +708,307 @@ select handle, query_plan from #temp_plans
 	err = rows.Err()
 	if err != nil {
 		return nil, fmt.Errorf("fetch plans - err: %w", err)
+	}
+	return ret, nil
+}
+
+// computeQueryMetricDelta computes per-interval counter deltas from cumulative sys.dm_exec_query_stats counters.
+// Returns (delta, true) when a sample should be emitted, or (nil, false) when only the baseline should be updated.
+func computeQueryMetricDelta(prev, curr map[string]int64) (map[string]int64, bool) {
+	currExec := curr["executionCount"]
+	if currExec <= 0 {
+		return nil, false
+	}
+	if prev == nil {
+		// On first observation, skip very old cached queries with large cumulative counts to avoid startup spikes.
+		if currExec > 30 {
+			return nil, false
+		}
+		out := make(map[string]int64, len(curr))
+		for k, v := range curr {
+			out[k] = v
+		}
+		return out, true
+	}
+
+	prevExec := prev["executionCount"]
+	if currExec == prevExec {
+		return nil, false
+	}
+	if currExec < prevExec {
+		// Plan cache entry was evicted/reset and recreated; emit only if small, otherwise reset baseline.
+		if currExec > 30 {
+			return nil, false
+		}
+		out := make(map[string]int64, len(curr))
+		for k, v := range curr {
+			out[k] = v
+		}
+		return out, true
+	}
+
+	out := make(map[string]int64, len(curr))
+	for k, v := range curr {
+		diff := v - prev[k]
+		if diff < 0 {
+			diff = 0
+		}
+		out[k] = diff
+	}
+	return out, true
+}
+
+func (s SqlServerSnapshotter) CollectQueryMetrics(ctx context.Context, databases []string) ([]*common_domain.QueryMetric, error) {
+	ctx, span := s.tracer.Start(ctx, "CollectQueryMetrics")
+	defer span.End()
+
+	collectionTime := time.Now().UTC()
+	query := `
+with qstats as (
+    select query_hash,
+           plan_handle,
+           last_execution_time,
+           last_elapsed_time,
+           CONCAT(
+               CONVERT(binary(64), plan_handle),
+               CONVERT(binary(4), statement_start_offset),
+               CONVERT(binary(4), statement_end_offset)
+           ) as plan_handle_and_offsets,
+           (select value from sys.dm_exec_plan_attributes(plan_handle) where attribute = 'dbid') as dbid,
+           execution_count,
+           total_worker_time,
+           total_physical_reads,
+           total_logical_writes,
+           total_logical_reads,
+           total_clr_time,
+           total_elapsed_time,
+           total_rows,
+           total_dop,
+           total_grant_kb,
+           total_used_grant_kb,
+           total_ideal_grant_kb,
+           total_reserved_threads,
+           total_used_threads,
+           total_columnstore_segment_reads,
+           total_columnstore_segment_skips,
+           total_spills
+    from sys.dm_exec_query_stats
+    where last_execution_time > dateadd(second, -120, getdate())
+),
+qstats_aggr as (
+    select query_hash,
+           isnull(cast(s.dbid as int), 0)       as dbid,
+           isnull(d.name, '')                   as db_name,
+           max(plan_handle_and_offsets)         as plan_handle_and_offsets,
+           max(last_execution_time)             as last_execution_time,
+           max(last_elapsed_time)               as last_elapsed_time,
+           sum(execution_count)                 as execution_count,
+           sum(total_worker_time)               as total_worker_time,
+           sum(total_physical_reads)            as total_physical_reads,
+           sum(total_logical_writes)            as total_logical_writes,
+           sum(total_logical_reads)             as total_logical_reads,
+           sum(total_clr_time)                  as total_clr_time,
+           sum(total_elapsed_time)              as total_elapsed_time,
+           sum(total_rows)                      as total_rows,
+           sum(total_dop)                       as total_dop,
+           sum(total_grant_kb)                  as total_grant_kb,
+           sum(total_used_grant_kb)             as total_used_grant_kb,
+           sum(total_ideal_grant_kb)            as total_ideal_grant_kb,
+           sum(total_reserved_threads)          as total_reserved_threads,
+           sum(total_used_threads)              as total_used_threads,
+           sum(total_columnstore_segment_reads) as total_columnstore_segment_reads,
+           sum(total_columnstore_segment_skips) as total_columnstore_segment_skips,
+           sum(total_spills)                    as total_spills
+    from qstats s
+             left join sys.databases d on s.dbid = d.database_id
+    group by query_hash, isnull(cast(s.dbid as int), 0), isnull(d.name, '')
+),
+qstats_aggr_split as (
+    select convert(varbinary(64), substring(plan_handle_and_offsets, 1, 64))  as plan_handle,
+           convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 65, 4))) as statement_start_offset,
+           convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 69, 4))) as statement_end_offset,
+           query_hash,
+           dbid,
+           db_name,
+           last_execution_time,
+           last_elapsed_time,
+           execution_count,
+           total_worker_time,
+           total_physical_reads,
+           total_logical_writes,
+           total_logical_reads,
+           total_clr_time,
+           total_elapsed_time,
+           total_rows,
+           total_dop,
+           total_grant_kb,
+           total_used_grant_kb,
+           total_ideal_grant_kb,
+           total_reserved_threads,
+           total_used_threads,
+           total_columnstore_segment_reads,
+           total_columnstore_segment_skips,
+           total_spills
+    from qstats_aggr
+)
+select qas.query_hash,
+       qas.dbid,
+       qas.db_name,
+       qas.last_execution_time,
+       qas.last_elapsed_time,
+       qas.execution_count,
+       qas.total_worker_time,
+       qas.total_physical_reads,
+       qas.total_logical_writes,
+       qas.total_logical_reads,
+       qas.total_clr_time,
+       qas.total_elapsed_time,
+       qas.total_rows,
+       qas.total_dop,
+       qas.total_grant_kb,
+       qas.total_used_grant_kb,
+       qas.total_ideal_grant_kb,
+       qas.total_reserved_threads,
+       qas.total_used_threads,
+       qas.total_columnstore_segment_reads,
+       qas.total_columnstore_segment_skips,
+       qas.total_spills,
+       CASE
+           WHEN qas.statement_start_offset >= 0 AND DATALENGTH(st.text) > 0 THEN
+               SUBSTRING(
+                   st.text,
+                   (qas.statement_start_offset / 2) + 1,
+                   ((CASE qas.statement_end_offset
+                       WHEN -1 THEN DATALENGTH(st.text)
+                       ELSE qas.statement_end_offset
+                     END - qas.statement_start_offset) / 2) + 1
+               )
+           ELSE st.text
+       END as statement_text
+from qstats_aggr_split qas
+         cross apply sys.dm_exec_sql_text(qas.plan_handle) st
+where st.text is not null
+`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("collecting query metrics: %w", err)
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	ret := make([]*common_domain.QueryMetric, 0)
+	for rows.Next() {
+		var queryHash []byte
+		var dbId int
+		var dbName string
+		var lastExecutionTime time.Time
+		var lastElapsedTime int64
+		var executionCount int64
+		var totalWorkerTime int64
+		var totalPhysicalReads int64
+		var totalLogicalWrites int64
+		var totalLogicalReads int64
+		var totalClrTime int64
+		var totalElapsedTime int64
+		var totalRows int64
+		var totalDop int64
+		var totalGrantKb int64
+		var totalUsedGrantKb int64
+		var totalIdealGrantKb int64
+		var totalReservedThreads int64
+		var totalUsedThreads int64
+		var totalColumnstoreSegmentReads int64
+		var totalColumnstoreSegmentSkips int64
+		var totalSpills int64
+		var text sql.NullString
+
+		err = rows.Scan(
+			&queryHash,
+			&dbId,
+			&dbName,
+			&lastExecutionTime,
+			&lastElapsedTime,
+			&executionCount,
+			&totalWorkerTime,
+			&totalPhysicalReads,
+			&totalLogicalWrites,
+			&totalLogicalReads,
+			&totalClrTime,
+			&totalElapsedTime,
+			&totalRows,
+			&totalDop,
+			&totalGrantKb,
+			&totalUsedGrantKb,
+			&totalIdealGrantKb,
+			&totalReservedThreads,
+			&totalUsedThreads,
+			&totalColumnstoreSegmentReads,
+			&totalColumnstoreSegmentSkips,
+			&totalSpills,
+			&text,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("collecting query metrics - scan: %w", err)
+		}
+		if len(queryHash) == 0 || !text.Valid || strings.TrimSpace(text.String) == "" {
+			continue
+		}
+		if len(databases) > 0 && !slices.Contains(databases, dbName) {
+			continue
+		}
+
+		counters := map[string]int64{
+			"executionCount":               executionCount,
+			"totalWorkerTime":              totalWorkerTime,
+			"totalPhysicalReads":           totalPhysicalReads,
+			"totalLogicalWrites":           totalLogicalWrites,
+			"totalLogicalReads":            totalLogicalReads,
+			"totalClrTime":                 totalClrTime,
+			"totalElapsedTime":             totalElapsedTime,
+			"totalRows":                    totalRows,
+			"totalDop":                     totalDop,
+			"totalGrantKb":                 totalGrantKb,
+			"totalUsedGrantKb":             totalUsedGrantKb,
+			"totalIdealGrantKb":            totalIdealGrantKb,
+			"totalReservedThreads":         totalReservedThreads,
+			"totalUsedThreads":             totalUsedThreads,
+			"totalColumnstoreSegmentReads": totalColumnstoreSegmentReads,
+			"totalColumnstoreSegmentSkips": totalColumnstoreSegmentSkips,
+			"totalSpills":                  totalSpills,
+		}
+
+		encodedHash := base64.StdEncoding.EncodeToString(queryHash)
+		counterKey := fmt.Sprintf("%s:%d", encodedHash, dbId)
+
+		var prev map[string]int64
+		if s.metricsMu != nil {
+			s.metricsMu.Lock()
+			prev = s.lastQueryCounters[counterKey]
+			s.lastQueryCounters[counterKey] = counters
+			s.metricsMu.Unlock()
+		}
+
+		digestedCounters, emit := computeQueryMetricDelta(prev, counters)
+		if !emit {
+			continue
+		}
+
+		ret = append(ret, &common_domain.QueryMetric{
+			QueryHash: encodedHash,
+			Text:      strings.TrimSpace(text.String),
+			Database: common_domain.DataBaseMetadata{
+				DatabaseID:   strconv.Itoa(dbId),
+				DatabaseName: dbName,
+			},
+			LastExecutionTime: lastExecutionTime,
+			LastElapsedTime:   time.Duration(lastElapsedTime) * time.Microsecond,
+			Counters:          digestedCounters,
+			CollectionTime:    collectionTime,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("collecting query metrics - rows.Err: %w", err)
 	}
 	return ret, nil
 }

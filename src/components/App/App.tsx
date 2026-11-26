@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppRootProps } from '@grafana/data';
 import { LoadingPlaceholder } from '@grafana/ui';
 import PagePlanAnalysis from '../../pages/PageTwo';
+import PageQueryMetrics from '../../pages/PageThree';
 import { AppPluginJsonData, AppSettingsProvider } from '../../context/AppSettingsContext';
 
 const PageOne = React.lazy(() => import('../../pages/PageOne'));
@@ -16,6 +17,7 @@ function App(props: AppRootProps<AppPluginJsonData>) {
           <Route path="*" element={<Navigate to="/snapshots" replace />} />
           <Route path="/snapshots" element={<PageOne />} />
           <Route path="/plan_analysis" element={<PagePlanAnalysis />} />
+          <Route path="/query_metrics" element={<PageQueryMetrics />} />
         </Routes>
       </Suspense>
     </AppSettingsProvider>

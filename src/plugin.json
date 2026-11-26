@@ -56,6 +56,12 @@
     },
     {
       "type": "page",
+      "name": "Query Metrics",
+      "path": "/a/%PLUGIN_ID%/query_metrics",
+      "addToNav": true
+    },
+    {
+      "type": "page",
       "icon": "cog",
       "name": "Configuration",
       "path": "/plugins/%PLUGIN_ID%",

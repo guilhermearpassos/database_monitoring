@@ -25,7 +25,7 @@ import {
   TimeRange,
 } from '@grafana/data';
 import { css } from '@emotion/css';
-import { FileSearch, RefreshCw, X } from 'lucide-react';
+import { BarChart3, FileSearch, RefreshCw, X } from 'lucide-react';
 import { MyGraph } from './graph';
 import { QueryDetailsComponent } from '../components/QueryDetails/Details';
 import { SnapshotSummaryItem } from '../components/Snapshots/types';
@@ -342,6 +342,14 @@ const PageOne = () => {
             <FileSearch size={14} />
             <span style={{ marginLeft: 6 }}>Plan Analysis</span>
           </Button>
+          <Button
+            variant="secondary"
+            fill="outline"
+            onClick={() => navigate(`${prefixRoute(ROUTES.QueryMetrics)}${buildPreservedNavSearch(searchParams)}`)}
+          >
+            <BarChart3 size={14} />
+            <span style={{ marginLeft: 6 }}>Query Metrics</span>
+          </Button>
           <Combobox<number>
             width={20}
             options={AUTO_REFRESH_OPTIONS}
@@ -530,6 +538,9 @@ const PageOne = () => {
                   p.set('snapId', snapId);
                   p.set('sampleId', sampleId);
                 })
+              }
+              onOpenQueryMetrics={(queryHash) =>
+                navigate(`${prefixRoute(ROUTES.QueryMetrics)}${buildPreservedNavSearch(searchParams, { queryHash })}`)
               }
             />
           </div>

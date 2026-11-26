@@ -309,3 +309,32 @@ func (c *Client) GetMissingPlansHandles(ctx context.Context, server common_domai
 	}
 	return resp, nil
 }
+
+func (c *Client) SendQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, server common_domain.ServerMeta, timestamp time.Time) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+	protoMetrics := make([]*dbmv1.QueryMetric, 0, len(metrics))
+	for _, m := range metrics {
+		pm, err := converters.QueryMetricToProto(m)
+		if err != nil {
+			return fmt.Errorf("convert query metric to proto: %w", err)
+		}
+		if pm != nil {
+			protoMetrics = append(protoMetrics, pm)
+		}
+	}
+	_, err := c.client.IngestMetrics(ctx, &ingestorv2.DatabaseMetrics{
+		Server:    toProtoServer(server),
+		Timestamp: timestamppb.New(timestamp),
+		Metrics: &ingestorv2.DatabaseMetrics_QueryMetrics{
+			QueryMetrics: &ingestorv2.DatabaseMetrics_QueryMetricSample{
+				QueryMetrics: protoMetrics,
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("ingest query metrics: %w", err)
+	}
+	return nil
+}
