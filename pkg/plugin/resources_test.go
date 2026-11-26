@@ -33,7 +33,11 @@ type mockQuerierService struct {
 }
 
 func (m *mockQuerierService) ListServerSummary(_ context.Context, _ *querierv2.ListServerSummaryRequest) (*querierv2.ListServerSummaryResponse, error) {
-	return &querierv2.ListServerSummaryResponse{}, nil
+	return &querierv2.ListServerSummaryResponse{
+		Servers: []*querierv2.ServerSummary{
+			{Name: "localhost", Type: "mssql", Connections: 12, RequestRate: 42.5},
+		},
+	}, nil
 }
 
 func (m *mockQuerierService) ListPlansWithIssues(_ context.Context, _ *querierv2.ListPlansWithIssuesRequest) (*querierv2.ListPlansWithIssuesResponse, error) {
@@ -280,5 +284,61 @@ func TestCallResourceAndHealth(t *testing.T) {
 		require.Len(t, samples, 1)
 		require.Equal(t, "abcdef0123456789abcdef0123456789", samples[0].TraceID)
 		require.True(t, samples[0].IsBlocker)
+	})
+
+	t.Run("QueryData supports blocking_timeseries, wait_breakdown, plan_analysis_summary, and servers", func(t *testing.T) {
+		now := time.Now()
+		tr := backend.TimeRange{From: now.Add(-1 * time.Hour), To: now}
+
+		resp, err := app.QueryData(context.Background(), &backend.QueryDataRequest{
+			Queries: []backend.DataQuery{
+				{RefID: "A", QueryType: "blocking_timeseries", TimeRange: tr, JSON: []byte(`{"database":"localhost","blockingSeries":["blockers","waiters"]}`)},
+				{RefID: "B", QueryType: "wait_breakdown", TimeRange: tr, JSON: []byte(`{"database":"localhost","metric":"wait_time_ms"}`)},
+				{RefID: "C", QueryType: "plan_analysis_summary", TimeRange: tr, JSON: []byte(`{"database":"localhost","onlyLocks":true}`)},
+				{RefID: "D", QueryType: "servers", TimeRange: tr, JSON: []byte(`{}`)},
+			},
+		})
+		require.NoError(t, err)
+
+		require.NoError(t, resp.Responses["A"].Error)
+		require.Len(t, resp.Responses["A"].Frames, 1)
+		require.Len(t, resp.Responses["A"].Frames[0].Fields, 3) // time + blockers + waiters
+
+		require.NoError(t, resp.Responses["B"].Error)
+		require.Len(t, resp.Responses["B"].Frames, 1)
+		require.Equal(t, 2, resp.Responses["B"].Frames[0].Rows()) // LCK_M_X + cpu
+
+		require.NoError(t, resp.Responses["C"].Error)
+		require.Len(t, resp.Responses["C"].Frames, 1)
+		require.Equal(t, float64(1), resp.Responses["C"].Frames[0].Fields[0].At(0)) // totalPlans with locks == 1
+		require.Equal(t, float64(1), resp.Responses["C"].Frames[0].Fields[1].At(0)) // seekPlanConversions == 1
+
+		require.NoError(t, resp.Responses["D"].Error)
+		require.Len(t, resp.Responses["D"].Frames, 1)
+		require.Equal(t, 1, resp.Responses["D"].Frames[0].Rows())
+		require.Equal(t, "localhost", resp.Responses["D"].Frames[0].Fields[0].At(0))
+	})
+
+	t.Run("datasource-options supports server-databases, snapshots, and issue-tags", func(t *testing.T) {
+		for _, tc := range []struct {
+			url      string
+			minCount int
+		}{
+			{"datasource-options?type=server-databases&server=localhost", 2},
+			{"datasource-options?type=snapshots&server=localhost", 1},
+			{"datasource-options?type=issue-tags", 5},
+		} {
+			var r mockCallResourceResponseSender
+			err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+				Method: http.MethodGet,
+				URL:    tc.url,
+				Path:   "datasource-options",
+			}, &r)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, r.response.Status)
+			var opts []DropdownOption
+			require.NoError(t, json.Unmarshal(r.response.Body, &opts))
+			require.GreaterOrEqual(t, len(opts), tc.minCount)
+		}
 	})
 }

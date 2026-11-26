@@ -299,14 +299,19 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 	// Process each query in the request
 	for _, q := range req.Queries {
 		switch q.QueryType {
-		case "chart":
+		case "chart", "":
 			res := a.query(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
+		case "blocking_timeseries":
+			res := a.queryBlockingTimeSeries(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
+		case "wait_breakdown":
+			res := a.queryWaitBreakdown(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
 		case "snapshot-list":
 			res := a.querySnapList(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
 		case "snapshot":
-
 			res := a.querySnap(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
 		case "metrics":
@@ -317,6 +322,12 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 			response.Responses[q.RefID] = res
 		case "plan_analysis":
 			res := a.queryPlanAnalysis(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
+		case "plan_analysis_summary":
+			res := a.queryPlanAnalysisSummary(ctx, req.PluginContext, q)
+			response.Responses[q.RefID] = res
+		case "servers":
+			res := a.queryServers(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
 		}
 	}
@@ -347,8 +358,9 @@ func (a *App) PublishStream(_ context.Context, req *backend.PublishStreamRequest
 func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	response := backend.DataResponse{}
 	q := struct {
-		Database string `json:"database"`
-		Metric   string `json:"metric"`
+		Database  string `json:"database"`
+		Metric    string `json:"metric"`
+		WaitEvent string `json:"waitEvent"`
 	}{}
 	if err := json.Unmarshal(query.JSON, &q); err != nil {
 		response.Error = err
@@ -378,6 +390,7 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 		times[i] = from.Add(time.Duration(i) * interval)
 	}
 	useWaitTime := q.Metric == "wait_time_ms"
+	wantWait := strings.TrimSpace(q.WaitEvent)
 	for _, sum := range r.GetSnapSummaries() {
 		idx := int(sum.Timestamp.AsTime().Sub(from).Minutes())
 		if idx < 0 || idx >= points {
@@ -391,38 +404,290 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 			if we == "" {
 				we = "cpu"
 			}
+			if wantWait != "" && !strings.EqualFold(we, wantWait) {
+				continue
+			}
 			if _, ok := valuesByWaitType[we]; !ok {
 				valuesByWaitType[we] = make([]float64, points)
 			}
 			valuesByWaitType[we][idx] = float64(c)
 		}
 	}
-	frameName := "locks by type"
+	frameName := "connections by wait event"
 	if useWaitTime {
-		frameName = "wait time (ms) by type"
+		frameName = "wait time (ms) by wait event"
 	}
 	frame := data.NewFrame(frameName,
 		data.NewField("time", nil, times),
 	)
-	for we, v := range valuesByWaitType {
-		frame.Fields = append(frame.Fields, data.NewField(we, nil, v))
+	keys := make([]string, 0, len(valuesByWaitType))
+	for we := range valuesByWaitType {
+		keys = append(keys, we)
+	}
+	slices.Sort(keys)
+	for _, we := range keys {
+		f := data.NewField(we, nil, valuesByWaitType[we])
+		if useWaitTime {
+			f.Config = &data.FieldConfig{Unit: "ms"}
+		}
+		frame.Fields = append(frame.Fields, f)
 	}
 
 	frame.RefID = query.RefID
 	frame.Meta = &data.FrameMeta{
-		Type: data.FrameTypeTimeSeriesWide,
+		Type:                       data.FrameTypeTimeSeriesWide,
+		PreferredVisualization:     data.VisTypeGraph,
 	}
 
 	response.Frames = append(response.Frames, frame)
 	return response
 }
 
-// querySnapList processes individual queries
-func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
-	// Implement your SQL query logic here
+func (a *App) queryBlockingTimeSeries(ctx context.Context, _ backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	response := backend.DataResponse{}
+	q := struct {
+		Database       string   `json:"database"`
+		BlockingSeries []string `json:"blockingSeries"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	r, err := a.client.ListSnapshotSummaries(ctx, &querierv2.ListSnapshotSummariesRequest{
+		Start:  timestamppb.New(query.TimeRange.From),
+		End:    timestamppb.New(query.TimeRange.To),
+		Server: q.Database,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	summaries := slices.Clone(r.GetSnapSummaries())
+	slices.SortFunc(summaries, func(a, b *querierv2.SnapshotSummary) int {
+		at, bt := a.GetTimestamp().AsTime(), b.GetTimestamp().AsTime()
+		if at.Before(bt) {
+			return -1
+		}
+		if at.After(bt) {
+			return 1
+		}
+		return 0
+	})
+
+	size := len(summaries)
+	times := make([]time.Time, 0, size)
+	connections := make([]float64, 0, size)
+	blockers := make([]float64, 0, size)
+	waiters := make([]float64, 0, size)
+	waitDurationSec := make([]float64, 0, size)
+	for _, sum := range summaries {
+		times = append(times, sum.GetTimestamp().AsTime())
+		connections = append(connections, float64(sum.GetConnections()))
+		blockers = append(blockers, float64(sum.GetBlockers()))
+		waiters = append(waiters, float64(sum.GetWaiters()))
+		waitDurationSec = append(waitDurationSec, sum.GetWaitDuration()/1000.0)
+	}
+
+	include := func(name string) bool {
+		return len(q.BlockingSeries) == 0 || slices.Contains(q.BlockingSeries, name)
+	}
+
+	frame := data.NewFrame("connections_and_blocking",
+		data.NewField("time", nil, times),
+	)
+	if include("connections") {
+		frame.Fields = append(frame.Fields, data.NewField("connections", nil, connections))
+	}
+	if include("blockers") {
+		frame.Fields = append(frame.Fields, data.NewField("blockers", nil, blockers))
+	}
+	if include("waiters") {
+		frame.Fields = append(frame.Fields, data.NewField("waiters", nil, waiters))
+	}
+	if include("waitDurationSec") {
+		f := data.NewField("waitDurationSec", nil, waitDurationSec)
+		f.Config = &data.FieldConfig{Unit: "s"}
+		frame.Fields = append(frame.Fields, f)
+	}
+
+	frame.RefID = query.RefID
+	frame.Meta = &data.FrameMeta{
+		Type:                   data.FrameTypeTimeSeriesWide,
+		PreferredVisualization: data.VisTypeGraph,
+	}
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+func (a *App) queryWaitBreakdown(ctx context.Context, _ backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	response := backend.DataResponse{}
 	q := struct {
 		Database string `json:"database"`
+		Metric   string `json:"metric"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
+	r, err := a.client.ListSnapshotSummaries(ctx, &querierv2.ListSnapshotSummariesRequest{
+		Start:  timestamppb.New(query.TimeRange.From),
+		End:    timestamppb.New(query.TimeRange.To),
+		Server: q.Database,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+
+	connTotals := make(map[string]int64)
+	timeTotals := make(map[string]int64)
+	var grandConns int64
+	var grandTime int64
+	for _, sum := range r.GetSnapSummaries() {
+		for rawWait, c := range sum.GetConnectionsByWaitEvent() {
+			k := rawWait
+			if k == "" {
+				k = "cpu"
+			}
+			connTotals[k] += c
+			grandConns += c
+		}
+		for rawWait, ms := range sum.GetTimeMsByWaitEvent() {
+			k := rawWait
+			if k == "" {
+				k = "cpu"
+			}
+			timeTotals[k] += ms
+			grandTime += ms
+		}
+	}
+
+	type waitRow struct {
+		name  string
+		conns int64
+		ms    int64
+	}
+	rows := make([]waitRow, 0, len(connTotals))
+	seen := make(map[string]struct{}, len(connTotals))
+	for k, c := range connTotals {
+		seen[k] = struct{}{}
+		rows = append(rows, waitRow{name: k, conns: c, ms: timeTotals[k]})
+	}
+	for k, ms := range timeTotals {
+		if _, ok := seen[k]; !ok {
+			rows = append(rows, waitRow{name: k, conns: 0, ms: ms})
+		}
+	}
+	useWaitTime := q.Metric == "wait_time_ms"
+	slices.SortFunc(rows, func(a, b waitRow) int {
+		if useWaitTime {
+			if a.ms > b.ms {
+				return -1
+			}
+			if a.ms < b.ms {
+				return 1
+			}
+		}
+		if a.conns > b.conns {
+			return -1
+		}
+		if a.conns < b.conns {
+			return 1
+		}
+		return strings.Compare(a.name, b.name)
+	})
+
+	names := make([]string, 0, len(rows))
+	conns := make([]float64, 0, len(rows))
+	waitMs := make([]float64, 0, len(rows))
+	sharePct := make([]float64, 0, len(rows))
+	for _, row := range rows {
+		names = append(names, row.name)
+		conns = append(conns, float64(row.conns))
+		waitMs = append(waitMs, float64(row.ms))
+		pct := 0.0
+		if useWaitTime && grandTime > 0 {
+			pct = (float64(row.ms) / float64(grandTime)) * 100
+		} else if !useWaitTime && grandConns > 0 {
+			pct = (float64(row.conns) / float64(grandConns)) * 100
+		}
+		sharePct = append(sharePct, pct)
+	}
+
+	waitMsField := data.NewField("waitTimeMs", nil, waitMs)
+	waitMsField.Config = &data.FieldConfig{Unit: "ms"}
+	pctField := data.NewField("sharePct", nil, sharePct)
+	pctField.Config = &data.FieldConfig{Unit: "percent"}
+
+	frame := data.NewFrame("wait_breakdown",
+		data.NewField("waitEvent", nil, names),
+		data.NewField("connections", nil, conns),
+		waitMsField,
+		pctField,
+	)
+	frame.RefID = query.RefID
+	frame.Meta = &data.FrameMeta{
+		PreferredVisualization: data.VisTypeTable,
+	}
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+func (a *App) queryServers(ctx context.Context, _ backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	response := backend.DataResponse{}
+	resp, err := a.client.ListServerSummary(ctx, &querierv2.ListServerSummaryRequest{
+		Start: timestamppb.New(query.TimeRange.From),
+		End:   timestamppb.New(query.TimeRange.To),
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	size := len(resp.GetServers())
+	names := make([]string, 0, size)
+	types := make([]string, 0, size)
+	conns := make([]float64, 0, size)
+	reqRate := make([]float64, 0, size)
+	for _, srv := range resp.GetServers() {
+		names = append(names, srv.GetName())
+		types = append(types, srv.GetType())
+		conns = append(conns, float64(srv.GetConnections()))
+		reqRate = append(reqRate, srv.GetRequestRate())
+	}
+	nameField := data.NewField("server", nil, names)
+	nameField.Config = &data.FieldConfig{
+		Links: []data.DataLink{
+			{
+				Title: "Open in Sqlsights Snapshots",
+				URL:   "/a/guilhermearpassos-sqlsights-app/snapshots?server=${__value.raw}&from=${__from}&to=${__to}",
+			},
+			{
+				Title: "Open in Sqlsights Plan Analysis",
+				URL:   "/a/guilhermearpassos-sqlsights-app/plan_analysis?server=${__value.raw}&from=${__from}&to=${__to}",
+			},
+		},
+	}
+	frame := data.NewFrame("servers",
+		nameField,
+		data.NewField("type", nil, types),
+		data.NewField("connections", nil, conns),
+		data.NewField("requestRate", nil, reqRate),
+	)
+	frame.RefID = query.RefID
+	frame.Meta = &data.FrameMeta{
+		PreferredVisualization: data.VisTypeTable,
+	}
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+// querySnapList processes individual queries
+func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	response := backend.DataResponse{}
+	q := struct {
+		Database     string `json:"database"`
+		OnlyBlocking bool   `json:"onlyBlocking"`
+		WaitEvent    string `json:"waitEvent"`
 	}{}
 	if err := json.Unmarshal(query.JSON, &q); err != nil {
 		response.Error = err
@@ -450,7 +715,20 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 	avgDuration := make([]float64, 0, size)
 	maxDuration := make([]float64, 0, size)
 	waitsByType := make([]string, 0, size)
+	wantWait := strings.TrimSpace(q.WaitEvent)
 	for _, sum := range r.GetSnapSummaries() {
+		if q.OnlyBlocking && sum.Waiters <= 0 && sum.Blockers <= 0 {
+			continue
+		}
+		if wantWait != "" {
+			key := wantWait
+			if strings.EqualFold(wantWait, "cpu") {
+				key = ""
+			}
+			if sum.GetConnectionsByWaitEvent()[key] <= 0 && sum.GetConnectionsByWaitEvent()[wantWait] <= 0 {
+				continue
+			}
+		}
 		times = append(times, time.Unix(sum.Timestamp.AsTime().Unix(), 0))
 		connections = append(connections, float64(sum.GetConnections()))
 		waiters = append(waiters, float64(sum.Waiters))
@@ -464,30 +742,93 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 			response.Error = err
 			return response
 		}
-		waitsByType = append(waitsByType, string(cwe)) //"["+strings.Join(wbt, ",")+"]")
+		waitsByType = append(waitsByType, string(cwe))
 	}
+	idField := data.NewField("id", nil, ids)
+	idField.Config = &data.FieldConfig{
+		Links: []data.DataLink{
+			{
+				Title: "Inspect Snapshot in Sqlsights",
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/snapshots?server=%s&snapId=${__value.raw}&from=${__from}&to=${__to}", q.Database),
+			},
+		},
+	}
+	waitDurField := data.NewField("waitDuration", nil, waitDuration)
+	waitDurField.Config = &data.FieldConfig{Unit: "s"}
+
 	frame := data.NewFrame("snapshots",
 		data.NewField("time", nil, times),
-		data.NewField("id", nil, ids),
+		idField,
 		data.NewField("connections", nil, connections),
 		data.NewField("waiters", nil, waiters),
 		data.NewField("blockers", nil, blockers),
-		data.NewField("waitDuration", nil, waitDuration),
+		waitDurField,
 		data.NewField("avgDuration", nil, avgDuration),
 		data.NewField("maxDuration", nil, maxDuration),
 		data.NewField("waitsByType", nil, waitsByType),
 	)
 
-	// Set the RefID to match the query
 	frame.RefID = query.RefID
-
-	// Add metadata for proper visualization
 	frame.Meta = &data.FrameMeta{
-		Type: data.FrameTypeTimeSeriesWide,
+		PreferredVisualization: data.VisTypeTable,
 	}
 
 	response.Frames = append(response.Frames, frame)
 	return response
+}
+
+func filterPlanItemsExtended(items []PlanAnalysisItem, onlyLocks bool, minImpact float64, search string) []PlanAnalysisItem {
+	q := strings.ToLower(strings.TrimSpace(search))
+	if !onlyLocks && minImpact <= 0 && q == "" {
+		return items
+	}
+	out := make([]PlanAnalysisItem, 0, len(items))
+	for _, item := range items {
+		if onlyLocks && item.RelatedLockCount <= 0 {
+			continue
+		}
+		if minImpact > 0 && item.MaxImpact < minImpact {
+			continue
+		}
+		if q != "" {
+			matched := strings.Contains(strings.ToLower(item.Text), q) ||
+				strings.Contains(strings.ToLower(item.Database), q) ||
+				strings.Contains(strings.ToLower(item.QueryHash), q)
+			if !matched {
+				for _, c := range item.Converts {
+					if strings.Contains(strings.ToLower(c.ConvertIssue+" "+c.Expression), q) {
+						matched = true
+						break
+					}
+				}
+			}
+			if !matched {
+				for _, m := range item.MissingIndexes {
+					if strings.Contains(strings.ToLower(m.Schema+"."+m.Table), q) {
+						matched = true
+						break
+					}
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func formatPlanWarningSummary(item PlanAnalysisItem) string {
+	parts := make([]string, 0, len(item.Converts)+len(item.MissingIndexes))
+	for _, c := range item.Converts {
+		parts = append(parts, fmt.Sprintf("%s: %s", c.ConvertIssue, c.Expression))
+	}
+	for _, m := range item.MissingIndexes {
+		cols := append(slices.Clone(m.EqualityColumns), m.InequalityColumns...)
+		parts = append(parts, fmt.Sprintf("MissingIndex(%.1f%%) %s.%s(%s)", m.Impact, m.Schema, m.Table, strings.Join(cols, ",")))
+	}
+	return strings.Join(parts, " | ")
 }
 
 // queryPlanAnalysis processes individual queries
@@ -497,6 +838,9 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 		Database  string   `json:"database"`
 		Databases []string `json:"databases"`
 		IssueTags []string `json:"issueTags"`
+		OnlyLocks bool     `json:"onlyLocks"`
+		MinImpact float64  `json:"minImpact"`
+		Search    string   `json:"search"`
 	}{}
 	if err := json.Unmarshal(query.JSON, &q); err != nil {
 		response.Error = err
@@ -515,36 +859,57 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 		response.Error = err
 		return response
 	}
-	items := buildPlanAnalysisItems(r.GetPlans(), q.IssueTags)
+	items := filterPlanItemsExtended(buildPlanAnalysisItems(r.GetPlans(), q.IssueTags), q.OnlyLocks, q.MinImpact, q.Search)
 	size := len(items)
 	queries := make([]string, 0, size)
 	databases := make([]string, 0, size)
 	issues := make([]float64, 0, size)
 	issueTags := make([]string, 0, size)
+	warningSummaries := make([]string, 0, size)
+	maxImpacts := make([]float64, 0, size)
 	occurrences := make([]float64, 0, size)
 	locks := make([]float64, 0, size)
 	times := make([]time.Time, 0, size)
 	snapIds := make([]string, 0, size)
 	sampleIds := make([]string, 0, size)
+	traceIds := make([]string, 0, size)
 	for _, item := range items {
 		queries = append(queries, item.Text)
 		issues = append(issues, float64(item.IssueCount))
 		issueTags = append(issueTags, strings.Join(item.IssueTags, ", "))
+		warningSummaries = append(warningSummaries, formatPlanWarningSummary(item))
+		maxImpacts = append(maxImpacts, item.MaxImpact)
 		occurrences = append(occurrences, float64(item.Occurrences))
 		locks = append(locks, float64(item.RelatedLockCount))
 		times = append(times, item.LastSnapTime)
 		snapIds = append(snapIds, item.SnapID)
 		sampleIds = append(sampleIds, item.SampleID)
 		databases = append(databases, item.Database)
+		traceIds = append(traceIds, item.TraceID)
 	}
+	textField := data.NewField("text", nil, queries)
+	textField.Config = &data.FieldConfig{
+		Links: []data.DataLink{
+			{
+				Title: "Inspect Execution Plan in Sqlsights",
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/plan_analysis?server=%s&snapId=${__data.fields.snapID}&sampleId=${__data.fields.sampleId}&from=${__from}&to=${__to}", q.Database),
+			},
+		},
+	}
+	impactField := data.NewField("maxImpact", nil, maxImpacts)
+	impactField.Config = &data.FieldConfig{Unit: "percent"}
+
 	frame := data.NewFrame("plans_with_issues",
 		data.NewField("lastSnapTime", nil, times),
-		data.NewField("text", nil, queries),
 		data.NewField("database", nil, databases),
-		data.NewField("issues", nil, issues),
 		data.NewField("issueTags", nil, issueTags),
+		textField,
+		data.NewField("warningSummary", nil, warningSummaries),
+		impactField,
+		data.NewField("issues", nil, issues),
 		data.NewField("occurrences", nil, occurrences),
 		data.NewField("locks", nil, locks),
+		data.NewField("traceId", nil, traceIds),
 		data.NewField("snapID", nil, snapIds),
 		data.NewField("id", nil, snapIds),
 		data.NewField("sampleId", nil, sampleIds),
@@ -552,28 +917,91 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 
 	frame.RefID = query.RefID
 	frame.Meta = &data.FrameMeta{
-		Type: data.FrameTypeTimeSeriesWide,
+		PreferredVisualization: data.VisTypeTable,
 	}
 
 	response.Frames = append(response.Frames, frame)
 	return response
 }
 
-// querySnap processes individual queries
-func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
-	// Implement your SQL query logic here
+func (a *App) queryPlanAnalysisSummary(ctx context.Context, _ backend.PluginContext, query backend.DataQuery) backend.DataResponse {
 	response := backend.DataResponse{}
 	q := struct {
-		Database string `json:"database"`
-		SnapID   string `json:"snapshotID"`
+		Database  string   `json:"database"`
+		Databases []string `json:"databases"`
+		IssueTags []string `json:"issueTags"`
+		OnlyLocks bool     `json:"onlyLocks"`
+		MinImpact float64  `json:"minImpact"`
+		Search    string   `json:"search"`
 	}{}
 	if err := json.Unmarshal(query.JSON, &q); err != nil {
 		response.Error = err
 		return response
 	}
-	//timeRange := query.TimeRange
-	//from := timeRange.From
-	//to := timeRange.To
+	r, err := a.client.ListPlansWithIssues(ctx, &querierv2.ListPlansWithIssuesRequest{
+		Start:     timestamppb.New(query.TimeRange.From),
+		End:       timestamppb.New(query.TimeRange.To),
+		Host:      q.Database,
+		Databases: q.Databases,
+	})
+	if err != nil {
+		response.Error = err
+		return response
+	}
+	items := filterPlanItemsExtended(buildPlanAnalysisItems(r.GetPlans(), q.IssueTags), q.OnlyLocks, q.MinImpact, q.Search)
+
+	var seekPlanCount, cardinalityCount, missingIdxCount, relatedLocks, totalOccurrences float64
+	maxImpact := 0.0
+	for _, item := range items {
+		if slices.Contains(item.IssueTags, "seek_plan_convert") {
+			seekPlanCount++
+		}
+		if slices.Contains(item.IssueTags, "cardinality_convert") {
+			cardinalityCount++
+		}
+		if slices.Contains(item.IssueTags, "missing_index") {
+			missingIdxCount++
+		}
+		relatedLocks += float64(item.RelatedLockCount)
+		totalOccurrences += float64(item.Occurrences)
+		if item.MaxImpact > maxImpact {
+			maxImpact = item.MaxImpact
+		}
+	}
+
+	maxImpactField := data.NewField("maxImpact", nil, []float64{maxImpact})
+	maxImpactField.Config = &data.FieldConfig{Unit: "percent"}
+
+	frame := data.NewFrame("plan_analysis_summary",
+		data.NewField("totalPlans", nil, []float64{float64(len(items))}),
+		data.NewField("seekPlanConversions", nil, []float64{seekPlanCount}),
+		data.NewField("cardinalityConversions", nil, []float64{cardinalityCount}),
+		data.NewField("missingIndexes", nil, []float64{missingIdxCount}),
+		data.NewField("relatedLocks", nil, []float64{relatedLocks}),
+		data.NewField("totalOccurrences", nil, []float64{totalOccurrences}),
+		maxImpactField,
+	)
+	frame.RefID = query.RefID
+	frame.Meta = &data.FrameMeta{
+		PreferredVisualization: data.VisTypeTable,
+	}
+	response.Frames = append(response.Frames, frame)
+	return response
+}
+
+// querySnap processes individual queries
+func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
+	response := backend.DataResponse{}
+	q := struct {
+		Database     string   `json:"database"`
+		SnapID       string   `json:"snapshotID"`
+		Databases    []string `json:"databases"`
+		OnlyBlocking bool     `json:"onlyBlocking"`
+	}{}
+	if err := json.Unmarshal(query.JSON, &q); err != nil {
+		response.Error = err
+		return response
+	}
 	r, err := a.client.GetSnapshot(ctx, &querierv2.GetSnapshotRequest{
 		Id: q.SnapID,
 	})
@@ -591,72 +1019,64 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 	blockingImpact := make([]string, 0, size)
 	waitEvents := make([]string, 0, size)
 	databases := make([]string, 0, size)
-	blockingOrSelf := make([]string, 0, size)
-	lockStatus := make([]string, 0, size)
 	traceIds := make([]string, 0, size)
 	for _, sample := range r.GetSnapshot().GetSamples() {
+		dbName := sample.GetDb().GetDatabaseName()
+		if len(q.Databases) > 0 && !slices.Contains(q.Databases, dbName) {
+			continue
+		}
+		if q.OnlyBlocking && !sample.Blocked && !sample.Blocker {
+			continue
+		}
 		ids = append(ids, sample.Id)
-		sessionIDs = append(sessionIDs, sample.Session.SessionId)
+		sessionIDs = append(sessionIDs, sample.GetSession().GetSessionId())
 		statuses = append(statuses, sample.Status)
 		traceIds = append(traceIds, sample.GetContext().GetTraceId())
 		text = append(text, sample.Text)
-		users = append(users, sample.Session.LoginName)
+		users = append(users, sample.GetSession().GetLoginName())
 		waitEvents = append(waitEvents, sample.GetWaitInfo().GetWaitType())
-		databases = append(databases, sample.Db.DatabaseName)
-		durations = append(durations, float64(sample.TimeElapsedMillis/1000))
-		bos := sample.Session.SessionId
-		if sample.Blocked {
-			bos = sample.BlockInfo.BlockedBy
-		}
-		blockingOrSelf = append(blockingOrSelf, bos)
+		databases = append(databases, dbName)
+		durations = append(durations, float64(sample.TimeElapsedMillis)/1000.0)
 		impactText := ""
-		ls := ""
 		if sample.Blocked {
-			impactText += fmt.Sprintf("blocked by %s ", sample.BlockInfo.BlockedBy)
-			ls = `<span style="color:#CCCCCC">
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
-  <circle cx="12" cy="12" r="10"></circle>
-  <polyline points="12 6 12 12 16 14"></polyline>
-</svg>
-</span>`
+			impactText += fmt.Sprintf("blocked by %s ", sample.GetBlockInfo().GetBlockedBy())
 		}
 		if sample.Blocker {
 			if impactText != "" {
 				impactText += "| "
 			}
-			impactText += fmt.Sprintf("%d waiting", len(sample.BlockInfo.BlockedSessions))
-			ls = `
-<span style="color:#FF0000">
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
-  <rect x="3" y="11" width="18" height="11" rx="2"></rect>
-  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-</svg>
-
-</span>`
+			impactText += fmt.Sprintf("%d waiting", len(sample.GetBlockInfo().GetBlockedSessions()))
 		}
 		blockingImpact = append(blockingImpact, impactText)
-		lockStatus = append(lockStatus, ls)
 	}
-	frame := data.NewFrame("snapshots",
-		data.NewField("", nil, lockStatus),
+	sampleIDField := data.NewField("sampleID", nil, ids)
+	sampleIDField.Config = &data.FieldConfig{
+		Links: []data.DataLink{
+			{
+				Title: "Inspect Sample in Sqlsights",
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/snapshots?server=%s&snapId=%s&sampleId=${__value.raw}&from=${__from}&to=${__to}", q.Database, q.SnapID),
+			},
+		},
+	}
+	elapsedField := data.NewField("Elapsed", nil, durations)
+	elapsedField.Config = &data.FieldConfig{Unit: "s"}
+
+	frame := data.NewFrame("snapshot_samples",
 		data.NewField("sessionID", nil, sessionIDs),
-		data.NewField("sampleID", nil, ids),
-		data.NewField("traceId", nil, traceIds),
-		data.NewField("text", nil, text),
-		data.NewField("Elapsed", nil, durations),
+		sampleIDField,
+		data.NewField("database", nil, databases),
+		elapsedField,
 		data.NewField("Blocking Impact", nil, blockingImpact),
 		data.NewField("wait event", nil, waitEvents),
-		data.NewField("database", nil, databases),
 		data.NewField("Status", nil, statuses),
 		data.NewField("user", nil, users),
+		data.NewField("traceId", nil, traceIds),
+		data.NewField("text", nil, text),
 	)
 
-	// Set the RefID to match the query
 	frame.RefID = query.RefID
-
-	// Add metadata for proper visualization
 	frame.Meta = &data.FrameMeta{
-		Type: data.FrameTypeTimeSeriesWide,
+		PreferredVisualization: data.VisTypeTable,
 	}
 
 	response.Frames = append(response.Frames, frame)
@@ -730,7 +1150,7 @@ func (a *App) queryMetrics(ctx context.Context, pCtx backend.PluginContext, quer
 
 	// Add metadata for proper visualization
 	frame.Meta = &data.FrameMeta{
-		Type: data.FrameTypeTimeSeriesWide,
+		PreferredVisualization: data.VisTypeTable,
 	}
 
 	response.Frames = append(response.Frames, frame)
@@ -806,7 +1226,8 @@ func (a *App) queryMetricsTimeSeries(ctx context.Context, pCtx backend.PluginCon
 
 	// Add metadata for proper visualization
 	frame.Meta = &data.FrameMeta{
-		Type: data.FrameTypeTimeSeriesWide,
+		Type:                   data.FrameTypeTimeSeriesWide,
+		PreferredVisualization: data.VisTypeGraph,
 	}
 
 	response.Frames = append(response.Frames, frame)
@@ -819,51 +1240,86 @@ type DropdownOption struct {
 	Value string `json:"value"`
 }
 
-// handleDropdownOptions returns available options for query parameters
+// handleDropdownOptions returns available options for query parameters and dashboard variables
 func (a *App) handleDropdownOptions(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get the option type from query parameters
 	optionType := req.URL.Query().Get("type")
+	startTimestamp, endTimestamp, err := parseTimeBounds(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	var options []DropdownOption
-	// Customize this based on your needs
 	switch optionType {
-	case "databases":
-		start := req.URL.Query().Get("start")
-		end := req.URL.Query().Get("end")
-		var startTimestamp, endTimestamp time.Time
-		var err error
-		if start == "" {
-			startTimestamp = time.Now().Add(-1 * time.Hour)
-			//http.Error(w, "start and parameter is required", http.StatusBadRequest)
-			//return
-		} else {
-
-			startTimestamp, err = time.Parse(time.RFC3339, start)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-		if end == "" {
-			endTimestamp = time.Now()
-			//http.Error(w, "end and parameter is required", http.StatusBadRequest)
-			//return
-		} else {
-			endTimestamp, err = time.Parse(time.RFC3339, end)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
+	case "databases", "servers":
 		options, err = a.getDatabaseOptions(req.Context(), startTimestamp, endTimestamp)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+	case "server-databases":
+		server := strings.TrimSpace(req.URL.Query().Get("server"))
+		if server == "" {
+			options = []DropdownOption{}
+		} else {
+			resp, qErr := a.client.ListPlansWithIssues(req.Context(), &querierv2.ListPlansWithIssuesRequest{
+				Start: timestamppb.New(startTimestamp),
+				End:   timestamppb.New(endTimestamp),
+				Host:  server,
+			})
+			if qErr != nil {
+				http.Error(w, qErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			dbSet := make(map[string]struct{})
+			for _, p := range resp.GetPlans() {
+				if name := p.GetLatestSample().GetDb().GetDatabaseName(); name != "" {
+					dbSet[name] = struct{}{}
+				}
+			}
+			names := make([]string, 0, len(dbSet))
+			for n := range dbSet {
+				names = append(names, n)
+			}
+			slices.Sort(names)
+			options = make([]DropdownOption, len(names))
+			for i, n := range names {
+				options[i] = DropdownOption{Label: n, Value: n}
+			}
+		}
+	case "snapshots":
+		server := strings.TrimSpace(req.URL.Query().Get("server"))
+		if server == "" {
+			options = []DropdownOption{}
+		} else {
+			resp, qErr := a.client.ListSnapshotSummaries(req.Context(), &querierv2.ListSnapshotSummariesRequest{
+				Start:  timestamppb.New(startTimestamp),
+				End:    timestamppb.New(endTimestamp),
+				Server: server,
+			})
+			if qErr != nil {
+				http.Error(w, qErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			snaps := resp.GetSnapSummaries()
+			options = make([]DropdownOption, 0, len(snaps))
+			for _, s := range snaps {
+				label := fmt.Sprintf("%s (%d conns, %d blockers)", s.GetTimestamp().AsTime().Format(time.RFC3339), s.GetConnections(), s.GetBlockers())
+				options = append(options, DropdownOption{Label: label, Value: s.GetId()})
+			}
+		}
+	case "issue-tags":
+		options = []DropdownOption{
+			{Label: "Implicit Conversion (Seek Plan)", Value: "seek_plan_convert"},
+			{Label: "Missing Index", Value: "missing_index"},
+			{Label: "Implicit Conversion (Cardinality)", Value: "cardinality_convert"},
+			{Label: "Implicit Conversion (Any)", Value: "implicit_conversion"},
+			{Label: "Large Table Scan", Value: "large_table_scan"},
 		}
 	default:
 		http.Error(w, "invalid option type", http.StatusBadRequest)

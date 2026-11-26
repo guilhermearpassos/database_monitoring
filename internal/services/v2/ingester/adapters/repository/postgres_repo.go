@@ -283,8 +283,13 @@ func (p *PostgresRepo) GetMissingPlans(ctx context.Context, server common_domain
 	}
 	q := `select distinct qs.plan_handle from query_samples qs
     inner join snapshot s on qs.snap_id = s.id
-left join query_plans qp on qp.plan_handle = qs.plan_handle
-where qp.plan_handle is null and s.target_id = $1 and s.snap_time between $2 and $3`
+left join query_plans qp on qp.plan_handle = qs.plan_handle and qp.target_id = s.target_id
+where qp.plan_handle is null
+  and qs.plan_handle is not null
+  and qs.plan_handle <> ''
+  and qs.plan_handle <> 'AA=='
+  and s.target_id = $1
+  and s.snap_time between $2 and $3`
 
 	rows, err := p.db.QueryContext(ctx, q, targetId, start, end)
 	if err != nil {

@@ -61,6 +61,35 @@ func parseContext(raw []byte) common_domain.ContextInfo {
 	}
 	return common_domain.ContextInfo{Raw: raw}
 }
+
+// isValidPlanHandle reports whether raw bytes can be a valid SQL Server plan_handle
+// for sys.dm_exec_query_plan (non-empty, <= 64 bytes, and not all zeroes like 0x0 or 0x00...00).
+func isValidPlanHandle(raw []byte) bool {
+	if len(raw) == 0 || len(raw) > 64 {
+		return false
+	}
+	for _, b := range raw {
+		if b != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func encodeValidPlanHandle(raw []byte) string {
+	if !isValidPlanHandle(raw) {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(raw)
+}
+
+func isInvalidPlanHandleErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "handle that was passed to dm_exec_query_plan was invalid")
+}
+
 func PackTraceContext(ctx context.Context) []byte {
 	sc := trace.SpanFromContext(ctx).SpanContext()
 	buf := make([]byte, 128)
@@ -254,7 +283,7 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 			Status:     pStatus,
 			Cmd:        "",
 			SqlHandle:  base64.StdEncoding.EncodeToString(sqlHandle),
-			PlanHandle: base64.StdEncoding.EncodeToString(planHandle),
+			PlanHandle: encodeValidPlanHandle(planHandle),
 			QueryHash:  base64.StdEncoding.EncodeToString(queryHash),
 			Text:       text,
 			IsBlocked:  blockingSessionId != 0,
@@ -269,6 +298,7 @@ left JOIN sys.dm_exec_connections AS c on s.session_id = c.session_id
 				LastRequestStartTime: lastRequestStartTime,
 				LastRequestEndTime:   lastRequestEndTime,
 				ConnectionId:         connectionId.String(),
+				ClientIP:             clientNetAddress,
 				Context:              parseContext(sesContext),
 			},
 			Database: common_domain.DataBaseMetadata{
@@ -492,7 +522,7 @@ WHERE s.status = 'sleeping'
 			Status:     pStatus,
 			Cmd:        "",
 			SqlHandle:  base64.StdEncoding.EncodeToString(sqlHandle),
-			PlanHandle: base64.StdEncoding.EncodeToString(planHandle),
+			PlanHandle: encodeValidPlanHandle(planHandle),
 			QueryHash:  base64.StdEncoding.EncodeToString(queryHash),
 			Text:       text,
 			IsBlocked:  blockingSessionId != 0,
@@ -507,6 +537,7 @@ WHERE s.status = 'sleeping'
 				LastRequestStartTime: lastRequestStartTime,
 				LastRequestEndTime:   lastRequestEndTime,
 				ConnectionId:         connectionId.String(),
+				ClientIP:             clientNetAddress,
 			},
 			Database: common_domain.DataBaseMetadata{
 				DatabaseID:   strconv.Itoa(databaseId),
@@ -546,12 +577,28 @@ WHERE s.status = 'sleeping'
 func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles []string) (*collector.ExecPlanChunk, error) {
 	ctx, span := s.tracer.Start(ctx, "GetPlanHandles")
 	defer span.End()
+
+	type validHandle struct {
+		encoded string
+		raw     []byte
+	}
+	seen := make(map[string]struct{}, len(handles))
+	validHandles := make([]validHandle, 0, len(handles))
 	handles2 := make([]interface{}, 0, len(handles))
 	for _, handle := range handles {
-		decoded, err := base64.StdEncoding.DecodeString(handle)
-		if err == nil {
-			handles2 = append(handles2, decoded)
+		if handle == "" {
+			continue
 		}
+		if _, dup := seen[handle]; dup {
+			continue
+		}
+		decoded, err := base64.StdEncoding.DecodeString(handle)
+		if err != nil || !isValidPlanHandle(decoded) {
+			continue
+		}
+		seen[handle] = struct{}{}
+		validHandles = append(validHandles, validHandle{encoded: handle, raw: decoded})
+		handles2 = append(handles2, decoded)
 	}
 	if len(handles2) == 0 {
 		return &collector.ExecPlanChunk{Server: s.Server}, nil
@@ -559,24 +606,26 @@ func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles [
 
 	ret, err3 := s.batchFetchPlanHandles(ctx, s.db, handles2, s.Server)
 	if err3 != nil {
+		span.RecordError(err3)
 		ret = make(map[string]*common_domain.ExecutionPlan)
-		//fallback to 1 by 1 strategy, as there might be a problem with tempdb
+		// Fallback to 1-by-1 strategy if tempdb or a single invalid handle broke the batch.
 		query := "select query_plan from sys.dm_exec_query_plan(?)"
-		for _, handle := range handles {
-			decodeString, err3 := base64.StdEncoding.DecodeString(handle)
-			if err3 != nil {
-				span.RecordError(err3)
-				continue
-			}
-			row := s.db.QueryRowContext(ctx, query, decodeString)
-			err := row.Err()
-			if err != nil {
+		for _, h := range validHandles {
+			row := s.db.QueryRowContext(ctx, query, h.raw)
+			if err := row.Err(); err != nil {
+				if isInvalidPlanHandleErr(err) {
+					span.RecordError(err)
+					continue
+				}
 				return &collector.ExecPlanChunk{Server: s.Server, Plans: ret}, fmt.Errorf("fetch plan handle - %w", err)
 			}
 			var queryPlan *string
-			err = row.Scan(&queryPlan)
-			if err != nil {
+			if err := row.Scan(&queryPlan); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				if isInvalidPlanHandleErr(err) {
+					span.RecordError(err)
 					continue
 				}
 				return &collector.ExecPlanChunk{Server: s.Server, Plans: ret}, fmt.Errorf("fetch plan handle scan - %w", err)
@@ -584,8 +633,8 @@ func (s SqlServerSnapshotter) FetchExecutionPlans(ctx context.Context, handles [
 			if queryPlan == nil {
 				continue
 			}
-			ret[handle] = &common_domain.ExecutionPlan{
-				PlanHandle: handle,
+			ret[h.encoded] = &common_domain.ExecutionPlan{
+				PlanHandle: h.encoded,
 				XmlData:    *queryPlan,
 				Server:     s.Server,
 			}
@@ -605,21 +654,26 @@ func (s SqlServerSnapshotter) batchFetchPlanHandles(ctx context.Context, db *sql
 	}(tx)
 	createTempTable := `
 create table #temp_plans (handle varbinary(64) not null)`
-	insertIds := fmt.Sprintf(`
-insert into #temp_plans (handle) values %s
-`, strings.Join(slices.Repeat([]string{"(?)"}, len(handles2)), ","))
-	query := `
-select handle, query_plan from #temp_plans
-    cross apply sys.dm_exec_query_plan(handle)
-`
 	_, err = tx.ExecContext(ctx, createTempTable)
 	if err != nil {
 		return nil, fmt.Errorf("create id table: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, insertIds, handles2...)
-	if err != nil {
-		return nil, fmt.Errorf("insert ids: %w", err)
+	const maxInsertBatch = 500
+	for start := 0; start < len(handles2); start += maxInsertBatch {
+		end := min(start+maxInsertBatch, len(handles2))
+		chunk := handles2[start:end]
+		insertIds := fmt.Sprintf(`
+insert into #temp_plans (handle) values %s
+`, strings.Join(slices.Repeat([]string{"(?)"}, len(chunk)), ","))
+		_, err = tx.ExecContext(ctx, insertIds, chunk...)
+		if err != nil {
+			return nil, fmt.Errorf("insert ids: %w", err)
+		}
 	}
+	query := `
+select handle, query_plan from #temp_plans
+    cross apply sys.dm_exec_query_plan(handle)
+`
 	rows, err2 := tx.QueryContext(ctx, query)
 	if err2 != nil {
 		return nil, fmt.Errorf("fetch plans: %w", err2)

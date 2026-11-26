@@ -57,13 +57,17 @@ func (h *GetQuerySampleDetailsHandler) Handle(ctx context.Context, snapID string
 	for i, root := range roots {
 		participants[i] = h.buildblockNode(sampleMap, root, traveled)
 	}
-	planFound := true
-	plan, err := h.repo.GetExecutionPlan(ctx, baseQuery.PlanHandle, snap.SnapInfo.Server)
-	if err != nil {
-		if !errors.As(err, &custom_errors.NotFoundErr{}) {
-			return nil, fmt.Errorf("get snapshot %s error: %w", snapID, err)
+	planFound := false
+	var plan *common_domain.ExecutionPlan
+	if baseQuery.PlanHandle != "" {
+		plan, err = h.repo.GetExecutionPlan(ctx, baseQuery.PlanHandle, snap.SnapInfo.Server)
+		if err != nil {
+			if !errors.As(err, &custom_errors.NotFoundErr{}) {
+				return nil, fmt.Errorf("get snapshot %s error: %w", snapID, err)
+			}
+		} else {
+			planFound = true
 		}
-		planFound = false
 	}
 	var protoParsedPlan *dbmv1.ParsedExecutionPlan
 	if planFound {

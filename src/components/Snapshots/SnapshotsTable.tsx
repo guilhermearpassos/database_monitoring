@@ -282,7 +282,7 @@ const ExpandedSnapshotPanel: React.FC<{
           return false;
         }
         if (q) {
-          const hay = `${s.text} ${s.session_id} ${s.user} ${s.wait_event} ${s.database} ${s.trace_id || ''} ${s.program_name}`.toLowerCase();
+          const hay = `${s.text} ${s.session_id} ${s.user} ${s.wait_event} ${s.database} ${s.trace_id || ''} ${s.program_name} ${s.client_ip || ''}`.toLowerCase();
           if (!hay.includes(q)) {
             return false;
           }
