@@ -1,555 +1,542 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {FetchResponse, getBackendSrv, getDataSourceSrv, PluginPage} from '@grafana/runtime';
-import {lastValueFrom, Observable} from 'rxjs';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { FetchResponse, getBackendSrv, PluginPage } from '@grafana/runtime';
+import { lastValueFrom, Observable } from 'rxjs';
 import {
-    Alert,
-    Card,
-    Combobox,
-    ComboboxOption, Drawer,
-    LoadingPlaceholder,
-    TimeRangePicker,
-    useStyles2
+  Alert,
+  Button,
+  Card,
+  Combobox,
+  ComboboxOption,
+  Drawer,
+  LoadingPlaceholder,
+  RadioButtonGroup,
+  Switch,
+  TimeRangePicker,
+  useStyles2,
 } from '@grafana/ui';
 import {
-    CoreApp,
-    DataFrame,
-    dataFrameFromJSON,
-    DataQueryRequest,
-    DataSourceApi,
-    dateTime,
-    EventBusSrv,
-    GrafanaTheme2,
-    LoadingState, PanelData,
-    TimeRange
+  DataFrame,
+  EventBusSrv,
+  FieldType,
+  GrafanaTheme2,
+  LoadingState,
+  MutableDataFrame,
+  TimeRange,
 } from '@grafana/data';
-import {css} from '@emotion/css';
-import {MyQuery} from '../nested-datasource/types';
-import {DataQueryResponse} from "@grafana/data/dist/types/types/datasource";
-import {MyGraph} from "./graph";
-import {NestedTablesWithEventBus} from "./nested_table";
-import {addWaitTypeHTMLColumn} from "./waitTypeField";
-import {QueryDetailsComponent} from "../components/QueryDetails/Details";
+import { css } from '@emotion/css';
+import { FileSearch, RefreshCw, X } from 'lucide-react';
+import { MyGraph } from './graph';
+import { QueryDetailsComponent } from '../components/QueryDetails/Details';
+import { SnapshotSummaryItem } from '../components/Snapshots/types';
+import { SnapshotSortField, SnapshotsTable, SortDirection } from '../components/Snapshots/SnapshotsTable';
+import {
+  applyTimeRangeToSearchParams,
+  buildPreservedNavSearch,
+  parseTimeRangeFromSearchParams,
+  setOptionalParam,
+} from '../utils/urlState';
+import { ROUTES } from '../constants';
+import { prefixRoute } from '../utils/utils.routing';
+
+const AUTO_REFRESH_OPTIONS: Array<ComboboxOption<number>> = [
+  { label: 'Auto-refresh: Off', value: 0 },
+  { label: 'Every 10s', value: 10000 },
+  { label: 'Every 30s', value: 30000 },
+  { label: 'Every 1m', value: 60000 },
+];
 
 const getStyles = (theme: GrafanaTheme2) => ({
-    container: css`
-        padding: ${theme.spacing(2)};
-    `,
-    section: css`
-        margin-bottom: ${theme.spacing(3)};
-    `,
-    serverSelection: css`
-        max-width: 300px;
-        margin-bottom: ${theme.spacing(2)};
-    `,
-    headerRow: css`
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: ${theme.spacing(2)};
-        flex-wrap: wrap;
-        margin-bottom: ${theme.spacing(2)};
-    `,
-    headerLeft: css`
-        min-width: 280px;
-    `,
-    headerRight: css`
-        margin-left: auto;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-    `,
-    timeRangeLabel: css`
-        font-weight: ${theme.typography.fontWeightMedium};
-    `,
-    chartContainer: css`
-        height: 40vh;
-        margin-bottom: ${theme.spacing(3)};
-        border: 1px solid ${theme.colors.border.medium};
-        border-radius: ${theme.shape.borderRadius()};
-        padding: ${theme.spacing(2)};
-    `,
-    tableContainer: css`
-        margin-top: ${theme.spacing(2)};
-        max-height: 400px;
-        overflow-y: auto;
-        overflow-x: auto; /* prevent horizontal overflow */
-        width: 100%;
-    `,
-    drawerContent: css`
-        overflow-y: auto;
-        padding: ${theme.spacing(2)};
-        box-sizing: border-box;
-    `,
-    loadingContainer: css`
-        height: 200px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    `
+  headerRow: css`
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: ${theme.spacing(2)};
+    flex-wrap: wrap;
+    margin-bottom: ${theme.spacing(2)};
+  `,
+  headerRight: css`
+    display: flex;
+    align-items: center;
+    gap: ${theme.spacing(1)};
+    flex-wrap: wrap;
+  `,
+  filterCard: css`
+    background: ${theme.colors.background.secondary};
+    border: 1px solid ${theme.colors.border.weak};
+    border-radius: ${theme.shape.radius.default};
+    padding: ${theme.spacing(1.5, 2)};
+    margin-bottom: ${theme.spacing(2)};
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: ${theme.spacing(1.5)};
+  `,
+  filterGroup: css`
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: ${theme.spacing(1.5)};
+  `,
+  filterField: css`
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  `,
+  filterLabel: css`
+    font-size: ${theme.typography.bodySmall.fontSize};
+    color: ${theme.colors.text.secondary};
+    font-weight: ${theme.typography.fontWeightMedium};
+  `,
+  section: css`
+    margin-bottom: ${theme.spacing(2.5)};
+  `,
+  chartContainer: css`
+    height: 40vh;
+    min-height: 280px;
+  `,
+  drawerContent: css`
+    overflow-y: auto;
+    padding: ${theme.spacing(2)};
+    box-sizing: border-box;
+  `,
+  emptyPrompt: css`
+    padding: ${theme.spacing(5)};
+    text-align: center;
+    background: ${theme.colors.background.secondary};
+    border: 1px dashed ${theme.colors.border.medium};
+    border-radius: ${theme.shape.radius.default};
+    color: ${theme.colors.text.secondary};
+  `,
 });
 
-interface ServerMetadata {
-    name: string;
-    type: string;
-    host?: string;
-}
+function buildActivityDataFrame(
+  summaries: SnapshotSummaryItem[],
+  timeRange: TimeRange,
+  metric: 'connections' | 'wait_time_ms'
+): DataFrame[] {
+  if (summaries.length === 0) {
+    return [];
+  }
+  const fromMs = timeRange.from.valueOf();
+  const toMs = timeRange.to.valueOf();
+  const intervalMs = 60_000;
+  const points = Math.max(1, Math.floor((toMs - fromMs) / intervalMs) + 1);
 
-interface SampleID {
-    sampleID: string;
-    snapId: string;
+  const times: number[] = [];
+  for (let i = 0; i < points; i++) {
+    times.push(fromMs + i * intervalMs);
+  }
+
+  const seriesByWait = new Map<string, number[]>();
+  for (const sum of summaries) {
+    const tsMs = new Date(sum.timestamp).getTime();
+    const idx = Math.floor((tsMs - fromMs) / intervalMs);
+    if (idx < 0 || idx >= points) {
+      continue;
+    }
+    const source = metric === 'wait_time_ms' ? sum.time_ms_by_wait_event : sum.connections_by_wait_event;
+    for (const [rawWait, val] of Object.entries(source || {})) {
+      const key = rawWait === '' ? 'cpu' : rawWait;
+      let arr = seriesByWait.get(key);
+      if (!arr) {
+        arr = new Array<number>(points).fill(0);
+        seriesByWait.set(key, arr);
+      }
+      arr[idx] = Math.max(arr[idx], val);
+    }
+  }
+
+  const frame = new MutableDataFrame({
+    name: metric === 'wait_time_ms' ? 'Wait Time (ms) by Wait Event' : 'Active Connections by Wait Event',
+    fields: [{ name: 'time', type: FieldType.time, values: times }],
+  });
+
+  for (const [waitKey, values] of seriesByWait.entries()) {
+    frame.addField({ name: waitKey, type: FieldType.number, values });
+  }
+
+  return [frame];
 }
 
 const PageOne = () => {
-    const styles = useStyles2(getStyles);
+  const styles = useStyles2(getStyles);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const panelEventBus = useMemo(() => new EventBusSrv(), []);
 
-    const panelEventBus = useMemo(() => new EventBusSrv(), []);
+  // URL-derived state
+  const selectedServer = searchParams.get('server') || '';
+  const expandedSnapId = searchParams.get('snapId') || null;
+  const drawerSampleId = searchParams.get('sampleId') || '';
+  const onlyBlocking = searchParams.get('onlyBlocking') === '1';
+  const waitFilter = searchParams.get('wait') || '';
+  const chartMetric: 'connections' | 'wait_time_ms' =
+    searchParams.get('metric') === 'wait_time_ms' ? 'wait_time_ms' : 'connections';
+  const sortField = (searchParams.get('sort') as SnapshotSortField) || 'timestamp';
+  const sortDir: SortDirection = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
 
-    // State management
-    const [servers, setServers] = useState<ServerMetadata[]>([]);
-    const [selectedServer, setSelectedServer] = useState<ComboboxOption | null>(null);
-    const [snapshots, setSnapshots] = useState<DataFrame[]>([]);
-    const [chartFrames, setChartFrames] = useState<DataFrame[]>([]);
-    const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
-    const [sampleID, setSampleID] = useState<SampleID | null>(null);
-    const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
-        from: dateTime().subtract(1, 'hour'),
-        to: dateTime(),
-        raw: {from: 'now-1h', to: 'now'},
-    }));
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => parseTimeRangeFromSearchParams(searchParams));
+  const [autoRefreshMs, setAutoRefreshMs] = useState<number>(0);
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
-    // Loading states
-    // const [serversLoading, setServersLoading] = useState(false);
-    const [dataLoading, setDataLoading] = useState(false);
-    const [chartLoading, setChartLoading] = useState(false);
+  const [servers, setServers] = useState<Array<ComboboxOption<string>>>([]);
+  const [summaries, setSummaries] = useState<SnapshotSummaryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    // Error states
-    const [error, setError] = useState<string | null>(null);
+  const updateParams = useCallback(
+    (mutator: (next: URLSearchParams) => void) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          mutator(next);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
+  // Auto-refresh interval
+  useEffect(() => {
+    if (!autoRefreshMs || !selectedServer) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      setRefreshCounter((c) => c + 1);
+    }, autoRefreshMs);
+    return () => window.clearInterval(id);
+  }, [autoRefreshMs, selectedServer]);
 
-    // Initialize datasource
-    useEffect(() => {
-        const initDatasource = async () => {
-            try {
-                // Get the first available datasource of our type
-                const ds = await getDataSourceSrv().get({type:'guilhermearpassos-sqlsights-datasource'});
-                setDatasource(ds);
-            } catch (err) {
-                console.error('Failed to initialize datasource:', err);
-                // Fallback to direct API calls if datasource is not available
+  // Load servers
+  const loadServers = useCallback(async (tr: TimeRange) => {
+    try {
+      const params = new URLSearchParams({
+        start: tr.from.toISOString(),
+        end: tr.to.toISOString(),
+        type: 'databases',
+      });
+      const response: Observable<FetchResponse<Array<{ label: string; value: string }>>> = getBackendSrv().fetch({
+        url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?${params.toString()}`,
+      });
+      const result = await lastValueFrom(response);
+      setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load servers');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadServers(timeRange);
+  }, [timeRange, loadServers, refreshCounter]);
+
+  // Auto-select single server if none chosen
+  useEffect(() => {
+    if (!selectedServer && servers.length === 1) {
+      updateParams((p) => p.set('server', servers[0].value));
+    }
+  }, [selectedServer, servers, updateParams]);
+
+  // Load snapshot summaries (used for both chart and table -> single round trip!)
+  const loadSummaries = useCallback(async () => {
+    if (!selectedServer) {
+      setSummaries([]);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams({
+        server: selectedServer,
+        start: timeRange.from.toISOString(),
+        end: timeRange.to.toISOString(),
+      });
+      const response: Observable<FetchResponse<SnapshotSummaryItem[]>> = getBackendSrv().fetch({
+        url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/snapshotSummaries?${params.toString()}`,
+      });
+      const result = await lastValueFrom(response);
+      setSummaries(result.data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load snapshots');
+      setSummaries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedServer, timeRange]);
+
+  useEffect(() => {
+    loadSummaries();
+  }, [loadSummaries, refreshCounter]);
+
+  const waitEventOptions = useMemo<Array<ComboboxOption<string>>>(() => {
+    const set = new Set<string>();
+    for (const s of summaries) {
+      for (const rawKey of Object.keys(s.connections_by_wait_event || {})) {
+        set.add(rawKey === '' ? 'cpu' : rawKey);
+      }
+    }
+    return Array.from(set)
+      .sort()
+      .map((w) => ({ label: w, value: w }));
+  }, [summaries]);
+
+  const filteredSummaries = useMemo(() => {
+    return summaries.filter((s) => {
+      if (onlyBlocking && s.blockers <= 0 && s.waiters <= 0) {
+        return false;
+      }
+      if (waitFilter) {
+        const key = waitFilter === 'cpu' ? '' : waitFilter;
+        const hasWait =
+          (s.connections_by_wait_event && (s.connections_by_wait_event[key] ?? s.connections_by_wait_event[waitFilter] ?? 0) > 0);
+        if (!hasWait) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [summaries, onlyBlocking, waitFilter]);
+
+  const chartFrames = useMemo(
+    () => buildActivityDataFrame(filteredSummaries, timeRange, chartMetric),
+    [filteredSummaries, timeRange, chartMetric]
+  );
+
+  const handleTimeRangeChange = (next: TimeRange) => {
+    setTimeRange(next);
+    updateParams((p) => applyTimeRangeToSearchParams(p, next));
+  };
+
+  const handleSortChange = (field: SnapshotSortField) => {
+    updateParams((p) => {
+      if (sortField === field) {
+        p.set('dir', sortDir === 'desc' ? 'asc' : 'desc');
+      } else {
+        p.set('sort', field);
+        p.set('dir', 'desc');
+      }
+    });
+  };
+
+  const hasFilters = onlyBlocking || Boolean(waitFilter);
+
+  return (
+    <PluginPage>
+      <div className={styles.headerRow}>
+        <div>
+          <h2 style={{ margin: '0 0 4px 0' }}>SQL Database Monitoring</h2>
+          <p style={{ margin: 0 }}>
+            Monitor active sessions, wait events, blocking chains, and execution plans across your SQL Server instances.
+          </p>
+        </div>
+
+        <div className={styles.headerRight}>
+          <Button
+            variant="secondary"
+            fill="outline"
+            onClick={() => navigate(`${prefixRoute(ROUTES.PlanAnalysis)}${buildPreservedNavSearch(searchParams)}`)}
+          >
+            <FileSearch size={14} />
+            <span style={{ marginLeft: 6 }}>Plan Analysis</span>
+          </Button>
+          <Combobox<number>
+            width={20}
+            options={AUTO_REFRESH_OPTIONS}
+            value={autoRefreshMs}
+            onChange={(opt) => setAutoRefreshMs(opt?.value ?? 0)}
+          />
+          <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
+            <RefreshCw size={14} />
+          </Button>
+          <TimeRangePicker
+            value={timeRange}
+            onChange={handleTimeRangeChange}
+            timeZone="browser"
+            onChangeTimeZone={() => {}}
+            onZoom={() => {}}
+            onMoveBackward={() => {}}
+            onMoveForward={() => {}}
+          />
+        </div>
+      </div>
+
+      {error && (
+        <Alert title="Error" severity="error" className={styles.section}>
+          <div>{error}</div>
+          <Button size="sm" variant="secondary" onClick={() => setRefreshCounter((c) => c + 1)} style={{ marginTop: 8 }}>
+            Retry
+          </Button>
+        </Alert>
+      )}
+
+      <div className={styles.filterCard}>
+        <div className={styles.filterGroup}>
+          <div className={styles.filterField}>
+            <span className={styles.filterLabel}>SQL Server Instance</span>
+            <Combobox<string>
+              width={28}
+              options={servers}
+              value={selectedServer || null}
+              onChange={(opt) =>
+                updateParams((p) => {
+                  setOptionalParam(p, 'server', opt?.value);
+                  p.delete('snapId');
+                  p.delete('sampleId');
+                })
+              }
+              placeholder="Select a server..."
+              isClearable
+            />
+          </div>
+
+          <div className={styles.filterField}>
+            <span className={styles.filterLabel}>Wait Event</span>
+            <Combobox<string>
+              width={26}
+              options={waitEventOptions}
+              value={waitFilter || null}
+              onChange={(opt) => updateParams((p) => setOptionalParam(p, 'wait', opt?.value))}
+              placeholder="All wait events"
+              disabled={!selectedServer}
+              isClearable
+            />
+          </div>
+
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', paddingBottom: 6 }}>
+            <Switch
+              value={onlyBlocking}
+              onChange={(e) =>
+                updateParams((p) => setOptionalParam(p, 'onlyBlocking', e.currentTarget.checked ? '1' : null))
+              }
+            />
+            <span>Only snapshots with blockers / waiters</span>
+          </label>
+        </div>
+
+        {hasFilters && (
+          <Button
+            size="sm"
+            variant="secondary"
+            fill="text"
+            onClick={() =>
+              updateParams((p) => {
+                p.delete('onlyBlocking');
+                p.delete('wait');
+              })
             }
-        };
-        initDatasource();
-    }, []);
+          >
+            <X size={13} />
+            <span style={{ marginLeft: 4 }}>Clear Filters</span>
+          </Button>
+        )}
+      </div>
 
-    // Generic API call function
-    const makeApiCall = async <T, >(endpoint: string, params?: Record<string, any>): Promise<T> => {
-        try {
-            const url = `/api/plugins/guilhermearpassos-sqlsights-app/resources/${endpoint}`;
-            const queryParams = params ? '?' + new URLSearchParams(params).toString() : '';
-
-            const response: Observable<FetchResponse<T>> = getBackendSrv().fetch({
-                url: url + queryParams,
-            });
-
-            const result = await lastValueFrom(response);
-            return result.data;
-        } catch (err) {
-            throw new Error(`Failed to fetch ${endpoint}: ${err}`);
-        }
-    };
-
-    // Load available servers from backend
-    const loadServers = useCallback(async (timeRange: TimeRange) => {
-        try {
-            // setServersLoading(true);
-            setError(null);
-
-            const params = {
-                start: timeRange.from.toISOString(),
-                end: timeRange.to.toISOString(),
-                type: "databases"
-            };
-
-            const response = await makeApiCall<Array<{ label: string, value: string }>>('datasource-options', params);
-            let servers: ServerMetadata[] = []
-            for (const server of response) {
-                servers.push({name: server.label, type: server.label, host: server.label})
-            }
-            setServers(servers || []);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load servers');
-        } finally {
-            // setServersLoading(false);
-        }
-    }, []);
-    // Load servers on component mount
-    useEffect(() => {
-        loadServers(chartTimeRange);
-    }, [chartTimeRange, loadServers]);
-
-    // Load snapshots
-    const loadSnapshots = useCallback(async (serverName: string, timeRange: TimeRange) => {
-        if (!datasource) {
-            console.warn('Datasource not available');
-            setSnapshots([]);
-            return;
-        }
-        try {
-            setDataLoading(true);
-            setError(null);
-
-            const query: MyQuery = {
-                refId: 'A',
-                database: serverName,
-                hide: false,
-                datasource: {
-                    type: datasource.type,
-                    uid: datasource.uid
-                },
-                queryType: "snapshot-list"
-            };
-
-            const queryRequest: DataQueryRequest<MyQuery> = {
-                app: CoreApp.Explore,
-                requestId: `explore_${Date.now()}`,
-                timezone: 'browser',
-                panelId: 1,
-                dashboardUID: '',
-                range: timeRange,
-                timeInfo: '',
-                interval: '1m',
-                intervalMs: 60000,
-                targets: [query],
-                maxDataPoints: 1000,
-                scopedVars: {},
-                startTime: Date.now(),
-                liveStreaming: false
-            };
-
-            const resultObservable = datasource.query(queryRequest);
-            let result: DataQueryResponse
-            if (resultObservable instanceof Observable) {
-                result = await lastValueFrom(resultObservable);
-
-            } else {
-                result = await resultObservable;
-            }
-
-            if (result.data && Array.isArray(result.data)) {
-                const transformedFrames: DataFrame[] = processResponse(result)
-                setSnapshots(transformedFrames.map((f) => addWaitTypeHTMLColumn(f, "waitsByType", "Waits")));
-            } else {
-                setSnapshots([]);
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load snapshots');
-        } finally {
-            setDataLoading(false);
-        }
-    }, [datasource]);
-
-
-    // Load chart data using the datasource
-    const loadChartData = useCallback(async (serverName: string, timeRange: TimeRange) => {
-        if (!datasource) {
-            console.warn('Datasource not available');
-            setChartFrames([]);
-            return;
-        }
-
-        try {
-            setChartLoading(true);
-            setError(null);
-
-            const query: MyQuery = {
-                refId: 'A',
-                database: serverName,
-                hide: false,
-                datasource: {
-                    type: datasource.type,
-                    uid: datasource.uid
-                },
-                queryType: "chart"
-            };
-
-            const queryRequest: DataQueryRequest<MyQuery> = {
-                app: CoreApp.Explore,
-                requestId: `explore_${Date.now()}`,
-                timezone: 'browser',
-                panelId: 1,
-                dashboardUID: '',
-                range: timeRange,
-                timeInfo: '',
-                interval: '1m',
-                intervalMs: 60000,
-                targets: [query],
-                maxDataPoints: 1000,
-                scopedVars: {},
-                startTime: Date.now(),
-                liveStreaming: false
-            };
-
-            const resultObservable = datasource.query(queryRequest);
-            let result: DataQueryResponse;
-            if (resultObservable instanceof Observable) {
-                result = await lastValueFrom(resultObservable);
-            } else {
-                result = await resultObservable;
-            }
-
-            if (result.data && Array.isArray(result.data)) {
-                const transformedFrames: DataFrame[] = processResponse(result);
-                setChartFrames(transformedFrames);
-            } else {
-                setChartFrames([]);
-            }
-        } catch (err) {
-            console.error('Query failed:', err);
-            setError(err instanceof Error ? err.message : 'Query failed');
-            setChartFrames([]);
-        } finally {
-            setChartLoading(false);
-        }
-    }, [datasource]);
-
-    const processResponse = (result: DataQueryResponse): DataFrame[] => {
-        const transformedFrames: DataFrame[] = [];
-
-        result.data.forEach((rawFrame: any) => {
-            try {
-                // Try to use Grafana's utility to convert from JSON
-                const frame = dataFrameFromJSON({
-                    schema: rawFrame.schema,
-                    data: rawFrame.data
-                });
-                transformedFrames.push(frame);
-            } catch (error) {
-                console.error('Failed to convert frame:', error);
-                // Fallback to manual transformation if needed
-            }
-        });
-
-        return transformedFrames
-    };
-
-    // Handle server selection
-    const handleServerChange = useCallback((option: ComboboxOption<string> | null) => {
-        setSelectedServer(option);
-    }, []);
-
-    const handleChartTimeRangeChange = useCallback((nextRange: TimeRange) => {
-        setChartTimeRange(nextRange);
-    }, []);
-
-    useEffect(() => {
-        const serverName = selectedServer?.value;
-        if (!serverName) {
-            return;
-        }
-        const tr: TimeRange = {from: chartTimeRange.from, to: chartTimeRange.to, raw: chartTimeRange.raw};
-        loadChartData(serverName, tr);
-        loadSnapshots(serverName, tr);
-    }, [
-        selectedServer?.value,
-        chartTimeRange.from,
-        chartTimeRange.to,
-        chartTimeRange.raw,
-        loadChartData,
-        loadSnapshots
-    ]);
-
-
-    // Prepare server options for Select component
-    const serverOptions: ComboboxOption[] = servers.map(server => ({
-        label: `${server.name} (${server.type})`,
-        value: server.name,
-        description: server.host
-    }));
-
-
-    const loadSamplesPanelData = useCallback(async (snapID: string): Promise<DataFrame[]> => {
-        if (!datasource) {
-            throw new Error('Datasource not available');
-        }
-        const serverName = selectedServer?.value;
-        if (!serverName) {
-            return [];
-        }
-        if (!snapID) {
-            return [];
-        }
-
-        const query: MyQuery = {
-            refId: 'A',
-            database: serverName,
-            hide: false,
-            datasource: {
-                type: datasource.type,
-                uid: datasource.uid
-            },
-            queryType: "snapshot",
-            snapshotID: snapID
-        };
-
-        const queryRequest: DataQueryRequest<MyQuery> = {
-            app: CoreApp.Explore,
-            requestId: `explore_${Date.now()}`,
-            timezone: 'browser',
-            panelId: 1,
-            dashboardUID: '',
-            range: chartTimeRange,
-            timeInfo: '',
-            interval: '1m',
-            intervalMs: 60000,
-            targets: [query],
-            maxDataPoints: 1000,
-            scopedVars: {},
-            startTime: Date.now(),
-            liveStreaming: false
-        };
-
-        const resultObservable = datasource.query(queryRequest);
-        const result: DataQueryResponse =
-            resultObservable instanceof Observable ? await lastValueFrom(resultObservable) : await resultObservable;
-
-        return processResponse(result);
-    }, [datasource, selectedServer?.value, chartTimeRange]);
-
-    const onSampleSelection = useCallback((snapID: string, sampleID: string) => {
-        setSampleID({sampleID: sampleID, snapId: snapID})
-    }, [])
-    const getDetailsData = useCallback(async (id: string): Promise<PanelData> => {
-        let frames = await loadSamplesPanelData(id);
-        return {
-
-            series: frames, state: LoadingState.Loading,
-            timeRange: {
-                from: dateTime().subtract(1, 'hour'),
-                to: dateTime(),
-                raw: {from: 'now-1h', to: 'now'}
-            }
-        };
-    }, [loadSamplesPanelData]);
-    return (
-        <PluginPage>
-            <div className={styles.headerRow}>
-                <div className={styles.headerLeft}>
-                    <h2>SQL Database Monitoring</h2>
-                    <p>Monitor and analyze database performance and activity across your servers.</p>
-                </div>
-
-                <div className={styles.headerRight}>
-                    <TimeRangePicker
-                        value={chartTimeRange}
-                        onChange={handleChartTimeRangeChange}
-                        timeZone="browser"
-                        onChangeTimeZone={timeZone => {
-                        }}
-                        onZoom={() => {
-                        }}
-                        onMoveBackward={() => {
-                        }}
-                        onMoveForward={() => {
-                        }}/>
-                </div>
-                {error && (
-                    <Alert title="Error" severity="error">
-                        {error}
-                    </Alert>
-                )}
-            </div>
-
-
-            <div className={styles.section}>
-                <div>{sampleID && (<Drawer onClose={() => {
-                        setSampleID(null)
-                    }} size="lg">
-                        <div className={styles.drawerContent}>
-                            <QueryDetailsComponent
-                                snapID={sampleID.snapId}
-                                sampleID={sampleID.sampleID}
-                                timeRange={chartTimeRange}
-                                server={selectedServer?.value??''}
-                            />
-                        </div>
-                    </Drawer>
-                )}</div>
-                <h3>Server Selection</h3>
-                <div className={styles.serverSelection}>
-                    <Combobox<string>
-                        width="auto"
-                        options={serverOptions}
-                        value={selectedServer}
-                        onChange={handleServerChange}
-                        placeholder="Select a server..."
-                        minWidth={20}
-                        isClearable
+      {!selectedServer ? (
+        <div className={styles.emptyPrompt}>
+          Select a SQL Server instance above to view database activity and snapshots.
+        </div>
+      ) : (
+        <>
+          <div className={styles.section}>
+            <Card>
+              <Card.Heading>Database Activity Over Time</Card.Heading>
+              <Card.Actions>
+                <RadioButtonGroup<'connections' | 'wait_time_ms'>
+                  size="sm"
+                  options={[
+                    { label: 'Active Connections', value: 'connections' },
+                    { label: 'Wait Time (ms)', value: 'wait_time_ms' },
+                  ]}
+                  value={chartMetric}
+                  onChange={(val) => updateParams((p) => setOptionalParam(p, 'metric', val === 'connections' ? null : val))}
+                />
+              </Card.Actions>
+              <Card.Description>
+                <div className={styles.chartContainer}>
+                  {loading && summaries.length === 0 ? (
+                    <LoadingPlaceholder text="Loading activity chart..." />
+                  ) : chartFrames.length > 0 ? (
+                    <MyGraph
+                      data={chartFrames}
+                      loadingState={loading ? LoadingState.Loading : LoadingState.Done}
+                      eventBus={panelEventBus}
+                      timeRange={timeRange}
+                      onTimeRangeChange={handleTimeRangeChange}
                     />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                      <p>No activity data available for the selected range.</p>
+                    </div>
+                  )}
                 </div>
+              </Card.Description>
+            </Card>
+          </div>
 
-                {selectedServer && (
-                    <>
-                        <div className={styles.section}>
-                            <Card>
-                                <Card.Heading>Database Activity Over Time</Card.Heading>
-                                <Card.Description>
-                                    <div className={styles.chartContainer}>
-                                        {chartLoading ? (
-                                            <div className={styles.loadingContainer}>
-                                                <LoadingPlaceholder text="Loading chart data..."/>
-                                            </div>
-                                        ) : chartFrames.length > 0 ? (
-                                            <>
-                                                {chartFrames.length > 0 && (
-                                                    <MyGraph
-                                                        data={chartFrames}
-                                                        loadingState={chartLoading ? LoadingState.Loading : LoadingState.Done}
-                                                        eventBus={panelEventBus}
-                                                        timeRange={chartTimeRange}
-                                                        onTimeRangeChange={handleChartTimeRangeChange}
-                                                    />
-                                                )}
-                                            </>
-                                        ) : (
-                                            <div className={styles.loadingContainer}>
-                                                <p>No chart data available</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </Card.Description>
-                            </Card>
-                        </div>
+          <div className={styles.section}>
+            {loading && summaries.length === 0 ? (
+              <LoadingPlaceholder text="Loading snapshots..." />
+            ) : (
+              <SnapshotsTable
+                summaries={filteredSummaries}
+                sortField={sortField}
+                sortDir={sortDir}
+                onSortChange={handleSortChange}
+                expandedSnapId={expandedSnapId}
+                onToggleExpand={(snapId) =>
+                  updateParams((p) => {
+                    if (expandedSnapId === snapId) {
+                      p.delete('snapId');
+                    } else {
+                      p.set('snapId', snapId);
+                    }
+                  })
+                }
+                onSelectSample={(snapId, sampleId) =>
+                  updateParams((p) => {
+                    p.set('snapId', snapId);
+                    p.set('sampleId', sampleId);
+                  })
+                }
+                timeRange={timeRange}
+              />
+            )}
+          </div>
+        </>
+      )}
 
-                        <div className={styles.section}>
-                            <Card>
-                                <Card.Heading>Database Snapshots</Card.Heading>
-                                <Card.Description>
-
-                                    <div className={styles.tableContainer}>
-                                        {dataLoading ? (
-                                            <LoadingPlaceholder text="Loading snapshots..."/>
-                                        ) : (
-                                            <>
-                                                <NestedTablesWithEventBus
-                                                    getDetailsData={
-                                                        getDetailsData
-                                                    }
-                                                    summaryData={snapshots}
-                                                    timeRange={chartTimeRange}
-                                                    onSampleSelection={onSampleSelection}
-                                                />
-                                            </>
-                                        )}
-                                    </div>
-                                </Card.Description>
-                            </Card>
-                        </div>
-
-                    </>
-                )}
-            </div>
-        </PluginPage>
-    );
+      {expandedSnapId && drawerSampleId && (
+        <Drawer
+          title="Query Sample Details"
+          size="lg"
+          onClose={() =>
+            updateParams((p) => {
+              p.delete('sampleId');
+            })
+          }
+        >
+          <div className={styles.drawerContent}>
+            <QueryDetailsComponent
+              snapID={expandedSnapId}
+              sampleID={drawerSampleId}
+              timeRange={timeRange}
+              server={selectedServer}
+              initialTab="overview"
+              onSelectSample={(snapId, sampleId) =>
+                updateParams((p) => {
+                  p.set('snapId', snapId);
+                  p.set('sampleId', sampleId);
+                })
+              }
+            />
+          </div>
+        </Drawer>
+      )}
+    </PluginPage>
+  );
 };
 
 export default PageOne;

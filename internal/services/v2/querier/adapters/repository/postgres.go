@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
@@ -355,6 +356,7 @@ where s.snap_time between $1 and $2
   and qp.target_id = $3
   and analyzed = true
   and has_problems = true
+order by s.snap_time desc
 	`
 	rows, err := p.db.QueryContext(ctx, q, Start, End, targetId)
 	if err != nil {
@@ -407,16 +409,7 @@ where s.snap_time between $1 and $2
 		if blocker {
 			lc++
 		}
-		issueTags := make([]string, 0, 3)
-		if missingIndexes > 0 {
-			issueTags = append(issueTags, "missing_index")
-		}
-		if implicitConversions > 0 {
-			issueTags = append(issueTags, "implicit_conversion")
-		}
-		if largeTableScans > 0 {
-			issueTags = append(issueTags, "large_table_scan")
-		}
+		issueTags := extractPlanIssueTags(parsedPlan, missingIndexes, implicitConversions, largeTableScans)
 		pwi := &domain.PlanWithIssue{
 			ParsedPlan:  parsedPlan,
 			Sample:      domainSample,
@@ -433,4 +426,47 @@ where s.snap_time between $1 and $2
 		return nil, fmt.Errorf("query plans with issues rows: %w", err)
 	}
 	return maps.Values(ret), nil
+}
+
+func extractPlanIssueTags(parsedPlan *parsers.ParsedExecutionPlan, missingIndexes, implicitConversions, largeTableScans int) []string {
+	tagSet := make(map[string]struct{}, 4)
+	if missingIndexes > 0 {
+		tagSet["missing_index"] = struct{}{}
+	}
+	if largeTableScans > 0 {
+		tagSet["large_table_scan"] = struct{}{}
+	}
+	foundConvertKind := false
+	if parsedPlan != nil {
+		for _, batch := range parsedPlan.Batches {
+			for _, stmt := range parsers.CollectAllStatements(batch.Statements) {
+				if stmt.QueryPlan == nil {
+					continue
+				}
+				for _, conv := range stmt.QueryPlan.PlanAffectingConvert {
+					issue := strings.ToLower(conv.ConvertIssue)
+					switch {
+					case strings.Contains(issue, "seek"):
+						tagSet["seek_plan_convert"] = struct{}{}
+						foundConvertKind = true
+					case strings.Contains(issue, "cardinality"):
+						tagSet["cardinality_convert"] = struct{}{}
+						foundConvertKind = true
+					default:
+						tagSet["implicit_conversion"] = struct{}{}
+						foundConvertKind = true
+					}
+				}
+			}
+		}
+	}
+	if implicitConversions > 0 && !foundConvertKind {
+		tagSet["implicit_conversion"] = struct{}{}
+	}
+	tags := make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		tags = append(tags, tag)
+	}
+	slices.Sort(tags)
+	return tags
 }

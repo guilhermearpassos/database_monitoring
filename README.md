@@ -24,6 +24,17 @@ It includes a datasource plugin bundled and will include pre-built pages for eas
 
 # Grafana Sqlsights datasource
 ## Configuration
+
+Configure the Sqlsights Grafana app plugin under **Apps → Sqlsights → Configuration**:
+- **API Url**: `host:port` of your Sqlsights Querier gRPC endpoint (e.g., `sqlsights:9014`).
+- **Tempo Datasource** *(optional)*: Select a Grafana Tempo datasource to enable one-click navigation from SQL samples carrying a `trace_id` directly into Grafana Explore.
+
+## Distributed Trace Correlation (Tempo)
+
+Sqlsights can correlate SQL Server session snapshots, blocking chains, and problematic execution plans with OpenTelemetry distributed traces using SQL Server's `CONTEXT_INFO` register (`TPRC` binary header) and Grafana Tempo.
+
+- Local `docker-compose.yml` includes a pre-configured **Tempo** service (`tempo.yaml`), OTel Collector fan-out (`otel-collector-config.yaml`), and auto-provisioned Grafana Tempo datasource (`provisioning/datasources/datasources.yml`).
+- See [docs/trace_correlation.md](docs/trace_correlation.md) for the binary payload specification, Go / .NET / Node.js instrumentation examples, connection-pooling best practices, and verification steps.
 for now, configure the app plugin with host:port to your sqlsights instance
 ![img_4.png](src/docs/img_4.png)
 
@@ -43,9 +54,6 @@ given a snapshot id, shows the query samples that were running at that time
 ## Example dashboard
 dashboard combining the queries, with a data link on snapshot id so we can navigate between the snapshots
 ![dash.png](src/docs/dash.png)
-
-## Configuration
-
 
 ## Contributing
 

@@ -1,22 +1,21 @@
-import React, { ChangeEvent, useState } from 'react';
+import React, { ChangeEvent, useMemo, useState } from 'react';
 import { lastValueFrom } from 'rxjs';
 import { css } from '@emotion/css';
 import { AppPluginMeta, GrafanaTheme2, PluginConfigPageProps, PluginMeta } from '@grafana/data';
-import { getBackendSrv } from '@grafana/runtime';
-import { Button, Field, FieldSet, Input, SecretInput, useStyles2 } from '@grafana/ui';
+import { getBackendSrv, getDataSourceSrv } from '@grafana/runtime';
+import { Button, Combobox, ComboboxOption, Field, FieldSet, Input, SecretInput, useStyles2 } from '@grafana/ui';
 import { testIds } from '../testIds';
 
 type AppPluginSettings = {
   apiUrl?: string;
+  tempoDatasourceUid?: string;
 };
 
 type State = {
-  // The URL to reach our custom API.
   apiUrl: string;
-  // Tells us if the API key secret is set.
   isApiKeySet: boolean;
-  // A secret key for our custom API.
   apiKey: string;
+  tempoDatasourceUid: string;
 };
 
 export interface AppConfigProps extends PluginConfigPageProps<AppPluginMeta<AppPluginSettings>> {}
@@ -28,9 +27,27 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
     apiUrl: jsonData?.apiUrl || '',
     apiKey: '',
     isApiKeySet: Boolean(secureJsonFields?.apiKey),
+    tempoDatasourceUid: jsonData?.tempoDatasourceUid || '',
   });
+  const tempoOptions = useMemo<Array<ComboboxOption<string>>>(() => {
+    try {
+      const dsSrv = getDataSourceSrv();
+      if (!dsSrv || typeof dsSrv.getList !== 'function') {
+        return [];
+      }
+      const list = dsSrv.getList({ type: 'tempo' }) || [];
+      return list.map((ds) => ({
+        label: `${ds.name} (${ds.uid})`,
+        value: ds.uid,
+        description: ds.url,
+      }));
+    } catch {
+      // Ignore in test environments where DataSourceSrv is not initialized.
+      return [];
+    }
+  }, []);
 
-  const isSubmitDisabled = Boolean(!state.apiUrl || (!state.isApiKeySet && !state.apiKey));
+  const isSubmitDisabled = Boolean(!state.apiUrl);
 
   const onResetApiKey = () =>
     setState({
@@ -46,7 +63,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
     });
   };
 
-  const onSubmit = () => {
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (isSubmitDisabled) {
       return;
     }
@@ -56,21 +74,21 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
       pinned,
       jsonData: {
         apiUrl: state.apiUrl,
+        tempoDatasourceUid: state.tempoDatasourceUid || undefined,
       },
-      // This cannot be queried later by the frontend.
-      // We don't want to override it in case it was set previously and left untouched now.
-      secureJsonData: state.isApiKeySet
-        ? undefined
-        : {
-            apiKey: state.apiKey,
-          },
+      secureJsonData:
+        state.isApiKeySet || !state.apiKey
+          ? undefined
+          : {
+              apiKey: state.apiKey,
+            },
     });
   };
 
   return (
     <form onSubmit={onSubmit}>
       <FieldSet label="API Settings">
-        <Field label="API Key" description="A secret key for authenticating to our custom API">
+        <Field label="API Key" description="Optional secret key for authenticating to your Sqlsights API">
           <SecretInput
             width={60}
             id="config-api-key"
@@ -84,24 +102,40 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
           />
         </Field>
 
-        <Field label="API Url" description="" className={s.marginTop}>
+        <Field label="API Url" description="gRPC host:port of your Sqlsights Querier service" className={s.marginTop}>
           <Input
             width={60}
             name="apiUrl"
             id="config-api-url"
             data-testid={testIds.appConfig.apiUrl}
             value={state.apiUrl}
-            placeholder={`E.g.: http://mywebsite.com/api/v1`}
+            placeholder={`E.g.: sqlsights:9014`}
             onChange={onChange}
           />
         </Field>
-
-        <div className={s.marginTop}>
-          <Button type="submit" data-testid={testIds.appConfig.submit} disabled={isSubmitDisabled}>
-            Save API settings
-          </Button>
-        </div>
       </FieldSet>
+
+      <FieldSet label="Tracing Integration (Tempo)" className={s.marginTop}>
+        <Field
+          label="Tempo Datasource"
+          description="Select a Grafana Tempo datasource to enable one-click trace navigation from SQL samples carrying a Trace ID (auto-detects the first Tempo datasource if left empty)."
+        >
+          <Combobox<string>
+            width={60}
+            options={tempoOptions}
+            value={state.tempoDatasourceUid || null}
+            onChange={(opt) => setState((prev) => ({ ...prev, tempoDatasourceUid: opt?.value || '' }))}
+            placeholder={tempoOptions.length > 0 ? 'Auto-detect or choose Tempo datasource...' : 'No Tempo datasources found'}
+            isClearable
+          />
+        </Field>
+      </FieldSet>
+
+      <div className={s.marginTop}>
+        <Button type="submit" data-testid={testIds.appConfig.submit} disabled={isSubmitDisabled}>
+          Save API settings
+        </Button>
+      </div>
     </form>
   );
 };
@@ -120,9 +154,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
 const updatePluginAndReload = async (pluginId: string, data: Partial<PluginMeta<AppPluginSettings>>) => {
   try {
     await updatePlugin(pluginId, data);
-
-    // Reloading the page as the changes made here wouldn't be propagated to the actual plugin otherwise.
-    // This is not ideal, however unfortunately currently there is no supported way for updating the plugin state.
     window.location.reload();
   } catch (e) {
     console.error('Error while updating the plugin', e);

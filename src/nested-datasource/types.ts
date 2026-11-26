@@ -3,10 +3,12 @@ import {DataQuery} from '@grafana/schema';
 
 export interface MyQuery extends DataQuery {
     database?: string;
+    databases?: string[];
+    issueTags?: string[];
+    metric?: 'connections' | 'wait_time_ms';
     snapshotID?: string;
     queryHash?: string;
     metrics?: string[];
-    // Add other query parameters as needed
 }
 
 export const DEFAULT_QUERY: Partial<MyQuery> = {

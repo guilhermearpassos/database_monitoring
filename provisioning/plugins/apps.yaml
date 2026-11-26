@@ -7,5 +7,6 @@ apps:
     disabled: false
     jsonData:
       apiUrl: sqlsights-grpc:8082
+      tempoDatasourceUid: tempo
     secureJsonData:
       apiKey: secret-key

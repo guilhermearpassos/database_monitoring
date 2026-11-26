@@ -38,6 +38,7 @@ export function QueryEditor({query, onChange, onRunQuery, datasource}: Props) {
                             {label: "chart", value: "chart"},
                             {label: "snapshot-list", value: "snapshot-list"},
                             {label: "snapshot", value: "snapshot"},
+                            {label: "plan_analysis", value: "plan_analysis"},
                             {label: "metrics", value: "metrics"},
                             {label: "metrics_series", value: "metrics_series"}
                         ]}
@@ -68,6 +69,37 @@ export function QueryEditor({query, onChange, onRunQuery, datasource}: Props) {
                     </InlineField>
                 )}
 
+                {(query.queryType === "plan_analysis") && (
+                    <>
+                        <InlineField label="Databases (CSV)">
+                            <Input
+                                value={(query.databases || []).join(',')}
+                                onChange={event => {
+                                    const list = event.currentTarget.value
+                                        .split(',')
+                                        .map(s => s.trim())
+                                        .filter(Boolean);
+                                    onChange({...query, databases: list});
+                                }}
+                                placeholder="db1,db2"/>
+                        </InlineField>
+                        <InlineField label="Issue Types">
+                            <MultiCombobox
+                                width={"auto"}
+                                minWidth={24}
+                                onChange={option => onChange({...query, issueTags: option.map(value => value.value)})}
+                                options={[
+                                    {label: "Seek Plan Convert", value: "seek_plan_convert"},
+                                    {label: "Cardinality Convert", value: "cardinality_convert"},
+                                    {label: "Missing Index", value: "missing_index"},
+                                    {label: "Implicit Conversion (Any)", value: "implicit_conversion"},
+                                    {label: "Large Table Scan", value: "large_table_scan"},
+                                ]}
+                                value={query.issueTags}
+                            />
+                        </InlineField>
+                    </>
+                )}
                 {(query.queryType === "metrics_series") && (
                     <InlineField label="Query Hash">
                         <Input

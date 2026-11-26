@@ -1,30 +1,24 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppRootProps } from '@grafana/data';
-import PagePlanAnalysis from "../../pages/PageTwo";
-// import { ROUTES } from '../../constants';
+import { LoadingPlaceholder } from '@grafana/ui';
+import PagePlanAnalysis from '../../pages/PageTwo';
+import { AppPluginJsonData, AppSettingsProvider } from '../../context/AppSettingsContext';
+
 const PageOne = React.lazy(() => import('../../pages/PageOne'));
-// const PageTwo = React.lazy(() => import('../../pages/PageTwo'));
-// const PageThree = React.lazy(() => import('../../pages/PageThree'));
-// const PageFour = React.lazy(() => import('../../pages/PageFour'));
 
-function App(props: AppRootProps) {
+function App(props: AppRootProps<AppPluginJsonData>) {
   return (
-    <Routes>
-      {/*<Route path={ROUTES.Two} element={<PageTwo />} />*/}
-      {/*<Route path={`${ROUTES.Three}/:id?`} element={<PageThree />} />*/}
-
-      {/*/!* Full-width page (this page will have no side navigation) *!/*/}
-      {/*<Route path={ROUTES.Four} element={<PageFour />} />*/}
-
-      {/* Default and fallback redirects */}
-      <Route path="/" element={<Navigate to="/snapshots" replace />} />
-      <Route path="*" element={<Navigate to="/snapshots" replace />} />
-
-      {/* App pages */}
-      <Route path="/snapshots" element={<PageOne />} />
-      <Route path="/plan_analysis" element={<PagePlanAnalysis />} />
-    </Routes>
+    <AppSettingsProvider jsonData={props.meta?.jsonData}>
+      <Suspense fallback={<LoadingPlaceholder text="Loading..." />}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/snapshots" replace />} />
+          <Route path="*" element={<Navigate to="/snapshots" replace />} />
+          <Route path="/snapshots" element={<PageOne />} />
+          <Route path="/plan_analysis" element={<PagePlanAnalysis />} />
+        </Routes>
+      </Suspense>
+    </AppSettingsProvider>
   );
 }
 

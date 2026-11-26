@@ -56,7 +56,9 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/datasource-options", a.handleDropdownOptions)
 	mux.HandleFunc("/query", a.handleQuery)
 	mux.HandleFunc("/getQueryDetails", a.handleFetchQueryDetails)
-
+	mux.HandleFunc("/planAnalysis", a.handlePlanAnalysis)
+	mux.HandleFunc("/snapshotSummaries", a.handleSnapshotSummaries)
+	mux.HandleFunc("/snapshotSamples", a.handleSnapshotSamples)
 }
 
 func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +181,7 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (QuerySample, error) {
 		SessionProgramName:      sample.GetSession().GetProgramName(),
 		SessionLastRequestStart: sample.GetSession().GetLastRequestStart().AsTime(),
 		SessionLastRequestEnd:   sample.GetSession().GetLastRequestEnd().AsTime(),
+		TraceID:                 sample.GetContext().GetTraceId(),
 	}
 	return dSample, nil
 }
@@ -342,10 +345,10 @@ func (a *App) PublishStream(_ context.Context, req *backend.PublishStreamRequest
 
 // query processes individual queries
 func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
-	// Implement your SQL query logic here
 	response := backend.DataResponse{}
 	q := struct {
 		Database string `json:"database"`
+		Metric   string `json:"metric"`
 	}{}
 	if err := json.Unmarshal(query.JSON, &q); err != nil {
 		response.Error = err
@@ -365,16 +368,26 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 	}
 	interval := time.Minute * 1 // 1-minute intervals
 	points := int(to.Sub(from)/interval) + 1
+	if points < 1 {
+		points = 1
+	}
 
 	times := make([]time.Time, points)
 	valuesByWaitType := make(map[string][]float64, points)
 	for i := 0; i < points; i++ {
 		times[i] = from.Add(time.Duration(i) * interval)
 	}
+	useWaitTime := q.Metric == "wait_time_ms"
 	for _, sum := range r.GetSnapSummaries() {
 		idx := int(sum.Timestamp.AsTime().Sub(from).Minutes())
-		for we, c := range sum.GetConnectionsByWaitEvent() {
-
+		if idx < 0 || idx >= points {
+			continue
+		}
+		source := sum.GetConnectionsByWaitEvent()
+		if useWaitTime {
+			source = sum.GetTimeMsByWaitEvent()
+		}
+		for we, c := range source {
 			if we == "" {
 				we = "cpu"
 			}
@@ -384,17 +397,18 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 			valuesByWaitType[we][idx] = float64(c)
 		}
 	}
-	frame := data.NewFrame("locks by type",
+	frameName := "locks by type"
+	if useWaitTime {
+		frameName = "wait time (ms) by type"
+	}
+	frame := data.NewFrame(frameName,
 		data.NewField("time", nil, times),
 	)
 	for we, v := range valuesByWaitType {
 		frame.Fields = append(frame.Fields, data.NewField(we, nil, v))
 	}
 
-	// Set the RefID to match the query
 	frame.RefID = query.RefID
-
-	// Add metadata for proper visualization
 	frame.Meta = &data.FrameMeta{
 		Type: data.FrameTypeTimeSeriesWide,
 	}
@@ -478,10 +492,11 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 
 // queryPlanAnalysis processes individual queries
 func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext, query backend.DataQuery) backend.DataResponse {
-	// Implement your SQL query logic here
 	response := backend.DataResponse{}
 	q := struct {
-		Database string `json:"database"`
+		Database  string   `json:"database"`
+		Databases []string `json:"databases"`
+		IssueTags []string `json:"issueTags"`
 	}{}
 	if err := json.Unmarshal(query.JSON, &q); err != nil {
 		response.Error = err
@@ -491,15 +506,17 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 	from := timeRange.From
 	to := timeRange.To
 	r, err := a.client.ListPlansWithIssues(ctx, &querierv2.ListPlansWithIssuesRequest{
-		Start: timestamppb.New(from),
-		End:   timestamppb.New(to),
-		Host:  q.Database,
+		Start:     timestamppb.New(from),
+		End:       timestamppb.New(to),
+		Host:      q.Database,
+		Databases: q.Databases,
 	})
 	if err != nil {
 		response.Error = err
 		return response
 	}
-	size := len(r.GetPlans())
+	items := buildPlanAnalysisItems(r.GetPlans(), q.IssueTags)
+	size := len(items)
 	queries := make([]string, 0, size)
 	databases := make([]string, 0, size)
 	issues := make([]float64, 0, size)
@@ -509,16 +526,16 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 	times := make([]time.Time, 0, size)
 	snapIds := make([]string, 0, size)
 	sampleIds := make([]string, 0, size)
-	for _, p := range r.GetPlans() {
-		queries = append(queries, p.GetLatestSample().GetText())
-		issues = append(issues, float64(p.GetIssueCount()))
-		issueTags = append(issueTags, strings.Join(p.GetIssueTag(), ", "))
-		occurrences = append(occurrences, float64(p.GetOccurrences()))
-		locks = append(locks, float64(p.GetRelatedLockCount()))
-		times = append(times, p.GetLatestSample().GetSnapInfo().GetTimestamp().AsTime())
-		snapIds = append(snapIds, p.GetLatestSample().GetSnapInfo().GetId())
-		sampleIds = append(sampleIds, p.GetLatestSample().GetId())
-		databases = append(databases, p.GetLatestSample().GetDb().GetDatabaseName())
+	for _, item := range items {
+		queries = append(queries, item.Text)
+		issues = append(issues, float64(item.IssueCount))
+		issueTags = append(issueTags, strings.Join(item.IssueTags, ", "))
+		occurrences = append(occurrences, float64(item.Occurrences))
+		locks = append(locks, float64(item.RelatedLockCount))
+		times = append(times, item.LastSnapTime)
+		snapIds = append(snapIds, item.SnapID)
+		sampleIds = append(sampleIds, item.SampleID)
+		databases = append(databases, item.Database)
 	}
 	frame := data.NewFrame("plans_with_issues",
 		data.NewField("lastSnapTime", nil, times),
@@ -533,10 +550,7 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 		data.NewField("sampleId", nil, sampleIds),
 	)
 
-	// Set the RefID to match the query
 	frame.RefID = query.RefID
-
-	// Add metadata for proper visualization
 	frame.Meta = &data.FrameMeta{
 		Type: data.FrameTypeTimeSeriesWide,
 	}
@@ -880,4 +894,321 @@ func (a *App) getDatabaseOptions(ctx context.Context, startTimestamp time.Time, 
 		}
 	}
 	return ret, nil
+}
+
+func parseTimeBounds(r *http.Request) (time.Time, time.Time, error) {
+	now := time.Now()
+	start := now.Add(-1 * time.Hour)
+	end := now
+
+	if s := r.URL.Query().Get("start"); s != "" {
+		parsed, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid start timestamp: %w", err)
+		}
+		start = parsed
+	}
+	if e := r.URL.Query().Get("end"); e != "" {
+		parsed, err := time.Parse(time.RFC3339, e)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid end timestamp: %w", err)
+		}
+		end = parsed
+	}
+	return start, end, nil
+}
+
+func splitCSVParam(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func deriveIssueTagsFromProto(p *querierv2.PlansWithIssues, converts []PlanAffectingConvert, missingIndexes []MissingIndex) []string {
+	tagSet := make(map[string]struct{}, 4)
+	for _, t := range p.GetIssueTag() {
+		if t != "" {
+			tagSet[t] = struct{}{}
+		}
+	}
+	if len(missingIndexes) > 0 {
+		tagSet["missing_index"] = struct{}{}
+	}
+	for _, c := range converts {
+		issue := strings.ToLower(c.ConvertIssue)
+		switch {
+		case strings.Contains(issue, "seek"):
+			tagSet["seek_plan_convert"] = struct{}{}
+		case strings.Contains(issue, "cardinality"):
+			tagSet["cardinality_convert"] = struct{}{}
+		default:
+			tagSet["implicit_conversion"] = struct{}{}
+		}
+	}
+	tags := make([]string, 0, len(tagSet))
+	for t := range tagSet {
+		tags = append(tags, t)
+	}
+	slices.Sort(tags)
+	return tags
+}
+
+func matchesIssueTagFilter(itemTags []string, filterTags []string) bool {
+	if len(filterTags) == 0 {
+		return true
+	}
+	for _, want := range filterTags {
+		if want == "implicit_conversion" {
+			for _, t := range itemTags {
+				if t == "implicit_conversion" || t == "seek_plan_convert" || t == "cardinality_convert" {
+					return true
+				}
+			}
+			continue
+		}
+		if slices.Contains(itemTags, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func buildPlanAnalysisItems(plans []*querierv2.PlansWithIssues, filterIssueTags []string) []PlanAnalysisItem {
+	items := make([]PlanAnalysisItem, 0, len(plans))
+	for _, p := range plans {
+		converts := make([]PlanAffectingConvert, 0)
+		missingIndexes := make([]MissingIndex, 0)
+		maxImpact := 0.0
+
+		for _, w := range p.GetParsedPlan().GetWarnings() {
+			switch w.Warning.(type) {
+			case *dbmv1.PlanWarning_Convert:
+				c := w.GetConvert()
+				converts = append(converts, PlanAffectingConvert{
+					ConvertIssue: c.GetConvertIssue(),
+					Expression:   c.GetExpression(),
+				})
+			case *dbmv1.PlanWarning_MissingIndex:
+				mi := w.GetMissingIndex()
+				if mi.GetImpact() > maxImpact {
+					maxImpact = mi.GetImpact()
+				}
+				missingIndexes = append(missingIndexes, MissingIndex{
+					Database:          mi.GetDatabase(),
+					Schema:            mi.GetSchema(),
+					Table:             mi.GetTable(),
+					Impact:            mi.GetImpact(),
+					EqualityColumns:   mi.GetEqualityColumns(),
+					InequalityColumns: mi.GetInequalityColumns(),
+					IncludeColumns:    mi.GetIncludeColumns(),
+				})
+			}
+		}
+
+		tags := deriveIssueTagsFromProto(p, converts, missingIndexes)
+		if !matchesIssueTagFilter(tags, filterIssueTags) {
+			continue
+		}
+
+		sample := p.GetLatestSample()
+		items = append(items, PlanAnalysisItem{
+			PlanHandle:       sample.GetPlanHandle(),
+			QueryHash:        sample.GetQueryHash(),
+			SQLHandle:        sample.GetSqlHandle(),
+			Text:             sample.GetText(),
+			Database:         sample.GetDb().GetDatabaseName(),
+			SnapID:           sample.GetSnapInfo().GetId(),
+			SampleID:         sample.GetId(),
+			LastSnapTime:     sample.GetSnapInfo().GetTimestamp().AsTime(),
+			TraceID:          sample.GetContext().GetTraceId(),
+			IssueCount:       p.GetIssueCount(),
+			Occurrences:      p.GetOccurrences(),
+			RelatedLockCount: p.GetRelatedLockCount(),
+			IssueTags:        tags,
+			Converts:         converts,
+			MissingIndexes:   missingIndexes,
+			MaxImpact:        maxImpact,
+		})
+	}
+	return items
+}
+
+func (a *App) handlePlanAnalysis(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	server := strings.TrimSpace(r.URL.Query().Get("server"))
+	if server == "" {
+		http.Error(w, "server is required", http.StatusBadRequest)
+		return
+	}
+	start, end, err := parseTimeBounds(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	databasesFilter := splitCSVParam(r.URL.Query().Get("databases"))
+	issueTagsFilter := splitCSVParam(r.URL.Query().Get("issueTags"))
+
+	// Query server plans without DB filter first so we can return the full list of
+	// available databases for the dropdown alongside the filtered plans.
+	resp, err := a.client.ListPlansWithIssues(r.Context(), &querierv2.ListPlansWithIssuesRequest{
+		Start: timestamppb.New(start),
+		End:   timestamppb.New(end),
+		Host:  server,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	dbSet := make(map[string]struct{})
+	filteredProtoPlans := make([]*querierv2.PlansWithIssues, 0, len(resp.GetPlans()))
+	for _, p := range resp.GetPlans() {
+		dbName := p.GetLatestSample().GetDb().GetDatabaseName()
+		if dbName != "" {
+			dbSet[dbName] = struct{}{}
+		}
+		if len(databasesFilter) == 0 || slices.Contains(databasesFilter, dbName) {
+			filteredProtoPlans = append(filteredProtoPlans, p)
+		}
+	}
+	availDBs := make([]string, 0, len(dbSet))
+	for db := range dbSet {
+		availDBs = append(availDBs, db)
+	}
+	slices.Sort(availDBs)
+
+	items := buildPlanAnalysisItems(filteredProtoPlans, issueTagsFilter)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(PlanAnalysisResponse{
+		Plans:              items,
+		AvailableDatabases: availDBs,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *App) handleSnapshotSummaries(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	server := strings.TrimSpace(r.URL.Query().Get("server"))
+	if server == "" {
+		http.Error(w, "server is required", http.StatusBadRequest)
+		return
+	}
+	start, end, err := parseTimeBounds(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp, err := a.client.ListSnapshotSummaries(r.Context(), &querierv2.ListSnapshotSummariesRequest{
+		Start:  timestamppb.New(start),
+		End:    timestamppb.New(end),
+		Server: server,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	summaries := make([]SnapshotSummaryDTO, 0, len(resp.GetSnapSummaries()))
+	for _, s := range resp.GetSnapSummaries() {
+		connsByWait := s.GetConnectionsByWaitEvent()
+		if connsByWait == nil {
+			connsByWait = map[string]int64{}
+		}
+		timeByWait := s.GetTimeMsByWaitEvent()
+		if timeByWait == nil {
+			timeByWait = map[string]int64{}
+		}
+		summaries = append(summaries, SnapshotSummaryDTO{
+			ID:                     s.GetId(),
+			Timestamp:              s.GetTimestamp().AsTime(),
+			Connections:            s.GetConnections(),
+			Waiters:                s.GetWaiters(),
+			Blockers:               s.GetBlockers(),
+			WaitDurationMs:         s.GetWaitDuration(),
+			AvgDuration:            s.GetAvgDuration(),
+			MaxDuration:            s.GetMaxDuration(),
+			ConnectionsByWaitEvent: connsByWait,
+			TimeMsByWaitEvent:      timeByWait,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(summaries); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (a *App) handleSnapshotSamples(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	snapID := strings.TrimSpace(r.URL.Query().Get("snapId"))
+	if snapID == "" {
+		http.Error(w, "snapId is required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := a.client.GetSnapshot(r.Context(), &querierv2.GetSnapshotRequest{Id: snapID})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	samples := make([]SnapshotSampleDTO, 0, len(resp.GetSnapshot().GetSamples()))
+	for _, s := range resp.GetSnapshot().GetSamples() {
+		blockedSessions := s.GetBlockInfo().GetBlockedSessions()
+		if blockedSessions == nil {
+			blockedSessions = []string{}
+		}
+		samples = append(samples, SnapshotSampleDTO{
+			SampleID:        s.GetId(),
+			SnapID:          s.GetSnapInfo().GetId(),
+			SessionID:       s.GetSession().GetSessionId(),
+			Status:          s.GetStatus(),
+			Text:            s.GetText(),
+			User:            s.GetSession().GetLoginName(),
+			ElapsedMs:       s.GetTimeElapsedMillis(),
+			WaitEvent:       s.GetWaitInfo().GetWaitType(),
+			WaitTimeMs:      s.GetWaitInfo().GetWaitTime(),
+			WaitResource:    s.GetWaitInfo().GetWaitResource(),
+			Database:        s.GetDb().GetDatabaseName(),
+			IsBlocked:       s.GetBlocked(),
+			IsBlocker:       s.GetBlocker(),
+			BlockedBy:       s.GetBlockInfo().GetBlockedBy(),
+			BlockedSessions: blockedSessions,
+			TraceID:         s.GetContext().GetTraceId(),
+			QueryHash:       s.GetQueryHash(),
+			PlanHandle:      s.GetPlanHandle(),
+			ProgramName:     s.GetSession().GetProgramName(),
+			HostName:        s.GetSession().GetHost(),
+			ClientIP:        s.GetSession().GetClientIp(),
+			SessionStatus:   s.GetSession().GetStatus(),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(samples); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

@@ -220,15 +220,12 @@ func TestOverlap_Enqueue_QueuesOnePending_NoOverlap(t *testing.T) {
 			minDelta = d
 		}
 	}
-	// Allow for OS timer and scheduler jitter (especially on Windows). Expect at least one near-immediate start
-	// where queued tick fires right after a long run completes. Consider anything within max(60ms, 2*interval) as immediate.
-	jitter := 60 * time.Millisecond
-	threshold := 2 * interval
-	if jitter > threshold {
-		threshold = jitter
-	}
-	if minDelta > threshold {
-		t.Fatalf("expected an immediate-ish start due to queued tick; min inter-start delta=%v (threshold=%v, interval=%v)", minDelta, threshold, interval)
+	// Because runs are sequential (no overlap) and each takes runDur (80ms),
+	// start-to-start delta with an enqueued tick should be right around runDur
+	// (well below runDur + 2*interval).
+	upperBound := runDur + 2*interval
+	if minDelta > upperBound {
+		t.Fatalf("expected an immediate-ish start after previous run finished; min inter-start delta=%v (upperBound=%v, runDur=%v, interval=%v)", minDelta, upperBound, runDur, interval)
 	}
 }
 

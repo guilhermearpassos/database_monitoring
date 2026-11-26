@@ -172,6 +172,7 @@ type QuerySample struct {
 	SessionLastRequestStart time.Time `json:"session_last_request_start"`
 	SessionLastRequestEnd   time.Time `json:"session_last_request_end"`
 	SessionClientIp         string    `json:"session_client_ip"`
+	TraceID                 string    `json:"trace_id"`
 }
 
 type BlockingNode struct {
@@ -182,4 +183,66 @@ type BlockingNode struct {
 
 type BlockChain struct {
 	Roots []BlockingNode `json:"roots"`
+}
+
+type PlanAnalysisItem struct {
+	PlanHandle       string                 `json:"plan_handle"`
+	QueryHash        string                 `json:"query_hash"`
+	SQLHandle        string                 `json:"sql_handle"`
+	Text             string                 `json:"text"`
+	Database         string                 `json:"database"`
+	SnapID           string                 `json:"snap_id"`
+	SampleID         string                 `json:"sample_id"`
+	LastSnapTime     time.Time              `json:"last_snap_time"`
+	TraceID          string                 `json:"trace_id"`
+	IssueCount       int32                  `json:"issue_count"`
+	Occurrences      int32                  `json:"occurrences"`
+	RelatedLockCount int32                  `json:"related_lock_count"`
+	IssueTags        []string               `json:"issue_tags"`
+	Converts         []PlanAffectingConvert `json:"converts"`
+	MissingIndexes   []MissingIndex         `json:"missing_indexes"`
+	MaxImpact        float64                `json:"max_impact"`
+}
+
+type PlanAnalysisResponse struct {
+	Plans              []PlanAnalysisItem `json:"plans"`
+	AvailableDatabases []string           `json:"available_databases"`
+}
+
+type SnapshotSummaryDTO struct {
+	ID                     string           `json:"id"`
+	Timestamp              time.Time        `json:"timestamp"`
+	Connections            int32            `json:"connections"`
+	Waiters                int32            `json:"waiters"`
+	Blockers               int32            `json:"blockers"`
+	WaitDurationMs         float64          `json:"wait_duration_ms"`
+	AvgDuration            float64          `json:"avg_duration"`
+	MaxDuration            float64          `json:"max_duration"`
+	ConnectionsByWaitEvent map[string]int64 `json:"connections_by_wait_event"`
+	TimeMsByWaitEvent      map[string]int64 `json:"time_ms_by_wait_event"`
+}
+
+type SnapshotSampleDTO struct {
+	SampleID        string   `json:"sample_id"`
+	SnapID          string   `json:"snap_id"`
+	SessionID       string   `json:"session_id"`
+	Status          string   `json:"status"`
+	Text            string   `json:"text"`
+	User            string   `json:"user"`
+	ElapsedMs       int64    `json:"elapsed_ms"`
+	WaitEvent       string   `json:"wait_event"`
+	WaitTimeMs      int64    `json:"wait_time_ms"`
+	WaitResource    string   `json:"wait_resource"`
+	Database        string   `json:"database"`
+	IsBlocked       bool     `json:"is_blocked"`
+	IsBlocker       bool     `json:"is_blocker"`
+	BlockedBy       string   `json:"blocked_by"`
+	BlockedSessions []string `json:"blocked_sessions"`
+	TraceID         string   `json:"trace_id"`
+	QueryHash       string   `json:"query_hash"`
+	PlanHandle      string   `json:"plan_handle"`
+	ProgramName     string   `json:"program_name"`
+	HostName        string   `json:"host_name"`
+	ClientIP        string   `json:"client_ip"`
+	SessionStatus   string   `json:"session_status"`
 }

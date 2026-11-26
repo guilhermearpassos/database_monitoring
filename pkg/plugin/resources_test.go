@@ -13,8 +13,10 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
+	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type mockCallResourceResponseSender struct {
@@ -32,6 +34,104 @@ type mockQuerierService struct {
 
 func (m *mockQuerierService) ListServerSummary(_ context.Context, _ *querierv2.ListServerSummaryRequest) (*querierv2.ListServerSummaryResponse, error) {
 	return &querierv2.ListServerSummaryResponse{}, nil
+}
+
+func (m *mockQuerierService) ListPlansWithIssues(_ context.Context, _ *querierv2.ListPlansWithIssuesRequest) (*querierv2.ListPlansWithIssuesResponse, error) {
+	now := timestamppb.Now()
+	return &querierv2.ListPlansWithIssuesResponse{
+		Plans: []*querierv2.PlansWithIssues{
+			{
+				IssueCount:       1,
+				RelatedLockCount: 3,
+				Occurrences:      12,
+				LatestSample: &dbmv1.QuerySample{
+					Id:         "sample-1",
+					Text:       "SELECT * FROM orders WHERE code = @p1",
+					PlanHandle: "plan-1",
+					Db:         &dbmv1.DBMetadata{DatabaseName: "orders_db"},
+					SnapInfo:   &dbmv1.SnapMetadata{Id: "snap-1", Timestamp: now},
+					Context:    &dbmv1.ContextInfo{TraceId: "0123456789abcdef0123456789abcdef"},
+				},
+				ParsedPlan: &dbmv1.ParsedExecutionPlan{
+					Warnings: []*dbmv1.PlanWarning{
+						{
+							Warning: &dbmv1.PlanWarning_Convert{
+								Convert: &dbmv1.PlanWarning_PlanAffectingConvert{
+									ConvertIssue: "Seek Plan",
+									Expression:   "CONVERT_IMPLICIT(nvarchar(50),[code],0)",
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				IssueCount:  1,
+				Occurrences: 5,
+				LatestSample: &dbmv1.QuerySample{
+					Id:         "sample-2",
+					Text:       "SELECT * FROM users WHERE email = @p1",
+					PlanHandle: "plan-2",
+					Db:         &dbmv1.DBMetadata{DatabaseName: "users_db"},
+					SnapInfo:   &dbmv1.SnapMetadata{Id: "snap-2", Timestamp: now},
+				},
+				ParsedPlan: &dbmv1.ParsedExecutionPlan{
+					Warnings: []*dbmv1.PlanWarning{
+						{
+							Warning: &dbmv1.PlanWarning_MissingIndex{
+								MissingIndex: &dbmv1.PlanWarning_MissingIndexWarning{
+									Database:        "[users_db]",
+									Schema:          "[dbo]",
+									Table:           "[users]",
+									Impact:          84.5,
+									EqualityColumns: []string{"[email]"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}, nil
+}
+
+func (m *mockQuerierService) ListSnapshotSummaries(_ context.Context, _ *querierv2.ListSnapshotSummariesRequest) (*querierv2.ListSnapshotSummariesResponse, error) {
+	return &querierv2.ListSnapshotSummariesResponse{
+		SnapSummaries: []*querierv2.SnapshotSummary{
+			{
+				Id:                     "snap-1",
+				Timestamp:              timestamppb.Now(),
+				Connections:            4,
+				Waiters:                1,
+				Blockers:               1,
+				WaitDuration:           1500,
+				ConnectionsByWaitEvent: map[string]int64{"LCK_M_X": 1, "": 3},
+				TimeMsByWaitEvent:      map[string]int64{"LCK_M_X": 1500},
+			},
+		},
+	}, nil
+}
+
+func (m *mockQuerierService) GetSnapshot(_ context.Context, req *querierv2.GetSnapshotRequest) (*querierv2.GetSnapshotResponse, error) {
+	return &querierv2.GetSnapshotResponse{
+		Snapshot: &dbmv1.DBSnapshot{
+			Id: req.GetId(),
+			Samples: []*dbmv1.QuerySample{
+				{
+					Id:                "sample-1",
+					Text:              "UPDATE orders SET status = 1",
+					Status:            "running",
+					Blocker:           true,
+					TimeElapsedMillis: 2500,
+					Db:                &dbmv1.DBMetadata{DatabaseName: "orders_db"},
+					Session:           &dbmv1.SessionMetadata{SessionId: "51", LoginName: "app_user"},
+					BlockInfo:         &dbmv1.BlockMetadata{BlockedSessions: []string{"52"}},
+					SnapInfo:          &dbmv1.SnapMetadata{Id: req.GetId()},
+					Context:           &dbmv1.ContextInfo{TraceId: "abcdef0123456789abcdef0123456789"},
+				},
+			},
+		},
+	}, nil
 }
 
 var testServerAddress string
@@ -132,4 +232,53 @@ func TestCallResourceAndHealth(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("planAnalysis filters single database and seek_plan_convert in memory", func(t *testing.T) {
+		var r mockCallResourceResponseSender
+		err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			URL:    "planAnalysis?server=localhost&databases=orders_db&issueTags=seek_plan_convert",
+			Path:   "planAnalysis",
+		}, &r)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r.response.Status)
+
+		var parsed PlanAnalysisResponse
+		require.NoError(t, json.Unmarshal(r.response.Body, &parsed))
+		require.Equal(t, []string{"orders_db", "users_db"}, parsed.AvailableDatabases)
+		require.Len(t, parsed.Plans, 1)
+		require.Equal(t, "orders_db", parsed.Plans[0].Database)
+		require.Contains(t, parsed.Plans[0].IssueTags, "seek_plan_convert")
+		require.Len(t, parsed.Plans[0].Converts, 1)
+		require.Equal(t, "Seek Plan", parsed.Plans[0].Converts[0].ConvertIssue)
+	})
+
+	t.Run("snapshotSummaries and snapshotSamples return typed JSON", func(t *testing.T) {
+		var r1 mockCallResourceResponseSender
+		err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			URL:    "snapshotSummaries?server=localhost",
+			Path:   "snapshotSummaries",
+		}, &r1)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r1.response.Status)
+		var sums []SnapshotSummaryDTO
+		require.NoError(t, json.Unmarshal(r1.response.Body, &sums))
+		require.Len(t, sums, 1)
+		require.Equal(t, int32(4), sums[0].Connections)
+
+		var r2 mockCallResourceResponseSender
+		err = app.CallResource(context.Background(), &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			URL:    "snapshotSamples?snapId=snap-1",
+			Path:   "snapshotSamples",
+		}, &r2)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r2.response.Status)
+		var samples []SnapshotSampleDTO
+		require.NoError(t, json.Unmarshal(r2.response.Body, &samples))
+		require.Len(t, samples, 1)
+		require.Equal(t, "abcdef0123456789abcdef0123456789", samples[0].TraceID)
+		require.True(t, samples[0].IsBlocker)
+	})
 }

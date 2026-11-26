@@ -48,8 +48,8 @@ func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlS
 var _ collector.Snapshotter = (*SqlServerSnapshotter)(nil)
 
 func parseContext(raw []byte) common_domain.ContextInfo {
-	//check if raw starts with MagicTraceparent
-	if bytes.HasPrefix(raw, MagicTraceparent) {
+	// Check that raw starts with MagicTraceparent and contains full TraceID + SpanID
+	if len(raw) >= 29 && bytes.HasPrefix(raw, MagicTraceparent) {
 		return common_domain.ContextInfo{
 			// Trace ID: 16 bytes starting at index 5
 			TraceId: hex.EncodeToString(raw[5:21]),

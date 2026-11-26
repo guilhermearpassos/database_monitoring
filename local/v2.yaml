@@ -27,7 +27,7 @@ services:
     targets:
       - alias: "localhost"
         driver: mssql
-        conn_string: "server=localhost;port=1433;user id=sa;password=SqlServer2019!"
+        conn_string: "server=localhost;port=1433;user id=sa;password=Exchange@2026!"
         interval: 10s
     ingestor_client:
       endpoint: inproc://
