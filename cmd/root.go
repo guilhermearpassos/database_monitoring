@@ -15,10 +15,6 @@ func main() {
 		},
 	}
 	c.AddCommand(DbmV2)
-	c.AddCommand(CollectorCmd)
-	c.AddCommand(AgentCmd)
-	c.AddCommand(GrpcCmd)
-	c.AddCommand(UiCmd)
 	c.AddCommand(MigrateCmd)
 	c.AddCommand(LoadGenCmd)
 	err := c.Execute()

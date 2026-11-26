@@ -407,12 +407,23 @@ where s.snap_time between $1 and $2
 		if blocker {
 			lc++
 		}
+		issueTags := make([]string, 0, 3)
+		if missingIndexes > 0 {
+			issueTags = append(issueTags, "missing_index")
+		}
+		if implicitConversions > 0 {
+			issueTags = append(issueTags, "implicit_conversion")
+		}
+		if largeTableScans > 0 {
+			issueTags = append(issueTags, "large_table_scan")
+		}
 		pwi := &domain.PlanWithIssue{
 			ParsedPlan:  parsedPlan,
 			Sample:      domainSample,
 			IssueCount:  issueCount,
 			LockCount:   lc,
 			Occurrences: 1,
+			IssueTags:   issueTags,
 		}
 		ret[planHandle] = pwi
 

@@ -3,7 +3,6 @@ import {FetchResponse, getBackendSrv, getDataSourceSrv, PluginPage} from '@grafa
 import {lastValueFrom, Observable} from 'rxjs';
 import {
     Alert,
-    Button,
     Card,
     Combobox,
     ComboboxOption, Drawer,
@@ -79,14 +78,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
         padding: ${theme.spacing(2)};
         box-sizing: border-box;
     `,
-    paginationContainer: css`
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: ${theme.spacing(2)};
-        padding: ${theme.spacing(1)};
-        border-top: 1px solid ${theme.colors.border.medium};
-    `,
     loadingContainer: css`
         height: 200px;
         display: flex;
@@ -114,9 +105,6 @@ const PageTwo = () => {
     const [servers, setServers] = useState<ServerMetadata[]>([]);
     const [selectedServer, setSelectedServer] = useState<ComboboxOption | null>(null);
     const [snapshots, setSnapshots] = useState<DataFrame[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalCount, setTotalCount] = useState(0);
-    const [pageSize] = useState(10);
     const [datasource, setDatasource] = useState<DataSourceApi | null>(null);
     const [sampleID, setSampleID] = useState<SampleID | null>(null);
     const [chartTimeRange, setChartTimeRange] = useState<TimeRange>(() => ({
@@ -194,8 +182,8 @@ const PageTwo = () => {
         loadServers(chartTimeRange);
     }, [chartTimeRange, loadServers]);
 
-    // // Load snapshots with pagination
-    const loadSnapshots = useCallback(async (serverName: string, page: number, timeRange: TimeRange) => {
+    // Load plans with issues
+    const loadPlans = useCallback(async (serverName: string, timeRange: TimeRange) => {
         if (!datasource) {
             console.warn('Datasource not available');
             setSnapshots([]);
@@ -205,11 +193,8 @@ const PageTwo = () => {
             setDataLoading(true);
             setError(null);
 
-            console.log(pageSize)
-            console.log(page)
-            // This mirrors what Explore does - simple query structure
             const query: MyQuery = {
-                refId: 'A', // Explore always starts with 'A'
+                refId: 'A',
                 database: serverName,
                 hide: false,
                 datasource: {
@@ -219,9 +204,8 @@ const PageTwo = () => {
                 queryType: "plan_analysis"
             };
 
-            // Mimic Explore's query request structure exactly
             const queryRequest: DataQueryRequest<MyQuery> = {
-                app: CoreApp.Explore, // Use Explore app context
+                app: CoreApp.Explore,
                 requestId: `explore_${Date.now()}`,
                 timezone: 'browser',
                 panelId: 1,
@@ -231,16 +215,12 @@ const PageTwo = () => {
                 interval: '1m',
                 intervalMs: 60000,
                 targets: [query],
-                maxDataPoints: 1000, // Explore uses higher maxDataPoints
+                maxDataPoints: 1000,
                 scopedVars: {},
                 startTime: Date.now(),
                 liveStreaming: false
             };
 
-            console.log('Query request (same as Explore):', queryRequest);
-
-            setTotalCount(1)
-            // Use the datasource query method directly - exactly like Explore
             const resultObservable = datasource.query(queryRequest);
             let result: DataQueryResponse
             if (resultObservable instanceof Observable) {
@@ -249,9 +229,7 @@ const PageTwo = () => {
             } else {
                 result = await resultObservable;
             }
-            console.log('Query response (raw):', result);
 
-            // Explore doesn't transform the data - it uses it directly
             if (result.data && Array.isArray(result.data)) {
                 const transformedFrames: DataFrame[] = processResponse(result)
                 setSnapshots(transformedFrames.map((f) => addWaitTypeHTMLColumn(f, "waitsByType", "Waits")));
@@ -263,7 +241,7 @@ const PageTwo = () => {
         } finally {
             setDataLoading(false);
         }
-    }, [datasource, pageSize]);
+    }, [datasource]);
 
 
 
@@ -290,13 +268,10 @@ const PageTwo = () => {
     // Handle server selection
     const handleServerChange = useCallback((option: ComboboxOption<string> | null) => {
         setSelectedServer(option);
-        setCurrentPage(1);
-
     }, []);
 
     const handleChartTimeRangeChange = useCallback((nextRange: TimeRange) => {
         setChartTimeRange(nextRange);
-        setCurrentPage(1);
     }, []);
 
     useEffect(() => {
@@ -305,21 +280,14 @@ const PageTwo = () => {
             return;
         }
         const tr: TimeRange = {from: chartTimeRange.from, to: chartTimeRange.to, raw: chartTimeRange.raw};
-        loadSnapshots(serverName, 1, tr);
+        loadPlans(serverName, tr);
     }, [
         selectedServer?.value,
         chartTimeRange.from,
         chartTimeRange.to,
         chartTimeRange.raw,
-        loadSnapshots
+        loadPlans
     ]);
-
-    // Handle pagination
-    const handlePageChange = useCallback((page: number) => {
-        if (selectedServer?.value) {
-            // loadSnapshots(selectedServer.value, page);
-        }
-    }, [selectedServer/*, loadSnapshots*/]);
 
 
     // Prepare server options for Select component
@@ -350,7 +318,7 @@ const PageTwo = () => {
                 type: datasource.type,
                 uid: datasource.uid
             },
-            queryType: "plan_analysis",
+            queryType: "snapshot",
             snapshotID: snapID
         };
 
@@ -468,39 +436,9 @@ const PageTwo = () => {
                                                         getDetailsData
                                                     }
                                                     summaryData={snapshots}
-                                                    timeRange={{
-                                                        from: dateTime().subtract(1, 'hour'),
-                                                        to: dateTime(),
-                                                        raw: {from: 'now-1h', to: 'now'}
-                                                    }}
+                                                    timeRange={chartTimeRange}
                                                     onSampleSelection={onSampleSelection}
                                                 />
-
-                                                <div className={styles.paginationContainer}>
-                        <span>
-                          Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} entries
-                        </span>
-                                                    <div>
-                                                        <Button
-                                                            variant="secondary"
-                                                            onClick={() => handlePageChange(currentPage - 1)}
-                                                            disabled={currentPage <= 1}
-                                                            style={{marginRight: '8px'}}
-                                                        >
-                                                            Previous
-                                                        </Button>
-                                                        <span style={{margin: '0 16px'}}>
-                            Page {currentPage} of {Math.ceil(totalCount / pageSize)}
-                          </span>
-                                                        <Button
-                                                            variant="secondary"
-                                                            onClick={() => handlePageChange(currentPage + 1)}
-                                                            disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                                                        >
-                                                            Next
-                                                        </Button>
-                                                    </div>
-                                                </div>
                                             </>
                                         )}
                                     </div>

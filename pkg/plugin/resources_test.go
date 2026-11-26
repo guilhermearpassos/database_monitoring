@@ -5,93 +5,86 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"net"
 	"net/http"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
-// mockCallResourceResponseSender implements backend.CallResourceResponseSender
-// for use in tests.
 type mockCallResourceResponseSender struct {
 	response *backend.CallResourceResponse
 }
 
-// Send sets the received *backend.CallResourceResponse to s.response
 func (s *mockCallResourceResponseSender) Send(response *backend.CallResourceResponse) error {
 	s.response = response
 	return nil
 }
 
-type MockGrpcService struct {
-	*dbmv1.UnimplementedDBMApiServer
-	*dbmv1.UnimplementedDBMSupportApiServer
+type mockQuerierService struct {
+	querierv2.UnimplementedQuerierAPIServer
+}
+
+func (m *mockQuerierService) ListServerSummary(_ context.Context, _ *querierv2.ListServerSummaryRequest) (*querierv2.ListServerSummaryResponse, error) {
+	return &querierv2.ListServerSummaryResponse{}, nil
 }
 
 var testServerAddress string
 
 func TestMain(m *testing.M) {
-	lis, err := net.Listen("tcp", ":0")
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
 	defer lis.Close()
 
-	testServerAddress = fmt.Sprintf("localhost:%d", lis.Addr().(*net.TCPAddr).Port)
+	testServerAddress = fmt.Sprintf("127.0.0.1:%d", lis.Addr().(*net.TCPAddr).Port)
 
 	grpcServer := grpc.NewServer()
-	mockService := &MockGrpcService{}
-	dbmv1.RegisterDBMApiServer(grpcServer, mockService)
-	dbmv1.RegisterDBMSupportApiServer(grpcServer, mockService)
+	querierv2.RegisterQuerierAPIServer(grpcServer, &mockQuerierService{})
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			panic(err)
 		}
 	}()
-	defer grpcServer.Stop()
 
-	m.Run()
+	code := m.Run()
+	grpcServer.Stop()
+	os.Exit(code)
 }
 
-// TestCallResource tests CallResource calls, using backend.CallResourceRequest and backend.CallResourceResponse.
-// This ensures the httpadapter for CallResource works correctly.
-func TestCallResource(t *testing.T) {
-	// Initialize app
+func TestCallResourceAndHealth(t *testing.T) {
 	data := map[string]interface{}{
-		"APIURL": testServerAddress,
+		"apiUrl": testServerAddress,
 	}
-	marshal, err2 := json.Marshal(data)
-	require.NoError(t, err2)
+	marshal, err := json.Marshal(data)
+	require.NoError(t, err)
 	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{
-		JSONData:                marshal,
-		DecryptedSecureJSONData: nil,
-		Updated:                 time.Time{},
-		APIVersion:              "",
+		JSONData: marshal,
+		Updated:  time.Time{},
 	})
-	if err != nil {
-		t.Fatalf("new app: %s", err)
-	}
-	if inst == nil {
-		t.Fatal("inst must not be nil")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, inst)
+
 	app, ok := inst.(*App)
-	if !ok {
-		t.Fatal("inst must be of type *App")
-	}
+	require.True(t, ok)
+	defer app.Dispose()
 
-	// Set up and run test cases
+	health, err := app.CheckHealth(context.Background(), &backend.CheckHealthRequest{})
+	require.NoError(t, err)
+	require.Equal(t, backend.HealthStatusOk, health.Status)
+
 	for _, tc := range []struct {
-		name string
-
-		method string
-		path   string
-		body   []byte
-
+		name      string
+		method    string
+		path      string
+		body      []byte
 		expStatus int
 		expBody   []byte
 	}{
@@ -115,28 +108,27 @@ func TestCallResource(t *testing.T) {
 			expStatus: http.StatusOK,
 			expBody:   []byte(`{"message":"ok"}`),
 		},
+		{
+			name:      "getQueryDetails missing snapId 400",
+			method:    http.MethodGet,
+			path:      "getQueryDetails?sampleId=abc",
+			expStatus: http.StatusBadRequest,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// Request by calling CallResource. This tests the httpadapter.
 			var r mockCallResourceResponseSender
 			err = app.CallResource(context.Background(), &backend.CallResourceRequest{
 				Method: tc.method,
 				Path:   tc.path,
 				Body:   tc.body,
 			}, &r)
-			if err != nil {
-				t.Fatalf("CallResource error: %s", err)
-			}
-			if r.response == nil {
-				t.Fatal("no response received from CallResource")
-			}
-			if tc.expStatus > 0 && tc.expStatus != r.response.Status {
-				t.Errorf("response status should be %d, got %d", tc.expStatus, r.response.Status)
+			require.NoError(t, err)
+			require.NotNil(t, r.response)
+			if tc.expStatus > 0 {
+				require.Equal(t, tc.expStatus, r.response.Status)
 			}
 			if len(tc.expBody) > 0 {
-				if tb := bytes.TrimSpace(r.response.Body); !bytes.Equal(tb, tc.expBody) {
-					t.Errorf("response body should be %s, got %s", tc.expBody, tb)
-				}
+				require.Equal(t, tc.expBody, bytes.TrimSpace(r.response.Body))
 			}
 		})
 	}

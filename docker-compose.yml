@@ -12,28 +12,6 @@ services:
   #    extra_hosts:
   #      - "host.docker.internal:host-gateway"
 
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2019-latest
-    environment:
-      SA_PASSWORD: "SqlServer2019!"
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: "Developer"
-    ports:
-      - "1433:1433"
-
-  load_gen:
-    #    container_name: sqlsights-grpc
-    image: guilhermearpassos/sql-sight:v1.0.28
-    build: .
-
-    command:
-      - "load_gen"
-      - "--config=/cfg/agent.toml"
-    volumes:
-      - "./local/docker:/cfg"
-    depends_on:
-      - sqlserver
-
   sqlsights:
     container_name: sqlsights
     image: guilhermearpassos/sql-sight:v2.0.0-b23
@@ -48,7 +26,6 @@ services:
       - "9016:9016"
     depends_on:
       - postgres
-      - sqlserver
 
   postgres:
     image: postgres:17-alpine

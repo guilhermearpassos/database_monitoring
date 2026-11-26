@@ -96,10 +96,11 @@ func discardLogger() *slog.Logger {
 }
 
 func newRuntimeWithTask(t Task) *BackGroundTaskRuntime {
-	return &BackGroundTaskRuntime{
-		tasks:  []Task{t},
-		logger: discardLogger(),
+	rt := NewBackGroundTaskRuntime(discardLogger())
+	if err := rt.RegisterTask(t); err != nil {
+		panic(err)
 	}
+	return rt
 }
 
 func waitFor(predicate func() bool, timeout time.Duration) bool {

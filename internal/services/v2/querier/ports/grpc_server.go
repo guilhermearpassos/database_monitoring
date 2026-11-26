@@ -66,6 +66,7 @@ func (s GRPCServer) ListPlansWithIssues(ctx context.Context, in *querierv2.ListP
 			IssueCount:       int32(r.IssueCount),
 			RelatedLockCount: int32(r.LockCount),
 			Occurrences:      int32(r.Occurrences),
+			IssueTag:         r.IssueTags,
 		}
 	}
 	return &querierv2.ListPlansWithIssuesResponse{Plans: protoRet}, nil

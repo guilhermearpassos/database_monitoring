@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/guilhermearpassos/database-monitoring/internal/services/ui/domain"
 	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -26,7 +25,6 @@ func (a *App) handlePing(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 // handleEcho is an example HTTP POST resource that accepts a JSON with a "message" key and
@@ -48,7 +46,6 @@ func (a *App) handleEcho(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 // registerRoutes takes a *http.ServeMux and registers some HTTP handlers.
@@ -63,8 +60,6 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 }
 
 func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
-	// handle the request
-	// e.g. call a third-party API
 	sampleID := r.URL.Query().Get("sampleId")
 	snapID := r.URL.Query().Get("snapId")
 	if sampleID == "" {
@@ -73,6 +68,7 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 	}
 	if snapID == "" {
 		http.Error(w, "snapId is required", http.StatusBadRequest)
+		return
 	}
 	resp, err := a.client.GetSampleDetails(r.Context(), &querierv2.GetSampleDetailsRequest{
 		SampleId: sampleID,
@@ -83,10 +79,9 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var plan domain.ParsedExecutionPlan
+	var plan ParsedExecutionPlan
 	if resp.ParsedPlan != nil {
-		plan = domain.ProtoParsedPlanToDomain(resp.ParsedPlan)
-
+		plan = protoParsedPlanToDomain(resp.ParsedPlan)
 	}
 	blockChain, err2 := blockChainFromProto(resp.BlockChain)
 	if err2 != nil {
@@ -99,9 +94,9 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m, err := json.Marshal(struct {
-		Plan   domain.ParsedExecutionPlan `json:"plan"`
-		Chain  domain.BlockChain          `json:"blocking_chain"`
-		Sample domain.QuerySample         `json:"query_sample"`
+		Plan   ParsedExecutionPlan `json:"plan"`
+		Chain  BlockChain          `json:"blocking_chain"`
+		Sample QuerySample         `json:"query_sample"`
 	}{
 		Plan:   plan,
 		Chain:  blockChain,
@@ -111,83 +106,97 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write(m)
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(m)
 }
 
-func blockChainFromProto(chain *querierv2.BlockChain) (domain.BlockChain, error) {
-	roots := make([]domain.BlockingNode, len(chain.Roots))
+func blockChainFromProto(chain *querierv2.BlockChain) (BlockChain, error) {
+	if chain == nil {
+		return BlockChain{Roots: []BlockingNode{}}, nil
+	}
+	roots := make([]BlockingNode, len(chain.Roots))
 	for i, root := range chain.Roots {
 		node, err2 := nodeFromProto(root, i)
 		if err2 != nil {
-			return domain.BlockChain{}, err2
+			return BlockChain{}, err2
 		}
 		roots[i] = node
 	}
-	return domain.BlockChain{
+	return BlockChain{
 		Roots: roots,
 	}, nil
 }
 
-func protoSampleToDomain(sample *dbmv1.QuerySample) (domain.QuerySample, error) {
+func protoSampleToDomain(sample *dbmv1.QuerySample) (QuerySample, error) {
+	if sample == nil {
+		return QuerySample{}, fmt.Errorf("nil query sample")
+	}
 	var blockTime, blockDetails string
-	if sample.Blocker {
+	if sample.Blocker && sample.BlockInfo != nil {
 		blockDetails = fmt.Sprintf("%d block waiters", len(sample.BlockInfo.BlockedSessions))
 		if sample.Blocked {
 			blockDetails += " | "
 		}
 	}
 	if sample.Blocked {
-		blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
-		blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
+		if sample.WaitInfo != nil {
+			blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
+		}
+		if sample.BlockInfo != nil {
+			blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
+		}
 	}
-	sid, err2 := strconv.Atoi(sample.Session.SessionId)
-	if err2 != nil {
-		return domain.QuerySample{}, err2
+	var sid int
+	if sample.GetSession().GetSessionId() != "" {
+		var err2 error
+		sid, err2 = strconv.Atoi(sample.GetSession().GetSessionId())
+		if err2 != nil {
+			return QuerySample{}, err2
+		}
 	}
 
-	dSample := domain.QuerySample{
+	dSample := QuerySample{
 		SID:                     sid,
 		Query:                   sample.Text,
 		ExecutionTime:           fmt.Sprintf("%d ms", sample.TimeElapsedMillis),
-		User:                    sample.Session.LoginName,
+		User:                    sample.GetSession().GetLoginName(),
 		IsBlocker:               sample.Blocker,
 		IsWaiter:                sample.Blocked,
 		BlockingTime:            blockTime,
 		BlockDetails:            blockDetails,
-		WaitEvent:               sample.WaitInfo.WaitType,
-		Database:                sample.Db.DatabaseName,
+		WaitEvent:               sample.GetWaitInfo().GetWaitType(),
+		Database:                sample.GetDb().GetDatabaseName(),
 		SampleID:                sample.Id,
-		SnapID:                  sample.SnapInfo.Id,
+		SnapID:                  sample.GetSnapInfo().GetId(),
 		SQLHandle:               sample.SqlHandle,
 		PlanHandle:              sample.PlanHandle,
 		Status:                  sample.Status,
 		QueryHash:               sample.QueryHash,
-		SessionLoginTime:        sample.Session.LoginTime.AsTime(),
-		SessionHost:             sample.Session.Host,
-		SessionClientIp:         sample.Session.ClientIp,
-		SessionStatus:           sample.Session.Status,
-		SessionProgramName:      sample.Session.ProgramName,
-		SessionLastRequestStart: sample.Session.LastRequestStart.AsTime(),
-		SessionLastRequestEnd:   sample.Session.LastRequestEnd.AsTime(),
+		SessionLoginTime:        sample.GetSession().GetLoginTime().AsTime(),
+		SessionHost:             sample.GetSession().GetHost(),
+		SessionClientIp:         sample.GetSession().GetClientIp(),
+		SessionStatus:           sample.GetSession().GetStatus(),
+		SessionProgramName:      sample.GetSession().GetProgramName(),
+		SessionLastRequestStart: sample.GetSession().GetLastRequestStart().AsTime(),
+		SessionLastRequestEnd:   sample.GetSession().GetLastRequestEnd().AsTime(),
 	}
 	return dSample, nil
 }
 
-func nodeFromProto(root *querierv2.BlockChain_BlockingNode, i int) (domain.BlockingNode, error) {
+func nodeFromProto(root *querierv2.BlockChain_BlockingNode, i int) (BlockingNode, error) {
 	ds, err := protoSampleToDomain(root.QuerySample)
 	if err != nil {
-		return domain.BlockingNode{}, err
+		return BlockingNode{}, err
 	}
-	childNodes := make([]domain.BlockingNode, len(root.ChildNodes))
+	childNodes := make([]BlockingNode, len(root.ChildNodes))
 	for j, child := range root.ChildNodes {
 		cn, err2 := nodeFromProto(child, i+1)
 		if err2 != nil {
-			return domain.BlockingNode{}, err2
+			return BlockingNode{}, err2
 		}
 		childNodes[j] = cn
 	}
-	node := domain.BlockingNode{
+	node := BlockingNode{
 		QuerySample: ds,
 		ChildNodes:  childNodes,
 		Level:       i,
@@ -494,6 +503,7 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 	queries := make([]string, 0, size)
 	databases := make([]string, 0, size)
 	issues := make([]float64, 0, size)
+	issueTags := make([]string, 0, size)
 	occurrences := make([]float64, 0, size)
 	locks := make([]float64, 0, size)
 	times := make([]time.Time, 0, size)
@@ -502,6 +512,7 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 	for _, p := range r.GetPlans() {
 		queries = append(queries, p.GetLatestSample().GetText())
 		issues = append(issues, float64(p.GetIssueCount()))
+		issueTags = append(issueTags, strings.Join(p.GetIssueTag(), ", "))
 		occurrences = append(occurrences, float64(p.GetOccurrences()))
 		locks = append(locks, float64(p.GetRelatedLockCount()))
 		times = append(times, p.GetLatestSample().GetSnapInfo().GetTimestamp().AsTime())
@@ -514,6 +525,7 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 		data.NewField("text", nil, queries),
 		data.NewField("database", nil, databases),
 		data.NewField("issues", nil, issues),
+		data.NewField("issueTags", nil, issueTags),
 		data.NewField("occurrences", nil, occurrences),
 		data.NewField("locks", nil, locks),
 		data.NewField("snapID", nil, snapIds),

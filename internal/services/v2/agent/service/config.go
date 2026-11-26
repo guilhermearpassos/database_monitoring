@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
@@ -15,6 +16,7 @@ import (
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/adapters/ingestor"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/ports/tasks"
 	ingestorv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2"
+	"google.golang.org/grpc"
 )
 
 type TargetConfig struct {
@@ -22,14 +24,18 @@ type TargetConfig struct {
 	Driver         string         `yaml:"driver" toml:"driver"`
 	ConnString     string         `yaml:"conn_string" toml:"conn_string"`
 	SnapInterval   time.Duration  `yaml:"snap_interval" toml:"snap_interval"`
+	Interval       time.Duration  `yaml:"interval" toml:"interval"`
 	PlanCollection PlanCollection `yaml:"plan" toml:"plan"`
 }
 
 func (cfg *TargetConfig) GetSnapInterval() time.Duration {
-	if cfg.SnapInterval == 0 {
-		return 10 * time.Second
+	if cfg.SnapInterval > 0 {
+		return cfg.SnapInterval
 	}
-	return cfg.SnapInterval
+	if cfg.Interval > 0 {
+		return cfg.Interval
+	}
+	return 10 * time.Second
 }
 
 type PlanCollection struct {
@@ -60,6 +66,27 @@ type AgentConfig struct {
 func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel) (appcommon.Service, error) {
 	tsks := make(map[string]runtimes.Task, len(c.Targets))
 	logger := slog.Default()
+
+	var conn grpc.ClientConnInterface
+	if c.IngestorClient.Endpoint == "" || strings.HasPrefix(c.IngestorClient.Endpoint, "inproc://") {
+		conn = inproc
+	} else {
+		maxMsgSize := c.IngestorClient.MaxMsgSize
+		if maxMsgSize <= 0 {
+			maxMsgSize = 100 * 1024 * 1024
+		}
+		cc, err := telemetry.OpenInstrumentedClientConn(c.IngestorClient.Endpoint, maxMsgSize, c.IngestorClient.TlsEnabled)
+		if err != nil {
+			return nil, fmt.Errorf("dial ingestor %s: %w", c.IngestorClient.Endpoint, err)
+		}
+		conn = cc
+	}
+	isc := ingestorv2.NewIngestionServiceClient(conn)
+	ic, err := ingestor.New(isc)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, target := range c.Targets {
 		server := common_domain.ServerMeta{
 			Host: target.Alias,
@@ -71,11 +98,6 @@ func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel
 		}
 		ss := collector.NewSqlServerSnapshotter(db, server)
 
-		isc := ingestorv2.NewIngestionServiceClient(inproc)
-		ic, err := ingestor.New(isc)
-		if err != nil {
-			return nil, err
-		}
 		t := tasks.NewCollectSnapshotTask(target.Alias, []string{}, target.GetSnapInterval(), ss, ic, logger)
 		tsks[t.Name()] = t
 		planCfg := target.PlanCollection

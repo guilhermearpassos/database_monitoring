@@ -47,9 +47,9 @@ func TestBackGroundTaskRuntime_StartStop_RunsTask(t *testing.T) {
         sleep:    1 * time.Millisecond,
     }
 
-    rt := &BackGroundTaskRuntime{
-        tasks:  []Task{task},
-        logger: newLogger(),
+    rt := NewBackGroundTaskRuntime(newLogger())
+    if err := rt.RegisterTask(task); err != nil {
+        t.Fatalf("register task: %v", err)
     }
 
     ctx := context.Background()

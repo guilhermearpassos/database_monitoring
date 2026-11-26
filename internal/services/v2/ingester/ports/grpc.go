@@ -37,6 +37,7 @@ func (u UpIter) Next(ctx context.Context) (*domain.SnapUploadMessage, error) {
 		if err == io.EOF {
 			return nil, nil
 		}
+		return nil, err
 	}
 	if msg == nil {
 		return nil, nil
@@ -85,6 +86,7 @@ func (u PlanUpIter) Next(ctx context.Context) (*domain.PlanUploadMessage, error)
 		if err == io.EOF {
 			return nil, nil
 		}
+		return nil, err
 	}
 	if msg == nil {
 		return nil, nil
@@ -136,15 +138,17 @@ func (s *GrpcIngester) IngestSnapshotStream(in grpc.ClientStreamingServer[ingest
 	var msg string
 	status := ingestorv2.SnapshotUploadResult_OK
 	if err != nil {
-		if errors.As(err, &domain.ErrMissingChunks) {
+		if errors.Is(err, domain.ErrMissingChunks) {
 			status = ingestorv2.SnapshotUploadResult_PARTIAL
+			msg = err.Error()
+		} else {
+			return err
 		}
 	}
-	err = in.SendAndClose(&ingestorv2.SnapshotUploadResult{
+	return in.SendAndClose(&ingestorv2.SnapshotUploadResult{
 		Status:  status,
 		Message: msg,
 	})
-	return err
 }
 
 func (s *GrpcIngester) GetMissingChunks(ctx context.Context, in *ingestorv2.GetMissingChunksRequest) (*ingestorv2.GetMissingChunksResponse, error) {

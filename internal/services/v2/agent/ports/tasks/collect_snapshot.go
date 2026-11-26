@@ -56,7 +56,7 @@ func (c CollectSnapshotTask) Run(ctx context.Context) error {
 		return fmt.Errorf("send snapshot: %w", err)
 	}
 	if resp.Status != ingestorv2.SnapshotUploadResult_OK {
-		c.logger.WarnContext(ctx, "Snapshot upload failed with status %s and message %s", resp.Status, resp.Message)
+		c.logger.WarnContext(ctx, "Snapshot upload failed", "status", resp.Status.String(), "message", resp.Message)
 	}
 	return nil
 }

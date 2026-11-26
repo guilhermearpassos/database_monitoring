@@ -4,8 +4,8 @@ import (
 	"embed"
 	"testing"
 
-	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/adapters/parsers"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/ports/tasks/parsers"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"github.com/stretchr/testify/require"
 )

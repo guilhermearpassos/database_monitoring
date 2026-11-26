@@ -53,18 +53,18 @@ func (c AnalizePlansTask) Run(ctx context.Context) error {
 	for _, plan := range plansToAnalize {
 		parsedPlan, err2 := parsers.ParseExecutionPlan(plan.XmlData)
 		if err2 != nil {
-			err = errors.Join(err, err2)
+			err = errors.Join(err, fmt.Errorf("parse plan %s: %w", plan.PlanHandle, err2))
+			continue
 		}
 		MissingIndexes := 0
 		ImplicitConversions := 0
 		LargeTableScans := 0
 		for _, b := range parsedPlan.Batches {
-			for _, s := range b.Statements.StmtSimple {
+			for _, s := range parsers.CollectAllStatements(b.Statements) {
 				if s.QueryPlan == nil {
 					continue
 				}
 				if x := s.QueryPlan.MissingIndexes; x != nil {
-
 					MissingIndexes += len(x.MissingIndexGroups)
 				}
 				ImplicitConversions += len(s.QueryPlan.PlanAffectingConvert)

@@ -22,4 +22,5 @@ type PlanWithIssue struct {
 	IssueCount  int
 	LockCount   int
 	Occurrences int
+	IssueTags   []string
 }

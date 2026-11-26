@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/common/custom_errors"
-	"github.com/guilhermearpassos/database-monitoring/internal/services/collector/adapters/parsers"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain/converters"
+	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/ports/tasks/parsers"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/querier/domain"
 	querierv2 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"

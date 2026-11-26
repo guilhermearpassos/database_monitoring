@@ -18,19 +18,19 @@ import (
 )
 
 type TelemetryConfig struct {
-	Enabled     bool          `toml:"enabled"`
-	ServiceName string        `toml:"service_name"`
-	OTLP        OTLPConfig    `toml:"otlp"`
-	Metrics     MetricsConfig `toml:"metrics"`
+	Enabled     bool          `toml:"enabled" yaml:"enabled"`
+	ServiceName string        `toml:"service_name" yaml:"service_name"`
+	OTLP        OTLPConfig    `toml:"otlp" yaml:"otlp"`
+	Metrics     MetricsConfig `toml:"metrics" yaml:"metrics"`
 }
 type MetricsConfig struct {
-	Enabled bool   `toml:"enabled"`
-	Host    string `toml:"host"`
+	Enabled bool   `toml:"enabled" yaml:"enabled"`
+	Host    string `toml:"host" yaml:"host"`
 }
 
 type OTLPConfig struct {
-	Enabled  bool   `toml:"enabled"`
-	Endpoint string `toml:"endpoint"`
+	Enabled  bool   `toml:"enabled" yaml:"enabled"`
+	Endpoint string `toml:"endpoint" yaml:"endpoint"`
 }
 
 func InitTelemetryFromConfig(config TelemetryConfig) error {
@@ -45,7 +45,7 @@ func InitTelemetryFromConfig(config TelemetryConfig) error {
 			promHost := config.Metrics.Host
 			mux := http.NewServeMux()
 			mux.Handle("/metrics", promhttp.Handler())
-			logger.Info("serving metrics on %s", promHost)
+			logger.Info("serving metrics", "host", promHost)
 			err2 := http.ListenAndServe(promHost, mux)
 			if err2 != nil {
 				panic(err2)

@@ -17,25 +17,29 @@ import (
 )
 
 type GRPCClientConfig struct {
-	Endpoint   string `toml:"endpoint"`
-	MaxMsgSize int    `toml:"max_msg_size"`
-	TlsEnabled bool   `toml:"tls_enabled"`
+	Endpoint   string `toml:"endpoint" yaml:"endpoint"`
+	MaxMsgSize int    `toml:"max_msg_size" yaml:"max_msg_size"`
+	TlsEnabled bool   `toml:"tls_enabled" yaml:"tls_enabled"`
 }
 
 func OpenInstrumentedClientConn(endpoint string, maxSize int, tlsEnabled bool) (*grpc.ClientConn, error) {
 	// Shared dial options for both network and inproc
 	baseOpts := []grpc.DialOption{
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-		grpc.WithDefaultCallOptions(
+	}
+	if maxSize > 0 {
+		baseOpts = append(baseOpts, grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxSize),
 			grpc.MaxCallSendMsgSize(maxSize),
-		),
+		))
 	}
-	// Network path (default): plaintext unless TLS enabled
-	opts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, baseOpts...)
+	var creds grpc.DialOption
 	if tlsEnabled {
-		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})))
+		creds = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}))
+	} else {
+		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 	}
+	opts := append([]grpc.DialOption{creds}, baseOpts...)
 	return grpc.DialContext(context.Background(), endpoint, opts...)
 
 }
@@ -46,9 +50,8 @@ func NewGrpcServer(maxMessageLength int, tlsEnabled bool, tlsCertPath string, tl
 		grpc_prometheus.UnaryServerInterceptor,
 		grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(func(ctx context.Context, r interface{}) error {
 			panicMessage := fmt.Sprintf("%v", r)
-			//span := trace.
 			fmt.Printf("%s\n", debug.Stack())
-			return fmt.Errorf(panicMessage)
+			return fmt.Errorf("%s", panicMessage)
 		})),
 	}
 	opts := []grpc.ServerOption{

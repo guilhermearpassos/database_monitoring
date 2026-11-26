@@ -386,8 +386,8 @@ func ParseExecutionPlan(data string) (*ParsedExecutionPlan, error) {
 	return &plan, nil
 }
 
-// Helper function to recursively collect all statements (including those in loops)
-func collectAllStatements(statements Statements) []StmtSimple {
+// CollectAllStatements recursively collects all statements (including those in loops and conditionals)
+func CollectAllStatements(statements Statements) []StmtSimple {
 	var result []StmtSimple
 
 	// Add simple statements
@@ -396,10 +396,10 @@ func collectAllStatements(statements Statements) []StmtSimple {
 	// Recursively process conditional statements
 	for _, cond := range statements.StmtCond {
 		if cond.Then != nil {
-			result = append(result, collectAllStatements(cond.Then.Statements)...)
+			result = append(result, CollectAllStatements(cond.Then.Statements)...)
 		}
 		if cond.Else != nil {
-			result = append(result, collectAllStatements(cond.Else.Statements)...)
+			result = append(result, CollectAllStatements(cond.Else.Statements)...)
 		}
 	}
 
@@ -414,7 +414,7 @@ func PlanToProto(handle string, server common_domain.ServerMeta, plan *ParsedExe
 	// Process all batches
 	for _, batch := range plan.Batches {
 		// Collect all statements, including those nested in loops
-		allStatements := collectAllStatements(batch.Statements)
+		allStatements := CollectAllStatements(batch.Statements)
 
 		for _, stmt := range allStatements {
 			// Skip statements without query plans (like ASSIGN, WAITFOR, etc.)
