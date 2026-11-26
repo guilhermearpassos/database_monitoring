@@ -15,7 +15,7 @@ services:
 
   sqlsights:
     container_name: sqlsights
-    image: guilhermearpassos/sql-sight:v2.0.0-b31
+    image: guilhermearpassos/sql-sight:v2.0.0
     command:
       - "all"
       - "--config=/v2.yaml"
