@@ -1,0 +1,17 @@
+syntax = "proto3";
+package database_monitoring.v2;
+option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/querier/v2;querierv2";
+
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/deadlock.proto";
+
+message ListDeadlocksRequest {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string host = 3;
+  repeated string databases = 4;
+}
+
+message ListDeadlocksResponse {
+  repeated database_monitoring.v1.DeadlockReport deadlocks = 1;
+}
