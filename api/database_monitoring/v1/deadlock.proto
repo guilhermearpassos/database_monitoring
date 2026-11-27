@@ -1,0 +1,21 @@
+syntax = "proto3";
+package database_monitoring.v1;
+option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1;dbmv1";
+
+import "google/protobuf/timestamp.proto";
+import "database_monitoring/v1/snapshot.proto";
+
+message DeadlockReport {
+  string id = 1;
+  ServerMetadata server = 2;
+  google.protobuf.Timestamp occurred_at = 3;
+  string xml_report = 4;
+  string xml_hash = 5;
+  string fingerprint = 6;
+  string pattern = 7;
+  repeated string databases = 8;
+  string victim_spid = 9;
+  int64 max_wait_ms = 10;
+  int32 process_count = 11;
+  int32 resource_count = 12;
+}
