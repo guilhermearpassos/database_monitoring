@@ -249,3 +249,28 @@ func (s *GrpcIngester) IngestMetrics(ctx context.Context, metrics *ingestorv2.Da
 	}
 	return &ingestorv2.IngestMetricsResponse{}, nil
 }
+
+func (s *GrpcIngester) IngestDeadlocks(ctx context.Context, req *ingestorv2.IngestDeadlocksRequest) (*ingestorv2.IngestDeadlocksResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.server.host", req.GetServer().GetHost()),
+		attribute.String("request.server.type", req.GetServer().GetType()),
+		attribute.Int("request.deadlocks_count", len(req.GetDeadlocks())),
+	)
+
+	domainDeadlocks := make([]*common_domain.DeadlockReport, 0, len(req.GetDeadlocks()))
+	for _, d := range req.GetDeadlocks() {
+		if dd := converters.DeadlockReportToDomain(d); dd != nil {
+			domainDeadlocks = append(domainDeadlocks, dd)
+		}
+	}
+
+	stored, err := s.app.Command.SaveDeadlocks.Handle(ctx, common_domain.ServerMeta{
+		Host: req.GetServer().GetHost(),
+		Type: req.GetServer().GetType(),
+	}, domainDeadlocks)
+	if err != nil {
+		return nil, err
+	}
+	return &ingestorv2.IngestDeadlocksResponse{StoredCount: int32(stored)}, nil
+}

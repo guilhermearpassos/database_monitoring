@@ -20,13 +20,14 @@ import (
 )
 
 type TargetConfig struct {
-	Alias             string            `yaml:"alias" toml:"alias"`
-	Driver            string            `yaml:"driver" toml:"driver"`
-	ConnString        string            `yaml:"conn_string" toml:"conn_string"`
-	SnapInterval      time.Duration     `yaml:"snap_interval" toml:"snap_interval"`
-	Interval          time.Duration     `yaml:"interval" toml:"interval"`
-	PlanCollection    PlanCollection    `yaml:"plan" toml:"plan"`
-	MetricsCollection MetricsCollection `yaml:"metrics" toml:"metrics"`
+	Alias               string              `yaml:"alias" toml:"alias"`
+	Driver              string              `yaml:"driver" toml:"driver"`
+	ConnString          string              `yaml:"conn_string" toml:"conn_string"`
+	SnapInterval        time.Duration       `yaml:"snap_interval" toml:"snap_interval"`
+	Interval            time.Duration       `yaml:"interval" toml:"interval"`
+	PlanCollection      PlanCollection      `yaml:"plan" toml:"plan"`
+	MetricsCollection   MetricsCollection   `yaml:"metrics" toml:"metrics"`
+	DeadlocksCollection DeadlocksCollection `yaml:"deadlocks" toml:"deadlocks"`
 }
 
 func (cfg *TargetConfig) GetSnapInterval() time.Duration {
@@ -51,6 +52,18 @@ type MetricsCollection struct {
 }
 
 func (cfg *MetricsCollection) GetMetricsInterval() time.Duration {
+	if cfg.Interval == 0 {
+		return 30 * time.Second
+	}
+	return cfg.Interval
+}
+
+type DeadlocksCollection struct {
+	Disabled bool          `yaml:"disabled" toml:"disabled"`
+	Interval time.Duration `yaml:"interval" toml:"interval"`
+}
+
+func (cfg *DeadlocksCollection) GetDeadlocksInterval() time.Duration {
 	if cfg.Interval == 0 {
 		return 30 * time.Second
 	}
@@ -122,6 +135,11 @@ func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel
 		if !metricsCfg.Disabled {
 			t3 := tasks.NewCollectQueryMetricsTask(target.Alias, server, []string{}, metricsCfg.GetMetricsInterval(), ss, ic, logger)
 			tsks[t3.Name()] = t3
+		}
+		deadlocksCfg := target.DeadlocksCollection
+		if !deadlocksCfg.Disabled {
+			t4 := tasks.NewCollectDeadlocksTask(target.Alias, server, []string{}, deadlocksCfg.GetDeadlocksInterval(), ss, ic, logger)
+			tsks[t4.Name()] = t4
 		}
 	}
 	return AgentService{Tasks: tsks}, nil

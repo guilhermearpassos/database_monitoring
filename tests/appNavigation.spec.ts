@@ -16,4 +16,9 @@ test.describe('navigating app', () => {
     await gotoPage(`/${ROUTES.QueryMetrics}`);
     await expect(page.getByText('Query Metrics & Workload Stats')).toBeVisible();
   });
+
+  test('deadlocks page should render successfully', async ({ gotoPage, page }) => {
+    await gotoPage(`/${ROUTES.Deadlocks}`);
+    await expect(page.getByText('Deadlocks Explorer')).toBeVisible();
+  });
 });

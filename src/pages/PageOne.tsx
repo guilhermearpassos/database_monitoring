@@ -25,7 +25,7 @@ import {
   TimeRange,
 } from '@grafana/data';
 import { css } from '@emotion/css';
-import { BarChart3, FileSearch, RefreshCw, X } from 'lucide-react';
+import { BarChart3, FileSearch, RefreshCw, ShieldAlert, X } from 'lucide-react';
 import { MyGraph } from './graph';
 import { QueryDetailsComponent } from '../components/QueryDetails/Details';
 import { SnapshotSummaryItem } from '../components/Snapshots/types';
@@ -350,6 +350,14 @@ const PageOne = () => {
           >
             <BarChart3 size={14} />
             <span style={{ marginLeft: 6 }}>Query Metrics</span>
+          </Button>
+          <Button
+            variant="secondary"
+            fill="outline"
+            onClick={() => navigate(`${prefixRoute(ROUTES.Deadlocks)}${buildPreservedNavSearch(searchParams)}`)}
+          >
+            <ShieldAlert size={14} />
+            <span style={{ marginLeft: 6 }}>Deadlocks</span>
           </Button>
           <Combobox<number>
             width={20}

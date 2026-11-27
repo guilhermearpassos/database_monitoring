@@ -40,6 +40,48 @@ func (m *mockQuerierService) ListServerSummary(_ context.Context, _ *querierv2.L
 	}, nil
 }
 
+func (m *mockQuerierService) ListDeadlocks(_ context.Context, _ *querierv2.ListDeadlocksRequest) (*querierv2.ListDeadlocksResponse, error) {
+	now := timestamppb.Now()
+	xml1 := `<deadlock>
+  <victim-list><victimProcess id="p1" /></victim-list>
+  <process-list>
+    <process id="p1" spid="64" waittime="3200" logused="1200" lockMode="X" clientapp="OrdersAPI" loginname="svc_orders" hostname="app-1" isolationlevel="read committed (2)" currentdbname="orders_db">
+      <executionStack><frame procname="orders_db.dbo.usp_Reserve" line="10">UPDATE dbo.Inventory SET Qty = Qty - 1;</frame></executionStack>
+      <inputbuf>EXEC dbo.usp_Reserve;</inputbuf>
+    </process>
+    <process id="p2" spid="71" waittime="2800" logused="9400" lockMode="U" clientapp="Worker" loginname="svc_worker" hostname="app-2" isolationlevel="read committed (2)" currentdbname="orders_db">
+      <executionStack><frame procname="orders_db.dbo.usp_Reconcile" line="22">UPDATE dbo.Orders SET Status = 'ALLOC';</frame></executionStack>
+    </process>
+  </process-list>
+  <resource-list>
+    <keylock hobtid="1" dbid="6" objectname="orders_db.dbo.Inventory" indexname="PK_Inventory" id="l1" mode="X">
+      <owner-list><owner id="p2" mode="X" /></owner-list>
+      <waiter-list><waiter id="p1" mode="X" requestType="wait" /></waiter-list>
+    </keylock>
+    <keylock hobtid="2" dbid="6" objectname="orders_db.dbo.Orders" indexname="PK_Orders" id="l2" mode="X">
+      <owner-list><owner id="p1" mode="X" /></owner-list>
+      <waiter-list><waiter id="p2" mode="U" requestType="wait" /></waiter-list>
+    </keylock>
+  </resource-list>
+</deadlock>`
+	return &querierv2.ListDeadlocksResponse{
+		Deadlocks: []*dbmv1.DeadlockReport{
+			{
+				Id:         "dl-1",
+				Server:     &dbmv1.ServerMetadata{Host: "localhost", Type: "mssql"},
+				OccurredAt: now,
+				XmlReport:  xml1,
+			},
+			{
+				Id:         "dl-2",
+				Server:     &dbmv1.ServerMetadata{Host: "localhost", Type: "mssql"},
+				OccurredAt: timestamppb.New(now.AsTime().Add(-5 * time.Minute)),
+				XmlReport:  xml1,
+			},
+		},
+	}, nil
+}
+
 func (m *mockQuerierService) ListPlansWithIssues(_ context.Context, _ *querierv2.ListPlansWithIssuesRequest) (*querierv2.ListPlansWithIssuesResponse, error) {
 	now := timestamppb.Now()
 	return &querierv2.ListPlansWithIssuesResponse{
@@ -457,5 +499,26 @@ func TestCallResourceAndHealth(t *testing.T) {
 			require.NoError(t, json.Unmarshal(r.response.Body, &opts))
 			require.GreaterOrEqual(t, len(opts), tc.minCount)
 		}
+	})
+
+	t.Run("deadlocks endpoint parses XML, diagnoses pattern, and counts fingerprint occurrences", func(t *testing.T) {
+		var r mockCallResourceResponseSender
+		err := app.CallResource(context.Background(), &backend.CallResourceRequest{
+			Method: http.MethodGet,
+			URL:    "deadlocks?server=localhost&databases=orders_db",
+			Path:   "deadlocks",
+		}, &r)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, r.response.Status)
+
+		var parsed DeadlocksResponse
+		require.NoError(t, json.Unmarshal(r.response.Body, &parsed))
+		require.Equal(t, []string{"orders_db"}, parsed.AvailableDatabases)
+		require.Len(t, parsed.Deadlocks, 2)
+		require.Equal(t, 2, parsed.Deadlocks[0].PatternOccurrences)
+		require.Equal(t, "reverse_order", parsed.Deadlocks[0].Diagnosis.Pattern)
+		require.Equal(t, "64", parsed.Deadlocks[0].VictimSPID)
+		require.Len(t, parsed.Deadlocks[0].Processes, 2)
+		require.Len(t, parsed.Deadlocks[0].Resources, 2)
 	})
 }

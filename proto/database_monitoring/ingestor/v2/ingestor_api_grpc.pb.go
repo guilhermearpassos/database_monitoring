@@ -24,6 +24,7 @@ const (
 	IngestionService_GetMissingPlans_FullMethodName           = "/database_monitoring.v2.IngestionService/GetMissingPlans"
 	IngestionService_GetMissingChunks_FullMethodName          = "/database_monitoring.v2.IngestionService/GetMissingChunks"
 	IngestionService_IngestMetrics_FullMethodName             = "/database_monitoring.v2.IngestionService/IngestMetrics"
+	IngestionService_IngestDeadlocks_FullMethodName           = "/database_monitoring.v2.IngestionService/IngestDeadlocks"
 )
 
 // IngestionServiceClient is the client API for IngestionService service.
@@ -37,6 +38,7 @@ type IngestionServiceClient interface {
 	// For resuming after a broken stream.
 	GetMissingChunks(ctx context.Context, in *GetMissingChunksRequest, opts ...grpc.CallOption) (*GetMissingChunksResponse, error)
 	IngestMetrics(ctx context.Context, in *DatabaseMetrics, opts ...grpc.CallOption) (*IngestMetricsResponse, error)
+	IngestDeadlocks(ctx context.Context, in *IngestDeadlocksRequest, opts ...grpc.CallOption) (*IngestDeadlocksResponse, error)
 }
 
 type ingestionServiceClient struct {
@@ -112,6 +114,16 @@ func (c *ingestionServiceClient) IngestMetrics(ctx context.Context, in *Database
 	return out, nil
 }
 
+func (c *ingestionServiceClient) IngestDeadlocks(ctx context.Context, in *IngestDeadlocksRequest, opts ...grpc.CallOption) (*IngestDeadlocksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IngestDeadlocksResponse)
+	err := c.cc.Invoke(ctx, IngestionService_IngestDeadlocks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IngestionServiceServer is the server API for IngestionService service.
 // All implementations must embed UnimplementedIngestionServiceServer
 // for forward compatibility.
@@ -123,6 +135,7 @@ type IngestionServiceServer interface {
 	// For resuming after a broken stream.
 	GetMissingChunks(context.Context, *GetMissingChunksRequest) (*GetMissingChunksResponse, error)
 	IngestMetrics(context.Context, *DatabaseMetrics) (*IngestMetricsResponse, error)
+	IngestDeadlocks(context.Context, *IngestDeadlocksRequest) (*IngestDeadlocksResponse, error)
 	mustEmbedUnimplementedIngestionServiceServer()
 }
 
@@ -147,6 +160,9 @@ func (UnimplementedIngestionServiceServer) GetMissingChunks(context.Context, *Ge
 }
 func (UnimplementedIngestionServiceServer) IngestMetrics(context.Context, *DatabaseMetrics) (*IngestMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IngestMetrics not implemented")
+}
+func (UnimplementedIngestionServiceServer) IngestDeadlocks(context.Context, *IngestDeadlocksRequest) (*IngestDeadlocksResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IngestDeadlocks not implemented")
 }
 func (UnimplementedIngestionServiceServer) mustEmbedUnimplementedIngestionServiceServer() {}
 func (UnimplementedIngestionServiceServer) testEmbeddedByValue()                          {}
@@ -230,6 +246,24 @@ func _IngestionService_IngestMetrics_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IngestionService_IngestDeadlocks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IngestDeadlocksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IngestionServiceServer).IngestDeadlocks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IngestionService_IngestDeadlocks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IngestionServiceServer).IngestDeadlocks(ctx, req.(*IngestDeadlocksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IngestionService_ServiceDesc is the grpc.ServiceDesc for IngestionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -244,6 +278,10 @@ var IngestionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IngestMetrics",
 			Handler:    _IngestionService_IngestMetrics_Handler,
+		},
+		{
+			MethodName: "IngestDeadlocks",
+			Handler:    _IngestionService_IngestDeadlocks_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

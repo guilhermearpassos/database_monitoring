@@ -1,0 +1,1931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SQLSights — Deadlock Collection &amp; Analysis PoC</title>
+  <style>
+    :root {
+      --bg-canvas: #111217;
+      --bg-primary: #181b1f;
+      --bg-secondary: #22252b;
+      --bg-hover: rgba(204, 204, 220, 0.08);
+      --border-weak: rgba(204, 204, 220, 0.12);
+      --border-medium: rgba(204, 204, 220, 0.22);
+      --text-primary: #ccccdc;
+      --text-strong: #f0f2f7;
+      --text-secondary: #8e94a4;
+      --primary: #3871dc;
+      --primary-light: #6e9fff;
+      --primary-bg: rgba(56, 113, 220, 0.15);
+      --error: #e02f44;
+      --error-text: #ff7383;
+      --error-bg: rgba(224, 47, 68, 0.15);
+      --error-border: rgba(224, 47, 68, 0.45);
+      --warning: #ff9830;
+      --warning-text: #ffb357;
+      --warning-bg: rgba(255, 152, 48, 0.14);
+      --warning-border: rgba(255, 152, 48, 0.45);
+      --success: #56a64b;
+      --success-text: #73bf69;
+      --success-bg: rgba(86, 166, 75, 0.15);
+      --success-border: rgba(86, 166, 75, 0.45);
+      --purple: #a352cc;
+      --purple-text: #c78ce8;
+      --purple-bg: rgba(163, 82, 204, 0.16);
+      --purple-border: rgba(163, 82, 204, 0.45);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --radius: 4px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      font-size: 13px;
+      color: var(--text-primary);
+      background: var(--bg-canvas);
+      line-height: 1.45;
+    }
+
+    .app-shell {
+      max-width: 1460px;
+      margin: 0 auto;
+      padding: 20px 24px 48px;
+    }
+
+    /* Header */
+    .header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .header-row h1 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      color: var(--text-strong);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .poc-pill {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--purple-bg);
+      color: var(--purple-text);
+      border: 1px solid var(--purple-border);
+    }
+    .header-row p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons & Inputs */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border-medium);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .btn:hover { background: #2c3038; border-color: rgba(204, 204, 220, 0.35); }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #477ee6; }
+    .btn-sm { padding: 4px 8px; font-size: 11px; }
+
+    .filter-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-weak);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px;
+    }
+    .filter-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    select, input[type="text"], textarea {
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius);
+      color: var(--text-strong);
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+    select:focus, input[type="text"]:focus, textarea:focus {
+      border-color: var(--primary-light);
+    }
+
+    /* KPI Strip */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kpi-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-weak);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+    }
+    .kpi-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .kpi-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-strong);
+      font-family: var(--mono);
+    }
+    .kpi-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Mini timeline card */
+    .card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-weak);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-weak);
+      font-weight: 600;
+      color: var(--text-strong);
+      font-size: 13px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .timeline-body {
+      padding: 14px 16px 10px;
+    }
+    .timeline-bars {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 6px;
+      align-items: end;
+      height: 76px;
+      border-bottom: 1px solid var(--border-weak);
+      padding-bottom: 4px;
+    }
+    .bar-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+      gap: 2px;
+    }
+    .bar-stack {
+      width: 100%;
+      max-width: 34px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 1px;
+    }
+    .bar-seg {
+      border-radius: 2px;
+      min-height: 4px;
+    }
+    .timeline-labels {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-secondary);
+      font-family: var(--mono);
+    }
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      flex-wrap: wrap;
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    /* Radio group */
+    .radio-group {
+      display: inline-flex;
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg-canvas);
+    }
+    .radio-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 5px 11px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .radio-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* Table */
+    .table-scroll { width: 100%; overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      padding: 9px 12px;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-medium);
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-weak);
+      vertical-align: top;
+    }
+    tbody tr {
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+    tbody tr:hover { background: var(--bg-hover); }
+    tbody tr.selected-row { background: rgba(56, 113, 220, 0.12); }
+
+    .mono { font-family: var(--mono); }
+    .sql-preview {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      max-width: 390px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-strong);
+    }
+    .sub-line {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 3px;
+      font-family: var(--mono);
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: var(--radius);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .badge-error { background: var(--error-bg); color: var(--error-text); border-color: var(--error-border); }
+    .badge-warning { background: var(--warning-bg); color: var(--warning-text); border-color: var(--warning-border); }
+    .badge-info { background: var(--primary-bg); color: var(--primary-light); border-color: rgba(110, 159, 255, 0.4); }
+    .badge-purple { background: var(--purple-bg); color: var(--purple-text); border-color: var(--purple-border); }
+    .badge-success { background: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+    .badge-neutral { background: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-weak); font-family: var(--mono); font-weight: 500; }
+
+    /* Drawer / Slideover */
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 90;
+      display: none;
+    }
+    .drawer-backdrop.open { display: block; }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(1040px, 92vw);
+      height: 100vh;
+      background: var(--bg-primary);
+      border-left: 1px solid var(--border-medium);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+    }
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-weak);
+      gap: 12px;
+    }
+    .drawer-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-strong);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .drawer-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-weak);
+    }
+    .tab-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .tab-btn:hover { color: var(--text-strong); }
+    .tab-btn.active {
+      color: var(--primary-light);
+      border-bottom-color: var(--primary-light);
+    }
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 20px 32px;
+    }
+
+    /* Diagnosis box */
+    .diagnosis-box {
+      background: linear-gradient(135deg, rgba(224, 47, 68, 0.1), rgba(56, 113, 220, 0.08));
+      border: 1px solid var(--border-medium);
+      border-left: 4px solid var(--error);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+    }
+    .diagnosis-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-strong);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .diagnosis-summary {
+      margin: 0 0 10px;
+      color: var(--text-primary);
+      font-size: 12.5px;
+    }
+    .rec-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text-primary);
+      font-size: 12px;
+    }
+    .rec-list li { margin-bottom: 4px; }
+
+    /* Graph Canvas */
+    .graph-container {
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-weak);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+    .graph-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    svg.deadlock-svg {
+      display: block;
+      width: 100%;
+      min-width: 780px;
+      height: auto;
+    }
+    .svg-node { cursor: pointer; }
+    .svg-node:hover rect { stroke-width: 2.2; }
+
+    /* Cycle Steps */
+    .cycle-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .cycle-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 9px 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-weak);
+      border-radius: var(--radius);
+      font-size: 12px;
+    }
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--primary-bg);
+      color: var(--primary-light);
+      border: 1px solid rgba(110, 159, 255, 0.4);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Side by side processes */
+    .process-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 14px;
+    }
+    .process-card {
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-weak);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .process-card.victim {
+      border-color: var(--error-border);
+    }
+    .process-card-header {
+      padding: 10px 14px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-weak);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .process-card.victim .process-card-header {
+      background: rgba(224, 47, 68, 0.14);
+    }
+    .process-card-body { padding: 12px 14px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px 12px;
+      margin-bottom: 12px;
+    }
+    .meta-k { font-size: 10.5px; color: var(--text-secondary); }
+    .meta-v { font-size: 12px; font-family: var(--mono); color: var(--text-strong); word-break: break-word; }
+
+    pre.code-block {
+      margin: 6px 0 10px;
+      padding: 10px 12px;
+      background: #0d0f13;
+      border: 1px solid var(--border-weak);
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: #d8dee9;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .stack-frame {
+      padding: 6px 8px;
+      border-left: 2px solid var(--primary);
+      background: var(--bg-primary);
+      margin-bottom: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .cross-links {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    /* Paste XML Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 120;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      width: min(760px, 95vw);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-medium);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-weak);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+      color: var(--text-strong);
+    }
+    .modal-body { padding: 14px 16px; }
+    .modal-footer {
+      padding: 10px 16px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-weak);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .callout-info {
+      background: var(--primary-bg);
+      border: 1px solid rgba(110, 159, 255, 0.3);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-size: 12px;
+      margin-top: 12px;
+    }
+    .xml-tag { color: #7cc4fa; }
+    .xml-attr { color: #ffb357; }
+    .xml-val { color: #9ae6b4; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Header -->
+    <div class="header-row">
+      <div>
+        <h1>
+          Deadlocks Explorer
+          <span class="poc-pill">UI PoC · Live XML Parser</span>
+        </h1>
+        <p>Inspect SQL Server <code>xml_deadlock_report</code> graphs collected from <code>system_health</code>, grouped by structural pattern with automated root-cause diagnosis.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" id="btnOpenPasteModal">+ Paste Deadlock XML</button>
+        <select id="serverSelect">
+          <option value="sql-prod-01">sql-prod-01</option>
+          <option value="sql-prod-02">sql-prod-02</option>
+        </select>
+        <select id="timeRangeSelect">
+          <option>Last 24 hours</option>
+          <option>Last 6 hours</option>
+          <option>Last 7 days</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-card">
+      <div class="filter-field">
+        <span class="filter-label">Database</span>
+        <select id="dbFilter">
+          <option value="">All databases</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <span class="filter-label">Deadlock Pattern</span>
+        <select id="patternFilter">
+          <option value="">All patterns</option>
+          <option value="reverse_order">Reverse-Order Lock Cycle</option>
+          <option value="bookmark_lookup">Key / Bookmark Lookup</option>
+          <option value="lock_upgrade">Lock Conversion (S → X / U)</option>
+          <option value="parallel_exchange">Parallelism Exchange</option>
+          <option value="generic_cycle">Other Lock Cycle</option>
+        </select>
+      </div>
+      <div class="filter-field" style="flex: 1; min-width: 240px;">
+        <span class="filter-label">Search SQL / Table / Index / App / Login / SPID</span>
+        <input type="text" id="searchInput" placeholder="e.g. dbo.Orders, IX_Orders_Status, CheckoutAPI, SPID 64..." />
+      </div>
+      <div class="filter-field">
+        <span class="filter-label">View Mode</span>
+        <div class="radio-group" id="viewModeGroup">
+          <button type="button" class="radio-btn active" data-mode="events">Events</button>
+          <button type="button" class="radio-btn" data-mode="patterns">Grouped Patterns</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Strip -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- Timeline Chart -->
+    <div class="card">
+      <div class="card-header">
+        <span>Deadlocks Over Time</span>
+        <div class="legend">
+          <span><span class="legend-dot" style="background: var(--error);"></span>Reverse-Order Cycle</span>
+          <span><span class="legend-dot" style="background: var(--warning);"></span>Bookmark Lookup</span>
+          <span><span class="legend-dot" style="background: var(--purple);"></span>Lock Upgrade (S→X)</span>
+          <span><span class="legend-dot" style="background: var(--primary-light);"></span>Parallelism / Other</span>
+        </div>
+      </div>
+      <div class="timeline-body">
+        <div class="timeline-bars" id="timelineBars"></div>
+        <div class="timeline-labels" id="timelineLabels"></div>
+      </div>
+    </div>
+
+    <!-- Deadlocks Table -->
+    <div class="card">
+      <div class="card-header">
+        <span id="tableCountLabel">Showing 0 deadlocks</span>
+        <span style="font-size: 11px; font-weight: 400; color: var(--text-secondary);">Click any row to open the interactive deadlock graph &amp; diagnosis slideover</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Details Slideover -->
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-title" id="drawerTitle">Deadlock Details</div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn btn-sm" id="btnDownloadXdl">Download .xdl (SSMS)</button>
+        <button class="btn btn-sm" id="btnCloseDrawer">✕ Close</button>
+      </div>
+    </div>
+    <div class="drawer-tabs" id="drawerTabs">
+      <button class="tab-btn active" data-tab="graph">Graph &amp; Diagnosis</button>
+      <button class="tab-btn" data-tab="processes">Processes &amp; SQL</button>
+      <button class="tab-btn" data-tab="resources">Contested Resources</button>
+      <button class="tab-btn" data-tab="xml">Raw XML (.xdl)</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </aside>
+
+  <!-- Paste Custom Deadlock XML Modal -->
+  <div class="modal-overlay" id="pasteModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span>Paste SQL Server Deadlock XML (<code>&lt;deadlock&gt;</code> or <code>&lt;deadlock-list&gt;</code>)</span>
+        <button class="btn btn-sm" id="btnCloseModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin: 0 0 8px; color: var(--text-secondary); font-size: 12px;">
+          Paste any real <code>xml_deadlock_report</code> or <code>.xdl</code> content from SQL Server to parse, classify, and visualize it live in this PoC.
+        </p>
+        <textarea id="pasteXmlInput" rows="13" style="width: 100%; font-family: var(--mono); font-size: 11.5px;" placeholder="<deadlock>&#10;  <victim-list>...</victim-list>&#10;  <process-list>...</process-list>&#10;  <resource-list>...</resource-list>&#10;</deadlock>"></textarea>
+        <div id="pasteError" style="color: var(--error-text); font-size: 12px; margin-top: 6px; display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnCancelModal">Cancel</button>
+        <button class="btn btn-primary" id="btnParseXml">Parse &amp; Visualize</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. REALISTIC SAMPLE SQL SERVER DEADLOCK XML PAYLOADS
+    // =========================================================================
+    const SAMPLE_DEADLOCKS = [
+      {
+        id: 'dl-101',
+        server: 'sql-prod-01',
+        timestamp: '2026-11-27T10:18:42Z',
+        occurrences: 9,
+        xml: `<deadlock>
+  <victim-list>
+    <victimProcess id="process22ab108" />
+  </victim-list>
+  <process-list>
+    <process id="process22ab108" taskpriority="0" logused="2416" waitresource="KEY: 6:72057594058113024 (8194443284a0)" waittime="3412" ownerId="9182311" transactionname="user_transaction" lasttranstarted="2026-11-27T10:18:38.100" XDES="0x1f82c1040" lockMode="X" schedulerid="4" kpid="14012" status="suspended" spid="64" sbid="0" ecid="0" priority="0" trancount="2" lastbatchstarted="2026-11-27T10:18:38.980" lastbatchcompleted="2026-11-27T10:18:38.977" clientapp="OrdersAPI (.NET 8)" hostname="aks-orders-7d9f" hostpid="412" loginname="svc_orders" isolationlevel="read committed (2)" xactid="9182311" currentdb="6" currentdbname="OrdersDB" lockTimeout="4294967295" clientoption1="671088672" clientoption2="128056">
+      <executionStack>
+        <frame procname="OrdersDB.dbo.usp_ReserveOrderStock" line="42" stmtstart="1420" stmtend="1790" sqlhandle="0x03000600a1b2c3d40001">
+UPDATE dbo.Inventory
+SET ReservedQty = ReservedQty + @Qty, UpdatedAt = SYSUTCDATETIME()
+WHERE SkuId = @SkuId AND WarehouseId = @WarehouseId;
+        </frame>
+        <frame procname="OrdersDB.dbo.usp_SubmitOrder" line="19" stmtstart="540" stmtend="690" sqlhandle="0x03000600a1b2c3d40002">
+EXEC dbo.usp_ReserveOrderStock @OrderId = @OrderId, @SkuId = @SkuId, @Qty = @Qty;
+        </frame>
+      </executionStack>
+      <inputbuf>
+EXEC dbo.usp_SubmitOrder @OrderId = 984211, @SkuId = 'SKU-4012', @Qty = 3, @WarehouseId = 2;
+      </inputbuf>
+    </process>
+    <process id="process22cd940" taskpriority="0" logused="18640" waitresource="KEY: 6:72057594041335808 (c401a28891b2)" waittime="2980" ownerId="9182304" transactionname="user_transaction" lasttranstarted="2026-11-27T10:18:37.540" XDES="0x1f82c9880" lockMode="U" schedulerid="2" kpid="15208" status="suspended" spid="71" sbid="0" ecid="0" priority="0" trancount="2" lastbatchstarted="2026-11-27T10:18:39.410" lastbatchcompleted="2026-11-27T10:18:39.405" clientapp="InventorySyncWorker" hostname="aks-worker-2a4c" hostpid="881" loginname="svc_inventory" isolationlevel="read committed (2)" xactid="9182304" currentdb="6" currentdbname="OrdersDB" lockTimeout="4294967295" clientoption1="671088672" clientoption2="128056">
+      <executionStack>
+        <frame procname="OrdersDB.dbo.usp_ReconcileBackorders" line="88" stmtstart="2910" stmtend="3340" sqlhandle="0x03000600e5f6a7b80001">
+UPDATE dbo.Orders
+SET Status = 'ALLOCATED', UpdatedAt = SYSUTCDATETIME()
+WHERE OrderId = @OrderId;
+        </frame>
+      </executionStack>
+      <inputbuf>
+EXEC dbo.usp_ReconcileBackorders @WarehouseId = 2, @BatchSize = 50;
+      </inputbuf>
+    </process>
+  </process-list>
+  <resource-list>
+    <keylock hobtid="72057594058113024" dbid="6" objectname="OrdersDB.dbo.Inventory" indexname="PK_Inventory_SkuWarehouse" id="lock19a80400" mode="X" associatedObjectId="72057594058113024">
+      <owner-list>
+        <owner id="process22cd940" mode="X" />
+      </owner-list>
+      <waiter-list>
+        <waiter id="process22ab108" mode="X" requestType="wait" />
+      </waiter-list>
+    </keylock>
+    <keylock hobtid="72057594041335808" dbid="6" objectname="OrdersDB.dbo.Orders" indexname="PK_Orders" id="lock19a80980" mode="X" associatedObjectId="72057594041335808">
+      <owner-list>
+        <owner id="process22ab108" mode="X" />
+      </owner-list>
+      <waiter-list>
+        <waiter id="process22cd940" mode="U" requestType="wait" />
+      </waiter-list>
+    </keylock>
+  </resource-list>
+</deadlock>`
+      },
+      {
+        id: 'dl-102',
+        server: 'sql-prod-01',
+        timestamp: '2026-11-27T09:44:11Z',
+        occurrences: 5,
+        xml: `<deadlock>
+  <victim-list>
+    <victimProcess id="process8801a08" />
+  </victim-list>
+  <process-list>
+    <process id="process8801a08" taskpriority="0" logused="0" waitresource="KEY: 6:72057594041335808 (9a2f001122bb)" waittime="1850" ownerId="9144012" transactionname="SELECT" lasttranstarted="2026-11-27T09:44:09.100" lockMode="S" status="suspended" spid="88" ecid="0" priority="0" trancount="0" clientapp="ReportingService" hostname="bi-node-03" loginname="svc_reports" isolationlevel="read committed (2)" currentdb="6" currentdbname="OrdersDB">
+      <executionStack>
+        <frame procname="adhoc" line="1" sqlhandle="0x0200000088ab11">
+SELECT OrderId, CustomerId, TotalAmount, ShippingAddress
+FROM dbo.Orders
+WHERE Status = @p0 AND CreatedAt &gt;= @p1;
+        </frame>
+      </executionStack>
+      <inputbuf>
+(@p0 nvarchar(20), @p1 datetime2) SELECT OrderId, CustomerId, TotalAmount, ShippingAddress FROM dbo.Orders WHERE Status = @p0 AND CreatedAt &gt;= @p1;
+      </inputbuf>
+    </process>
+    <process id="process9102f40" taskpriority="0" logused="4120" waitresource="KEY: 6:72057594049910272 (11ab22cd33ef)" waittime="1620" ownerId="9144009" transactionname="UPDATE" lasttranstarted="2026-11-27T09:44:09.250" lockMode="X" status="suspended" spid="91" ecid="0" priority="0" trancount="1" clientapp="CheckoutAPI (.NET 8)" hostname="aks-checkout-1b2e" loginname="svc_checkout" isolationlevel="read committed (2)" currentdb="6" currentdbname="OrdersDB">
+      <executionStack>
+        <frame procname="OrdersDB.dbo.usp_MarkOrderPaid" line="14" sqlhandle="0x0300060091cd22">
+UPDATE dbo.Orders
+SET Status = 'PAID', PaidAt = SYSUTCDATETIME()
+WHERE OrderId = @OrderId;
+        </frame>
+      </executionStack>
+      <inputbuf>
+EXEC dbo.usp_MarkOrderPaid @OrderId = 983904;
+      </inputbuf>
+    </process>
+  </process-list>
+  <resource-list>
+    <keylock hobtid="72057594041335808" dbid="6" objectname="OrdersDB.dbo.Orders" indexname="PK_Orders" id="lock8801" mode="X" associatedObjectId="72057594041335808">
+      <owner-list>
+        <owner id="process9102f40" mode="X" />
+      </owner-list>
+      <waiter-list>
+        <waiter id="process8801a08" mode="S" requestType="wait" />
+      </waiter-list>
+    </keylock>
+    <keylock hobtid="72057594049910272" dbid="6" objectname="OrdersDB.dbo.Orders" indexname="IX_Orders_Status_CreatedAt" id="lock8802" mode="S" associatedObjectId="72057594049910272">
+      <owner-list>
+        <owner id="process8801a08" mode="S" />
+      </owner-list>
+      <waiter-list>
+        <waiter id="process9102f40" mode="X" requestType="wait" />
+      </waiter-list>
+    </keylock>
+  </resource-list>
+</deadlock>`
+      },
+      {
+        id: 'dl-103',
+        server: 'sql-prod-01',
+        timestamp: '2026-11-27T08:12:05Z',
+        occurrences: 3,
+        xml: `<deadlock>
+  <victim-list>
+    <victimProcess id="process55a0108" />
+  </victim-list>
+  <process-list>
+    <process id="process55a0108" taskpriority="0" logused="640" waitresource="KEY: 7:72057594071200001 (aa11bb22cc33)" waittime="4120" ownerId="8871201" transactionname="user_transaction" lockMode="X" status="suspended" spid="55" ecid="0" priority="0" trancount="1" clientapp="BillingEngine" hostname="aks-billing-01" loginname="svc_billing" isolationlevel="repeatable read (3)" currentdb="7" currentdbname="BillingDB">
+      <executionStack>
+        <frame procname="BillingDB.dbo.usp_ApplyCredit" line="31" sqlhandle="0x0300070055aa11">
+UPDATE dbo.AccountBalances
+SET Balance = Balance + @Amount
+WHERE AccountId = @AccountId;
+        </frame>
+      </executionStack>
+      <inputbuf>
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN TRAN;
+SELECT Balance FROM dbo.AccountBalances WHERE AccountId = 44012;
+EXEC dbo.usp_ApplyCredit @AccountId = 44012, @Amount = 25.00;
+COMMIT;
+      </inputbuf>
+    </process>
+    <process id="process61b0940" taskpriority="0" logused="896" waitresource="KEY: 7:72057594071200001 (aa11bb22cc33)" waittime="3990" ownerId="8871204" transactionname="user_transaction" lockMode="X" status="suspended" spid="61" ecid="0" priority="0" trancount="1" clientapp="BillingEngine" hostname="aks-billing-02" loginname="svc_billing" isolationlevel="repeatable read (3)" currentdb="7" currentdbname="BillingDB">
+      <executionStack>
+        <frame procname="BillingDB.dbo.usp_ApplyCredit" line="31" sqlhandle="0x0300070055aa11">
+UPDATE dbo.AccountBalances
+SET Balance = Balance + @Amount
+WHERE AccountId = @AccountId;
+        </frame>
+      </executionStack>
+      <inputbuf>
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN TRAN;
+SELECT Balance FROM dbo.AccountBalances WHERE AccountId = 44012;
+EXEC dbo.usp_ApplyCredit @AccountId = 44012, @Amount = -10.00;
+COMMIT;
+      </inputbuf>
+    </process>
+  </process-list>
+  <resource-list>
+    <keylock hobtid="72057594071200001" dbid="7" objectname="BillingDB.dbo.AccountBalances" indexname="PK_AccountBalances" id="lock5501" mode="S" associatedObjectId="72057594071200001">
+      <owner-list>
+        <owner id="process55a0108" mode="S" />
+        <owner id="process61b0940" mode="S" />
+      </owner-list>
+      <waiter-list>
+        <waiter id="process55a0108" mode="X" requestType="convert" />
+        <waiter id="process61b0940" mode="X" requestType="convert" />
+      </waiter-list>
+    </keylock>
+  </resource-list>
+</deadlock>`
+      },
+      {
+        id: 'dl-104',
+        server: 'sql-prod-01',
+        timestamp: '2026-11-27T07:05:33Z',
+        occurrences: 2,
+        xml: `<deadlock>
+  <victim-list>
+    <victimProcess id="process112a01" />
+  </victim-list>
+  <process-list>
+    <process id="process112a01" taskpriority="0" logused="1024" waitresource="PAGE: 6:1:441920" waittime="2140" ownerId="8601100" transactionname="user_transaction" lockMode="IX" status="suspended" spid="112" ecid="0" priority="0" trancount="1" clientapp="FulfillmentSvc" hostname="aks-fulfill-04" loginname="svc_fulfill" isolationlevel="read committed (2)" currentdb="6" currentdbname="OrdersDB">
+      <executionStack>
+        <frame procname="OrdersDB.dbo.usp_ArchiveShipments" line="27" sqlhandle="0x03000600112a">
+DELETE FROM dbo.Shipments WHERE ShippedAt &lt; @Cutoff AND RegionId = @RegionId;
+        </frame>
+      </executionStack>
+      <inputbuf>
+EXEC dbo.usp_ArchiveShipments @Cutoff = '2026-01-01', @RegionId = 3;
+      </inputbuf>
+    </process>
+    <process id="process119b02" taskpriority="0" logused="5120" waitresource="PAGE: 6:1:441921" waittime="1980" ownerId="8601105" transactionname="user_transaction" lockMode="U" status="suspended" spid="119" ecid="0" priority="0" trancount="1" clientapp="CarrierWebhook" hostname="aks-webhook-02" loginname="svc_carrier" isolationlevel="read committed (2)" currentdb="6" currentdbname="OrdersDB">
+      <executionStack>
+        <frame procname="OrdersDB.dbo.usp_UpdateTracking" line="12" sqlhandle="0x03000600119b">
+UPDATE dbo.Shipments SET TrackingStatus = @Status WHERE TrackingCode = @Code;
+        </frame>
+      </executionStack>
+      <inputbuf>
+EXEC dbo.usp_UpdateTracking @Code = 'TRK-882910', @Status = 'DELIVERED';
+      </inputbuf>
+    </process>
+  </process-list>
+  <resource-list>
+    <pagelock fileid="1" pageid="441920" dbid="6" objectname="OrdersDB.dbo.Shipments" id="lock1121" mode="IX" associatedObjectId="72057594059999111">
+      <owner-list>
+        <owner id="process119b02" mode="X" />
+      </owner-list>
+      <waiter-list>
+        <waiter id="process112a01" mode="IX" requestType="wait" />
+      </waiter-list>
+    </pagelock>
+    <pagelock fileid="1" pageid="441921" dbid="6" objectname="OrdersDB.dbo.Shipments" id="lock1122" mode="X" associatedObjectId="72057594059999111">
+      <owner-list>
+        <owner id="process112a01" mode="X" />
+      </owner-list>
+      <waiter-list>
+        <waiter id="process119b02" mode="U" requestType="wait" />
+      </waiter-list>
+    </pagelock>
+  </resource-list>
+</deadlock>`
+      }
+    ];
+
+    // =========================================================================
+    // 2. CLIENT-SIDE DEADLOCK XML PARSER + PATTERN CLASSIFIER + DIAGNOSIS ENGINE
+    //    (Mirrors the Go parser we'll build in the agent/ingester!)
+    // =========================================================================
+    const LOCK_MODE_DESCRIPTIONS = {
+      S: 'Shared (read lock)',
+      U: 'Update (read-for-modify lock)',
+      X: 'Exclusive (write lock)',
+      IS: 'Intent Shared',
+      IU: 'Intent Update',
+      IX: 'Intent Exclusive',
+      SIX: 'Shared with Intent Exclusive',
+      'Sch-S': 'Schema Stability',
+      'Sch-M': 'Schema Modification',
+      'RangeS-S': 'Serializable Range Shared',
+      'RangeS-U': 'Serializable Range Update',
+      'RangeX-X': 'Serializable Range Exclusive',
+    };
+
+    function parseDeadlockXML(rawXml, meta = {}) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(rawXml, 'application/xml');
+      const parseErr = doc.querySelector('parsererror');
+      if (parseErr) {
+        throw new Error('Invalid XML: ' + parseErr.textContent.slice(0, 140));
+      }
+
+      const root = doc.querySelector('deadlock') || doc.documentElement;
+      if (!root || root.nodeName.toLowerCase() !== 'deadlock') {
+        throw new Error('Expected a <deadlock> element (or <deadlock-list> containing <deadlock>).');
+      }
+
+      const victimIds = new Set(
+        Array.from(root.querySelectorAll('victim-list > victimProcess')).map((el) => el.getAttribute('id'))
+      );
+
+      const processes = Array.from(root.querySelectorAll('process-list > process')).map((el) => {
+        const id = el.getAttribute('id') || '';
+        const frames = Array.from(el.querySelectorAll('executionStack > frame')).map((f) => ({
+          procname: f.getAttribute('procname') || 'adhoc',
+          line: f.getAttribute('line') || '',
+          sqlhandle: f.getAttribute('sqlhandle') || '',
+          sql: (f.textContent || '').trim(),
+        }));
+        const inputbuf = (el.querySelector('inputbuf')?.textContent || '').trim();
+        const activeSql = frames[0]?.sql || inputbuf || '(no SQL text captured)';
+        return {
+          id,
+          isVictim: victimIds.has(id),
+          spid: el.getAttribute('spid') || '?',
+          ecid: el.getAttribute('ecid') || '0',
+          status: el.getAttribute('status') || '',
+          waittime: Number(el.getAttribute('waittime') || 0),
+          waitresource: el.getAttribute('waitresource') || '',
+          lockMode: el.getAttribute('lockMode') || '',
+          logused: Number(el.getAttribute('logused') || 0),
+          priority: el.getAttribute('priority') || '0',
+          trancount: el.getAttribute('trancount') || '0',
+          transactionname: el.getAttribute('transactionname') || '',
+          isolationlevel: el.getAttribute('isolationlevel') || 'unknown',
+          clientapp: el.getAttribute('clientapp') || '-',
+          hostname: el.getAttribute('hostname') || '-',
+          loginname: el.getAttribute('loginname') || '-',
+          currentdbname: el.getAttribute('currentdbname') || '',
+          currentdb: el.getAttribute('currentdb') || '',
+          frames,
+          inputbuf,
+          activeSql,
+        };
+      });
+
+      const resourceListEl = root.querySelector('resource-list');
+      const resources = resourceListEl
+        ? Array.from(resourceListEl.children).map((el, idx) => {
+            const type = el.nodeName;
+            const owners = Array.from(el.querySelectorAll('owner-list > owner')).map((o) => ({
+              processId: o.getAttribute('id') || '',
+              mode: o.getAttribute('mode') || '',
+              requestType: o.getAttribute('requestType') || '',
+            }));
+            const waiters = Array.from(el.querySelectorAll('waiter-list > waiter')).map((w) => ({
+              processId: w.getAttribute('id') || '',
+              mode: w.getAttribute('mode') || '',
+              requestType: w.getAttribute('requestType') || 'wait',
+            }));
+            const objectname = el.getAttribute('objectname') || el.getAttribute('nodeId') || type;
+            const indexname = el.getAttribute('indexname') || '';
+            const dbFromObj = objectname.includes('.') ? objectname.split('.')[0] : '';
+            return {
+              id: el.getAttribute('id') || `res-${idx}`,
+              type,
+              dbid: el.getAttribute('dbid') || '',
+              database: dbFromObj,
+              objectname,
+              shortObject: objectname.includes('.') ? objectname.split('.').slice(1).join('.') : objectname,
+              indexname,
+              hobtid: el.getAttribute('hobtid') || el.getAttribute('associatedObjectId') || '',
+              fileid: el.getAttribute('fileid') || '',
+              pageid: el.getAttribute('pageid') || '',
+              slot: el.getAttribute('slot') || '',
+              mode: el.getAttribute('mode') || '',
+              owners,
+              waiters,
+            };
+          })
+        : [];
+
+      const databases = Array.from(
+        new Set([
+          ...processes.map((p) => p.currentdbname).filter(Boolean),
+          ...resources.map((r) => r.database).filter(Boolean),
+        ])
+      );
+
+      const diagnosis = classifyAndDiagnose(processes, resources);
+      const fingerprint = buildFingerprint(diagnosis.patternKey, resources);
+      const maxWaitMs = Math.max(0, ...processes.map((p) => p.waittime));
+
+      return {
+        id: meta.id || `dl-${Date.now()}`,
+        server: meta.server || 'sql-prod-01',
+        timestamp: meta.timestamp || new Date().toISOString(),
+        occurrences: meta.occurrences || 1,
+        xml: rawXml.trim(),
+        processes,
+        resources,
+        databases,
+        maxWaitMs,
+        diagnosis,
+        fingerprint,
+      };
+    }
+
+    function buildFingerprint(patternKey, resources) {
+      const resSig = resources
+        .map((r) => `${r.type}:${r.objectname}:${r.indexname}`)
+        .sort()
+        .join('|');
+      return `${patternKey}::${resSig}`;
+    }
+
+    function classifyAndDiagnose(processes, resources) {
+      const victim = processes.find((p) => p.isVictim) || processes[0];
+      const others = processes.filter((p) => p.id !== victim?.id);
+      const byId = Object.fromEntries(processes.map((p) => [p.id, p]));
+
+      const hasExchange = resources.some((r) => r.type.toLowerCase().includes('exchange'));
+      const hasConvert = resources.some((r) =>
+        r.waiters.some((w) => w.requestType === 'convert') ||
+        r.owners.some((o) => r.waiters.some((w) => w.processId === o.processId))
+      );
+      const distinctObjects = Array.from(new Set(resources.map((r) => r.objectname).filter(Boolean)));
+      const distinctIndexes = Array.from(new Set(resources.map((r) => r.indexname).filter(Boolean)));
+      const hasSharedAndExclusive =
+        resources.some((r) => r.owners.some((o) => o.mode === 'S') && r.waiters.some((w) => w.mode === 'X')) &&
+        resources.some((r) => r.owners.some((o) => o.mode === 'X') && r.waiters.some((w) => w.mode === 'S'));
+      const hasPageLock = resources.some((r) => r.type.toLowerCase() === 'pagelock');
+
+      let patternKey = 'generic_cycle';
+      let patternLabel = 'Lock Cycle Deadlock';
+      let severity = 'error';
+      let summary = '';
+      let recommendations = [];
+
+      if (hasExchange) {
+        patternKey = 'parallel_exchange';
+        patternLabel = 'Parallelism Exchange';
+        severity = 'info';
+        summary = `An intra-query parallelism deadlock occurred across exchange operators while coordinating parallel worker threads.`;
+        recommendations = [
+          'Check missing indexes or stale statistics that forced a large parallel scan/hash plan.',
+          'Review Cost Threshold for Parallelism and MAXDOP (or test OPTION (MAXDOP 1) on the offending query).',
+        ];
+      } else if (hasConvert) {
+        patternKey = 'lock_upgrade';
+        patternLabel = 'Lock Conversion (S → X)';
+        severity = 'purple';
+        const res = resources[0];
+        const iso = victim?.isolationlevel || 'elevated isolation';
+        summary = `Multiple sessions (SPID ${processes.map((p) => p.spid).join(', ')}) simultaneously held Shared (S) locks on ${res?.shortObject || 'the same resource'} under ${iso} and attempted to convert them to Exclusive (X) locks.`;
+        recommendations = [
+          'Acquire an Update lock on the initial SELECT using WITH (UPDLOCK) (or UPDLOCK, ROWLOCK) before updating the row.',
+          'Evaluate whether REPEATABLE READ / SERIALIZABLE is strictly necessary, or switch to SNAPSHOT / READ_COMMITTED_SNAPSHOT.',
+          'Combine read-then-write logic into a single atomic UPDATE ... OUTPUT statement where possible.',
+        ];
+      } else if (distinctObjects.length === 1 && distinctIndexes.length >= 2 && hasSharedAndExclusive) {
+        patternKey = 'bookmark_lookup';
+        patternLabel = 'Key / Bookmark Lookup';
+        severity = 'warning';
+        const reader = processes.find((p) => p.lockMode === 'S' || p.activeSql.toUpperCase().startsWith('SELECT')) || victim;
+        const writer = processes.find((p) => p.id !== reader?.id) || others[0];
+        summary = `Reader SPID ${reader?.spid} (${reader?.clientapp}) held a Shared (S) lock on nonclustered index ${distinctIndexes.find((i) => !i.startsWith('PK_')) || distinctIndexes[1]} while performing a Key Lookup to ${distinctIndexes.find((i) => i.startsWith('PK_')) || distinctIndexes[0]}, colliding with writer SPID ${writer?.spid} (${writer?.clientapp}) updating the clustered index and then maintaining the nonclustered index.`;
+        recommendations = [
+          `Create a covering index by adding selected columns to INCLUDE on ${distinctIndexes.find((i) => !i.startsWith('PK_')) || 'the nonclustered index'} to eliminate the Key Lookup.`,
+          'Enable READ_COMMITTED_SNAPSHOT (RCSI) on the database so SELECT queries use row versioning instead of acquiring Shared (S) locks.',
+        ];
+      } else if (distinctObjects.length >= 2 || hasPageLock) {
+        patternKey = 'reverse_order';
+        patternLabel = hasPageLock ? 'Reverse-Order Page Lock' : 'Reverse-Order Lock Cycle';
+        severity = 'error';
+        const objList = distinctObjects.map((o) => o.split('.').slice(1).join('.')).join(' and ');
+        const victimReason =
+          victim && others[0] && victim.logused < others[0].logused
+            ? `SQL Server selected SPID ${victim.spid} as the victim because it had lower transaction log usage (${victim.logused.toLocaleString()} B vs ${others[0].logused.toLocaleString()} B).`
+            : `SQL Server rolled back SPID ${victim?.spid} with Error 1205.`;
+        summary = hasPageLock
+          ? `SPID ${processes.map((p) => p.spid).join(' and ')} acquired incompatible PAGE locks on ${objList} in opposite order (likely due to a scan or missing index causing page-level locking). ${victimReason}`
+          : `SPID ${processes.map((p) => p.spid).join(' and ')} acquired incompatible write locks on ${objList} in opposite order inside multi-statement transactions. ${victimReason}`;
+        recommendations = hasPageLock
+          ? [
+              'Add a selective index for the DELETE / UPDATE predicates so SQL Server takes narrow KEY locks instead of scanning/locking entire 8 KB pages.',
+              'Batch large DELETE / archive operations into small chunks (e.g., TOP 500 per transaction) to shrink lock duration.',
+            ]
+          : [
+              `Standardize lock acquisition order across ${processes.map((p) => p.clientapp).join(' and ')} so every transaction updates ${objList} in the exact same order.`,
+              'Keep transactions as short as possible — avoid application work or unrelated queries while holding X/U locks.',
+              'Check the Execution Plans of both statements in Plan Analysis to confirm index seeks rather than broad scans.',
+            ];
+      } else {
+        summary = `Circular lock wait detected between SPID ${processes.map((p) => p.spid).join(' and ')} on ${distinctObjects.join(', ') || 'contested resources'}.`;
+        recommendations = [
+          'Inspect lock modes and ensure consistent access ordering across concurrent transactions.',
+          'Consider enabling READ_COMMITTED_SNAPSHOT (RCSI) if readers are involved.',
+        ];
+      }
+
+      // Build human-readable cycle narrative
+      const steps = [];
+      for (const r of resources) {
+        const resName = r.indexname ? `${r.shortObject} [${r.indexname}]` : `${r.shortObject}${r.pageid ? ` (Page ${r.fileid}:${r.pageid})` : ''}`;
+        for (const o of r.owners) {
+          const p = byId[o.processId];
+          steps.push({
+            kind: 'hold',
+            text: `<strong>SPID ${p?.spid || o.processId}</strong> (${p?.clientapp || '?'}) holds <span class="badge badge-success">${o.mode}</span> on <span class="mono">${resName}</span>`,
+          });
+        }
+        for (const w of r.waiters) {
+          const p = byId[w.processId];
+          const verb = w.requestType === 'convert' ? 'attempts to convert lock to' : 'waits for';
+          steps.push({
+            kind: 'wait',
+            text: `<strong>SPID ${p?.spid || w.processId}</strong> (${p?.clientapp || '?'}) ${verb} <span class="badge badge-error">${w.mode}</span> on <span class="mono">${resName}</span> (${p?.waittime || 0} ms)`,
+          });
+        }
+      }
+      if (victim) {
+        steps.push({
+          kind: 'victim',
+          text: `Deadlock monitor breaks cycle → <strong>SPID ${victim.spid}</strong> chosen as <span class="badge badge-error">VICTIM</span> and rolled back (Error 1205, log used: ${victim.logused.toLocaleString()} bytes).`,
+        });
+      }
+
+      return { patternKey, patternLabel, severity, summary, recommendations, steps };
+    }
+
+    // =========================================================================
+    // 3. STATE & RENDERING
+    // =========================================================================
+    let deadlocks = SAMPLE_DEADLOCKS.map((s) => parseDeadlockXML(s.xml, s));
+    let viewMode = 'events'; // 'events' | 'patterns'
+    let selectedDeadlockId = null;
+    let activeDrawerTab = 'graph';
+    let highlightedNodeId = null;
+
+    function badgeClassForSeverity(sev) {
+      return sev === 'error' ? 'badge-error' : sev === 'warning' ? 'badge-warning' : sev === 'purple' ? 'badge-purple' : 'badge-info';
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function highlightXml(xml) {
+      return escapeHtml(xml).replace(
+        /(&lt;\/?)([a-zA-Z0-9_-]+)([^&]*?)(\/?&gt;)/g,
+        (_, open, tag, attrs, close) => {
+          const coloredAttrs = attrs.replace(
+            /([a-zA-Z0-9_-]+)=(&quot;[^&]*?&quot;)/g,
+            '<span class="xml-attr">$1</span>=<span class="xml-val">$2</span>'
+          );
+          return `${open}<span class="xml-tag">${tag}</span>${coloredAttrs}${close}`;
+        }
+      );
+    }
+
+    function populateDbFilter() {
+      const sel = document.getElementById('dbFilter');
+      const current = sel.value;
+      const dbs = Array.from(new Set(deadlocks.flatMap((d) => d.databases))).sort();
+      sel.innerHTML = '<option value="">All databases</option>' + dbs.map((db) => `<option value="${escapeHtml(db)}">${escapeHtml(db)}</option>`).join('');
+      sel.value = current;
+    }
+
+    function getFilteredDeadlocks() {
+      const db = document.getElementById('dbFilter').value;
+      const pat = document.getElementById('patternFilter').value;
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+      return deadlocks.filter((d) => {
+        if (db && !d.databases.includes(db)) return false;
+        if (pat && d.diagnosis.patternKey !== pat) return false;
+        if (q) {
+          const hay = [
+            d.diagnosis.patternLabel,
+            d.databases.join(' '),
+            ...d.processes.map((p) => `${p.spid} ${p.clientapp} ${p.loginname} ${p.hostname} ${p.activeSql} ${p.inputbuf}`),
+            ...d.resources.map((r) => `${r.objectname} ${r.indexname} ${r.type}`),
+          ].join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderKpis(list) {
+      const totalEvents = list.reduce((acc, d) => acc + d.occurrences, 0);
+      const uniquePatterns = new Set(list.map((d) => d.fingerprint)).size;
+      const objectCounts = {};
+      for (const d of list) {
+        for (const r of d.resources) {
+          const k = r.indexname ? `${r.shortObject} [${r.indexname}]` : r.shortObject;
+          objectCounts[k] = (objectCounts[k] || 0) + d.occurrences;
+        }
+      }
+      const topObj = Object.entries(objectCounts).sort((a, b) => b[1] - a[1])[0];
+      const maxWait = Math.max(0, ...list.map((d) => d.maxWaitMs));
+
+      document.getElementById('kpiGrid').innerHTML = `
+        <div class="kpi-card">
+          <div class="kpi-label">Total Deadlocks</div>
+          <div class="kpi-value" style="color: ${totalEvents > 0 ? 'var(--error-text)' : 'inherit'};">${totalEvents}</div>
+          <div class="kpi-sub">Error 1205 rollbacks in window</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Distinct Patterns</div>
+          <div class="kpi-value">${uniquePatterns}</div>
+          <div class="kpi-sub">Grouped by objects, indexes &amp; cycle type</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Most Contested Object</div>
+          <div class="kpi-value" style="font-size: 14px; line-height: 1.35; margin-top: 4px;">${escapeHtml(topObj ? topObj[0] : '-')}</div>
+          <div class="kpi-sub">${topObj ? `Involved in ${topObj[1]} deadlock(s)` : 'No contention'}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Longest Wait Before Kill</div>
+          <div class="kpi-value">${(maxWait / 1000).toFixed(2)} s</div>
+          <div class="kpi-sub">Deadlock monitor interval ~5s default</div>
+        </div>
+      `;
+    }
+
+    function renderTimeline() {
+      const buckets = [
+        { label: '00:00', r: 1, b: 0, u: 0, o: 0 },
+        { label: '02:00', r: 0, b: 1, u: 0, o: 0 },
+        { label: '04:00', r: 1, b: 0, u: 0, o: 0 },
+        { label: '06:00', r: 2, b: 0, u: 0, o: 0 },
+        { label: '07:00', r: 2, b: 0, u: 0, o: 0 },
+        { label: '08:00', r: 1, b: 1, u: 3, o: 0 },
+        { label: '09:00', r: 1, b: 3, u: 0, o: 0 },
+        { label: '10:00', r: 4, b: 1, u: 0, o: 0 },
+        { label: '10:15', r: 3, b: 0, u: 0, o: 0 },
+        { label: '10:20', r: 2, b: 0, u: 0, o: 0 },
+        { label: '10:30', r: 1, b: 0, u: 0, o: 0 },
+        { label: 'Now', r: 0, b: 0, u: 0, o: 0 },
+      ];
+      const maxTotal = Math.max(1, ...buckets.map((x) => x.r + x.b + x.u + x.o));
+      const scale = 60 / maxTotal;
+      document.getElementById('timelineBars').innerHTML = buckets
+        .map((x) => {
+          const segs = [];
+          if (x.r) segs.push(`<div class="bar-seg" style="height:${x.r * scale}px;background:var(--error);" title="Reverse-Order: ${x.r}"></div>`);
+          if (x.b) segs.push(`<div class="bar-seg" style="height:${x.b * scale}px;background:var(--warning);" title="Bookmark Lookup: ${x.b}"></div>`);
+          if (x.u) segs.push(`<div class="bar-seg" style="height:${x.u * scale}px;background:var(--purple);" title="Lock Upgrade: ${x.u}"></div>`);
+          if (x.o) segs.push(`<div class="bar-seg" style="height:${x.o * scale}px;background:var(--primary-light);" title="Other: ${x.o}"></div>`);
+          return `<div class="bar-col"><div class="bar-stack">${segs.join('')}</div></div>`;
+        })
+        .join('');
+      document.getElementById('timelineLabels').innerHTML = buckets.map((x) => `<div>${x.label}</div>`).join('');
+    }
+
+    function renderTable() {
+      const list = getFilteredDeadlocks();
+      renderKpis(list);
+
+      document.getElementById('tableCountLabel').textContent =
+        viewMode === 'patterns'
+          ? `Showing ${list.length} distinct deadlock pattern(s)`
+          : `Showing ${list.length} captured deadlock report(s)`;
+
+      const thead = document.getElementById('tableHead');
+      const tbody = document.getElementById('tableBody');
+
+      thead.innerHTML = `
+        <tr>
+          <th>${viewMode === 'patterns' ? 'Occurrences / Last Seen' : 'Timestamp'}</th>
+          <th>Pattern</th>
+          <th>Database</th>
+          <th>Contested Resources</th>
+          <th>Victim vs Survivor(s)</th>
+          <th>Victim SQL</th>
+          <th>Max Wait</th>
+        </tr>
+      `;
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 32px; color: var(--text-secondary);">No deadlocks match your current filters.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list
+        .map((d) => {
+          const victim = d.processes.find((p) => p.isVictim) || d.processes[0];
+          const survivors = d.processes.filter((p) => !p.isVictim);
+          const resHtml = d.resources
+            .map(
+              (r) =>
+                `<div class="mono" style="font-size:11.5px;">${escapeHtml(r.shortObject)}${
+                  r.indexname ? ` <span style="color:var(--text-secondary);">[${escapeHtml(r.indexname)}]</span>` : ''
+                }</div>`
+            )
+            .join('');
+
+          const timeCol =
+            viewMode === 'patterns'
+              ? `<span class="badge badge-error">${d.occurrences}×</span><div class="sub-line">${new Date(d.timestamp).toLocaleTimeString()}</div>`
+              : `<div class="mono">${new Date(d.timestamp).toLocaleString()}</div><div class="sub-line">${d.occurrences}× same pattern</div>`;
+
+          return `
+            <tr data-id="${escapeHtml(d.id)}" class="${selectedDeadlockId === d.id ? 'selected-row' : ''}">
+              <td>${timeCol}</td>
+              <td><span class="badge ${badgeClassForSeverity(d.diagnosis.severity)}">${escapeHtml(d.diagnosis.patternLabel)}</span></td>
+              <td><span class="badge badge-neutral">${escapeHtml(d.databases.join(', ') || '-')}</span></td>
+              <td>${resHtml}</td>
+              <td>
+                <div><span class="badge badge-error">Victim SPID ${escapeHtml(victim?.spid)}</span> <span style="font-size:11px;color:var(--text-secondary);">${escapeHtml(victim?.clientapp)}</span></div>
+                <div class="sub-line">vs ${survivors.map((s) => `SPID ${escapeHtml(s.spid)} (${escapeHtml(s.clientapp)})`).join(', ') || '-'}</div>
+              </td>
+              <td>
+                <div class="sql-preview" title="${escapeHtml(victim?.activeSql)}">${escapeHtml(victim?.activeSql)}</div>
+                <div class="sub-line">${escapeHtml(victim?.isolationlevel)}</div>
+              </td>
+              <td class="mono">${(d.maxWaitMs / 1000).toFixed(2)} s</td>
+            </tr>
+          `;
+        })
+        .join('');
+
+      tbody.querySelectorAll('tr[data-id]').forEach((row) => {
+        row.addEventListener('click', () => openDrawer(row.getAttribute('data-id')));
+      });
+    }
+
+    // =========================================================================
+    // 4. INTERACTIVE SVG DEADLOCK CYCLE GRAPH
+    // =========================================================================
+    function renderDeadlockGraphSVG(d) {
+      const procs = d.processes;
+      const resList = d.resources;
+      const rows = Math.max(procs.length, resList.length, 1);
+      const nodeH = 112;
+      const gapY = 30;
+      const padY = 24;
+      const svgH = Math.max(260, padY * 2 + rows * nodeH + (rows - 1) * gapY);
+      const svgW = 920;
+
+      const procW = 290;
+      const resW = 270;
+      const procX = 24;
+      const resX = svgW - resW - 24;
+
+      const procPositions = {};
+      procs.forEach((p, i) => {
+        const totalH = procs.length * nodeH + (procs.length - 1) * gapY;
+        const startY = (svgH - totalH) / 2;
+        procPositions[p.id] = { x: procX, y: startY + i * (nodeH + gapY), w: procW, h: nodeH };
+      });
+
+      const resPositions = {};
+      resList.forEach((r, i) => {
+        const totalH = resList.length * nodeH + (resList.length - 1) * gapY;
+        const startY = (svgH - totalH) / 2;
+        resPositions[r.id] = { x: resX, y: startY + i * (nodeH + gapY), w: resW, h: nodeH };
+      });
+
+      // Build edges
+      const edges = [];
+      resList.forEach((r) => {
+        const rp = resPositions[r.id];
+        r.owners.forEach((o, idx) => {
+          const pp = procPositions[o.processId];
+          if (!pp || !rp) return;
+          edges.push({
+            kind: 'owns',
+            fromId: r.id,
+            toId: o.processId,
+            label: `OWNS ${o.mode}`,
+            x1: rp.x,
+            y1: rp.y + rp.h * 0.34 + idx * 14,
+            x2: pp.x + pp.w,
+            y2: pp.y + pp.h * 0.34 + idx * 14,
+          });
+        });
+        r.waiters.forEach((w, idx) => {
+          const pp = procPositions[w.processId];
+          if (!pp || !rp) return;
+          edges.push({
+            kind: 'waits',
+            fromId: w.processId,
+            toId: r.id,
+            label: w.requestType === 'convert' ? `CONVERT → ${w.mode}` : `WAITS ${w.mode}`,
+            x1: pp.x + pp.w,
+            y1: pp.y + pp.h * 0.68 + idx * 14,
+            x2: rp.x,
+            y2: rp.y + rp.h * 0.68 + idx * 14,
+          });
+        });
+      });
+
+      const edgesSvg = edges
+        .map((e, idx) => {
+          const isFocused = !highlightedNodeId || e.fromId === highlightedNodeId || e.toId === highlightedNodeId;
+          const opacity = isFocused ? 1 : 0.22;
+          const color = e.kind === 'owns' ? '#73bf69' : '#ff7383';
+          const dash = e.kind === 'waits' ? 'stroke-dasharray="6,4"' : '';
+          const marker = e.kind === 'owns' ? 'url(#arrow-owns)' : 'url(#arrow-waits)';
+
+          const dx = Math.abs(e.x2 - e.x1) * 0.45;
+          const c1x = e.kind === 'owns' ? e.x1 - dx : e.x1 + dx;
+          const c2x = e.kind === 'owns' ? e.x2 + dx : e.x2 - dx;
+          // Slight vertical curve separation so owns & waits between same pair never overlap
+          const curveOffset = e.kind === 'owns' ? -18 - idx * 3 : 18 + idx * 3;
+          const midX = (e.x1 + e.x2) / 2;
+          const midY = (e.y1 + e.y2) / 2 + curveOffset;
+          const path = `M ${e.x1} ${e.y1} Q ${midX} ${midY} ${e.x2} ${e.y2}`;
+
+          const labelX = midX;
+          const labelY = (e.y1 + e.y2) / 2 + curveOffset * 0.52;
+          const pillW = Math.max(76, e.label.length * 7.2 + 14);
+
+          return `
+            <g opacity="${opacity}">
+              <path d="${path}" fill="none" stroke="${color}" stroke-width="2" ${dash} marker-end="${marker}" />
+              <rect x="${labelX - pillW / 2}" y="${labelY - 10}" width="${pillW}" height="20" rx="10" fill="#181b1f" stroke="${color}" stroke-width="1" />
+              <text x="${labelX}" y="${labelY + 4}" text-anchor="middle" fill="${color}" font-size="10.5" font-family="var(--mono)" font-weight="700">${escapeHtml(e.label)}</text>
+            </g>
+          `;
+        })
+        .join('');
+
+      const procNodesSvg = procs
+        .map((p) => {
+          const pos = procPositions[p.id];
+          const isSelected = highlightedNodeId === p.id;
+          const stroke = p.isVictim ? '#e02f44' : isSelected ? '#6e9fff' : 'rgba(110, 159, 255, 0.55)';
+          const fill = p.isVictim ? 'rgba(224, 47, 68, 0.12)' : 'rgba(56, 113, 220, 0.10)';
+          const sqlShort = p.activeSql.replace(/\s+/g, ' ').slice(0, 38) + (p.activeSql.length > 38 ? '…' : '');
+          return `
+            <g class="svg-node" data-node-id="${escapeHtml(p.id)}">
+              <rect x="${pos.x}" y="${pos.y}" width="${pos.w}" height="${pos.h}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${isSelected ? 2.5 : 1.5}" />
+              <text x="${pos.x + 12}" y="${pos.y + 22}" fill="#f0f2f7" font-size="13" font-weight="700" font-family="var(--mono)">SPID ${escapeHtml(p.spid)}</text>
+              ${
+                p.isVictim
+                  ? `<rect x="${pos.x + pos.w - 72}" y="${pos.y + 9}" width="60" height="19" rx="3" fill="#e02f44" />
+                     <text x="${pos.x + pos.w - 42}" y="${pos.y + 22}" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">VICTIM</text>`
+                  : `<rect x="${pos.x + pos.w - 80}" y="${pos.y + 9}" width="68" height="19" rx="3" fill="rgba(56,113,220,0.35)" />
+                     <text x="${pos.x + pos.w - 46}" y="${pos.y + 22}" text-anchor="middle" fill="#9bc0ff" font-size="10" font-weight="600">SURVIVOR</text>`
+              }
+              <text x="${pos.x + 12}" y="${pos.y + 42}" fill="#ccccdc" font-size="11.5">${escapeHtml(p.clientapp)} · ${escapeHtml(p.loginname)}</text>
+              <text x="${pos.x + 12}" y="${pos.y + 60}" fill="#8e94a4" font-size="11" font-family="var(--mono)">Wait: ${p.waittime}ms · Log: ${p.logused.toLocaleString()}B</text>
+              <text x="${pos.x + 12}" y="${pos.y + 77}" fill="#8e94a4" font-size="10.5">${escapeHtml(p.isolationlevel)}</text>
+              <text x="${pos.x + 12}" y="${pos.y + 98}" fill="#7cc4fa" font-size="10.5" font-family="var(--mono)">${escapeHtml(sqlShort)}</text>
+            </g>
+          `;
+        })
+        .join('');
+
+      const resNodesSvg = resList
+        .map((r) => {
+          const pos = resPositions[r.id];
+          const isSelected = highlightedNodeId === r.id;
+          const stroke = isSelected ? '#ffb357' : 'rgba(255, 152, 48, 0.55)';
+          const typeLabel = r.type.replace(/lock$/i, '').toUpperCase() + ' LOCK';
+          const detailLine = r.indexname
+            ? `Index: ${r.indexname}`
+            : r.pageid
+              ? `File ${r.fileid} · Page ${r.pageid}`
+              : `HoBT: ${r.hobtid || '-'}`;
+          return `
+            <g class="svg-node" data-node-id="${escapeHtml(r.id)}">
+              <rect x="${pos.x}" y="${pos.y}" width="${pos.w}" height="${pos.h}" rx="6" fill="rgba(255, 152, 48, 0.09)" stroke="${stroke}" stroke-width="${isSelected ? 2.5 : 1.5}" />
+              <rect x="${pos.x + 12}" y="${pos.y + 10}" width="${Math.max(76, typeLabel.length * 7 + 12)}" height="18" rx="3" fill="rgba(255,152,48,0.22)" />
+              <text x="${pos.x + 18}" y="${pos.y + 23}" fill="#ffb357" font-size="10" font-weight="700" font-family="var(--mono)">${escapeHtml(typeLabel)}</text>
+              <text x="${pos.x + 12}" y="${pos.y + 48}" fill="#f0f2f7" font-size="12.5" font-weight="700" font-family="var(--mono)">${escapeHtml(r.shortObject.slice(0, 32))}</text>
+              <text x="${pos.x + 12}" y="${pos.y + 68}" fill="#ccccdc" font-size="11" font-family="var(--mono)">${escapeHtml(detailLine.slice(0, 36))}</text>
+              <text x="${pos.x + 12}" y="${pos.y + 88}" fill="#8e94a4" font-size="10.5" font-family="var(--mono)">DB: ${escapeHtml(r.database || r.dbid || '-')} · Mode: ${escapeHtml(r.mode || '-')}</text>
+            </g>
+          `;
+        })
+        .join('');
+
+      return `
+        <svg class="deadlock-svg" viewBox="0 0 ${svgW} ${svgH}">
+          <defs>
+            <marker id="arrow-owns" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#73bf69" />
+            </marker>
+            <marker id="arrow-waits" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#ff7383" />
+            </marker>
+          </defs>
+          ${edgesSvg}
+          ${procNodesSvg}
+          ${resNodesSvg}
+        </svg>
+      `;
+    }
+
+    // =========================================================================
+    // 5. DRAWER TABS
+    // =========================================================================
+    function openDrawer(id) {
+      selectedDeadlockId = id;
+      highlightedNodeId = null;
+      renderTable();
+      document.getElementById('drawerBackdrop').classList.add('open');
+      document.getElementById('drawer').classList.add('open');
+      renderDrawer();
+    }
+
+    function closeDrawer() {
+      selectedDeadlockId = null;
+      document.getElementById('drawerBackdrop').classList.remove('open');
+      document.getElementById('drawer').classList.remove('open');
+      renderTable();
+    }
+
+    function renderDrawer() {
+      const d = deadlocks.find((x) => x.id === selectedDeadlockId);
+      if (!d) return;
+
+      document.getElementById('drawerTitle').innerHTML = `
+        <span>Deadlock Report</span>
+        <span class="badge ${badgeClassForSeverity(d.diagnosis.severity)}">${escapeHtml(d.diagnosis.patternLabel)}</span>
+        <span style="font-size:12px; font-weight:400; color:var(--text-secondary); font-family:var(--mono);">${new Date(d.timestamp).toLocaleString()}</span>
+      `;
+
+      document.querySelectorAll('#drawerTabs .tab-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === activeDrawerTab);
+      });
+
+      const body = document.getElementById('drawerBody');
+
+      if (activeDrawerTab === 'graph') {
+        body.innerHTML = `
+          <div class="diagnosis-box">
+            <div class="diagnosis-title">
+              <span>Automated Diagnosis: ${escapeHtml(d.diagnosis.patternLabel)}</span>
+            </div>
+            <p class="diagnosis-summary">${escapeHtml(d.diagnosis.summary)}</p>
+            <strong style="font-size: 11.5px; color: var(--text-strong);">Recommended Fixes:</strong>
+            <ul class="rec-list">
+              ${d.diagnosis.recommendations.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}
+            </ul>
+          </div>
+
+          <div class="graph-container">
+            <div class="graph-hint">
+              <span><strong>Interactive Wait-For Graph</strong> — click any Process or Resource node to isolate its lock edges (click again to reset)</span>
+              <span>
+                <span style="color:#73bf69; font-family:var(--mono);">━━▶ OWNS lock</span> &nbsp;&nbsp;
+                <span style="color:#ff7383; font-family:var(--mono);">╌╌▶ WAITS / CONVERTS</span>
+              </span>
+            </div>
+            ${renderDeadlockGraphSVG(d)}
+          </div>
+
+          <h3 style="margin: 0 0 10px; font-size: 13.5px; color: var(--text-strong);">Circular Wait Breakdown</h3>
+          <div class="cycle-steps">
+            ${d.diagnosis.steps
+              .map(
+                (st, idx) => `
+              <div class="cycle-step">
+                <span class="step-num">${idx + 1}</span>
+                <div>${st.text}</div>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+        `;
+
+        body.querySelectorAll('.svg-node').forEach((node) => {
+          node.addEventListener('click', () => {
+            const nid = node.getAttribute('data-node-id');
+            highlightedNodeId = highlightedNodeId === nid ? null : nid;
+            renderDrawer();
+          });
+        });
+      } else if (activeDrawerTab === 'processes') {
+        body.innerHTML = `
+          <div class="process-grid">
+            ${d.processes
+              .map(
+                (p) => `
+              <div class="process-card ${p.isVictim ? 'victim' : ''}">
+                <div class="process-card-header">
+                  <div>
+                    <strong class="mono" style="font-size: 14px; color: var(--text-strong);">SPID ${escapeHtml(p.spid)}</strong>
+                    <span style="margin-left: 8px; color: var(--text-secondary);">${escapeHtml(p.clientapp)}</span>
+                  </div>
+                  ${
+                    p.isVictim
+                      ? '<span class="badge badge-error">DEADLOCK VICTIM (1205)</span>'
+                      : '<span class="badge badge-info">SURVIVOR</span>'
+                  }
+                </div>
+                <div class="process-card-body">
+                  <div class="meta-grid">
+                    <div><div class="meta-k">Database</div><div class="meta-v">${escapeHtml(p.currentdbname || p.currentdb || '-')}</div></div>
+                    <div><div class="meta-k">Wait Time</div><div class="meta-v">${p.waittime} ms</div></div>
+                    <div><div class="meta-k">Log Used</div><div class="meta-v">${p.logused.toLocaleString()} B</div></div>
+                    <div><div class="meta-k">Isolation Level</div><div class="meta-v">${escapeHtml(p.isolationlevel)}</div></div>
+                    <div><div class="meta-k">Requested Mode</div><div class="meta-v">${escapeHtml(p.lockMode || '-')}</div></div>
+                    <div><div class="meta-k">Deadlock Priority</div><div class="meta-v">${escapeHtml(p.priority)}</div></div>
+                    <div><div class="meta-k">Login</div><div class="meta-v">${escapeHtml(p.loginname)}</div></div>
+                    <div><div class="meta-k">Host</div><div class="meta-v">${escapeHtml(p.hostname)}</div></div>
+                    <div><div class="meta-k">Open Tran / Name</div><div class="meta-v">${escapeHtml(p.trancount)} (${escapeHtml(p.transactionname || '-')})</div></div>
+                  </div>
+
+                  <div class="meta-k">Active Statement (from <code>&lt;executionStack&gt;</code>)</div>
+                  <pre class="code-block">${escapeHtml(p.activeSql)}</pre>
+
+                  ${
+                    p.frames.length > 0
+                      ? `<div class="meta-k" style="margin-bottom:4px;">Call Stack (${p.frames.length} frame${p.frames.length > 1 ? 's' : ''})</div>
+                         ${p.frames
+                           .map(
+                             (f) =>
+                               `<div class="stack-frame"><strong>${escapeHtml(f.procname)}</strong>${
+                                 f.line ? ` : line ${escapeHtml(f.line)}` : ''
+                               }${f.sqlhandle ? ` <span style="color:var(--text-secondary);">(${escapeHtml(f.sqlhandle)})</span>` : ''}</div>`
+                           )
+                           .join('')}`
+                      : ''
+                  }
+
+                  ${
+                    p.inputbuf
+                      ? `<details style="margin-top:8px;">
+                           <summary style="cursor:pointer; color:var(--text-secondary); font-size:11.5px;">Show full &lt;inputbuf&gt; batch</summary>
+                           <pre class="code-block">${escapeHtml(p.inputbuf)}</pre>
+                         </details>`
+                      : ''
+                  }
+
+                  <div class="cross-links">
+                    <button class="btn btn-sm" onclick="alert('In SQLSights: navigates to /query_metrics filtered around this query &amp; time window')">View Query Metrics</button>
+                    <button class="btn btn-sm" onclick="alert('In SQLSights: navigates to /plan_analysis filtered to ${escapeHtml(p.currentdbname || 'this DB')}')">Inspect Plan Analysis</button>
+                    <button class="btn btn-sm" onclick="alert('In SQLSights: navigates to /snapshots?from=...&amp;to=... (±2m around deadlock timestamp)')">Jump to Snapshots (±2m)</button>
+                  </div>
+                </div>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+        `;
+      } else if (activeDrawerTab === 'resources') {
+        const byId = Object.fromEntries(d.processes.map((p) => [p.id, p]));
+        body.innerHTML = `
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lock Type</th>
+                  <th>Object &amp; Index</th>
+                  <th>Physical Target</th>
+                  <th>Owners (Holding)</th>
+                  <th>Waiters (Blocked)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${d.resources
+                  .map((r) => {
+                    const phys = r.pageid
+                      ? `File ${r.fileid} : Page ${r.pageid}${r.slot ? ` : Slot ${r.slot}` : ''}`
+                      : `HoBT ${r.hobtid || '-'}`;
+                    const ownersHtml = r.owners
+                      .map((o) => {
+                        const p = byId[o.processId];
+                        return `<div style="margin-bottom:4px;"><span class="badge badge-success">${escapeHtml(o.mode)}</span> <span class="mono">SPID ${escapeHtml(p?.spid || o.processId)}</span> <span style="color:var(--text-secondary);font-size:11px;">${escapeHtml(LOCK_MODE_DESCRIPTIONS[o.mode] || '')}</span></div>`;
+                      })
+                      .join('');
+                    const waitersHtml = r.waiters
+                      .map((w) => {
+                        const p = byId[w.processId];
+                        return `<div style="margin-bottom:4px;"><span class="badge badge-error">${escapeHtml(w.mode)}${w.requestType === 'convert' ? ' (convert)' : ''}</span> <span class="mono">SPID ${escapeHtml(p?.spid || w.processId)}</span> <span style="color:var(--text-secondary);font-size:11px;">${escapeHtml(LOCK_MODE_DESCRIPTIONS[w.mode] || '')}</span></div>`;
+                      })
+                      .join('');
+                    return `
+                      <tr>
+                        <td><span class="badge badge-warning">${escapeHtml(r.type)}</span></td>
+                        <td>
+                          <div class="mono" style="color:var(--text-strong);">${escapeHtml(r.objectname)}</div>
+                          ${r.indexname ? `<div class="sub-line">Index: ${escapeHtml(r.indexname)}</div>` : ''}
+                        </td>
+                        <td class="mono">${escapeHtml(phys)}</td>
+                        <td>${ownersHtml || '-'}</td>
+                        <td>${waitersHtml || '-'}</td>
+                      </tr>
+                    `;
+                  })
+                  .join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="callout-info">
+            <strong>Lock Compatibility Note:</strong> In SQL Server, <code>X</code> (Exclusive) locks conflict with every other data lock mode (<code>S</code>, <code>U</code>, <code>X</code>, <code>IS</code>, <code>IX</code>). Two <code>S</code> (Shared) locks are compatible with each other, which is why two transactions can both hold <code>S</code> and then deadlock when both request a <code>convert</code> to <code>X</code>.
+          </div>
+        `;
+      } else if (activeDrawerTab === 'xml') {
+        body.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="color:var(--text-secondary); font-size:12px;">Original <code>xml_deadlock_report</code> payload (compatible with SSMS <code>.xdl</code> viewer)</span>
+            <button class="btn btn-sm" id="btnCopyXml">Copy XML</button>
+          </div>
+          <pre class="code-block" style="max-height: 70vh;">${highlightXml(d.xml)}</pre>
+        `;
+        document.getElementById('btnCopyXml').addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(d.xml);
+            document.getElementById('btnCopyXml').textContent = 'Copied!';
+            setTimeout(() => (document.getElementById('btnCopyXml').textContent = 'Copy XML'), 1500);
+          } catch {
+            alert('Clipboard copy unavailable in this browser context.');
+          }
+        });
+      }
+    }
+
+    // =========================================================================
+    // 6. EVENT WIRING
+    // =========================================================================
+    document.getElementById('dbFilter').addEventListener('change', renderTable);
+    document.getElementById('patternFilter').addEventListener('change', renderTable);
+    document.getElementById('searchInput').addEventListener('input', renderTable);
+
+    document.querySelectorAll('#viewModeGroup .radio-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        viewMode = btn.getAttribute('data-mode');
+        document.querySelectorAll('#viewModeGroup .radio-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        renderTable();
+      });
+    });
+
+    document.querySelectorAll('#drawerTabs .tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activeDrawerTab = btn.getAttribute('data-tab');
+        renderDrawer();
+      });
+    });
+
+    document.getElementById('btnCloseDrawer').addEventListener('click', closeDrawer);
+    document.getElementById('drawerBackdrop').addEventListener('click', closeDrawer);
+
+    document.getElementById('btnDownloadXdl').addEventListener('click', () => {
+      const d = deadlocks.find((x) => x.id === selectedDeadlockId);
+      if (!d) return;
+      const blob = new Blob([d.xml], { type: 'application/xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `deadlock-${d.server}-${d.id}.xdl`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Paste XML modal
+    const modal = document.getElementById('pasteModal');
+    const closeModal = () => {
+      modal.classList.remove('open');
+      document.getElementById('pasteError').style.display = 'none';
+    };
+    document.getElementById('btnOpenPasteModal').addEventListener('click', () => modal.classList.add('open'));
+    document.getElementById('btnCloseModal').addEventListener('click', closeModal);
+    document.getElementById('btnCancelModal').addEventListener('click', closeModal);
+    document.getElementById('btnParseXml').addEventListener('click', () => {
+      const raw = document.getElementById('pasteXmlInput').value.trim();
+      const errBox = document.getElementById('pasteError');
+      try {
+        const parsed = parseDeadlockXML(raw, {
+          id: `custom-${deadlocks.length + 1}`,
+          server: document.getElementById('serverSelect').value,
+          timestamp: new Date().toISOString(),
+          occurrences: 1,
+        });
+        deadlocks.unshift(parsed);
+        populateDbFilter();
+        renderTable();
+        closeModal();
+        openDrawer(parsed.id);
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = 'block';
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (modal.classList.contains('open')) closeModal();
+        else if (selectedDeadlockId) closeDrawer();
+      }
+    });
+
+    // Init
+    populateDbFilter();
+    renderTimeline();
+    renderTable();
+    // Auto-open the first deadlock so the user immediately sees the full experience on load
+    openDrawer(deadlocks[0].id);
+  </script>
+</body>
+</html>

@@ -216,3 +216,25 @@ func (s GRPCServer) GetQueryMetricsTimeSeries(ctx context.Context, in *querierv2
 	}
 	return &querierv2.GetQueryMetricsTimeSeriesResponse{Metrics: protoM}, nil
 }
+
+func (s GRPCServer) ListDeadlocks(ctx context.Context, in *querierv2.ListDeadlocksRequest) (*querierv2.ListDeadlocksResponse, error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.String("request.start", in.GetStart().AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", in.GetEnd().AsTime().Format(time.RFC3339)),
+		attribute.String("request.host", in.GetHost()),
+		attribute.StringSlice("request.databases", in.GetDatabases()),
+	)
+	rows, err := s.app.Queries.ListDeadlocks.Handle(ctx, in.GetStart().AsTime(), in.GetEnd().AsTime(), in.GetHost(), in.GetDatabases())
+	if err != nil {
+		return nil, fmt.Errorf("list deadlocks: %w", err)
+	}
+	protoItems := make([]*dbmv1.DeadlockReport, 0, len(rows))
+	for _, d := range rows {
+		if pd := converters.DeadlockReportToProto(d); pd != nil {
+			protoItems = append(protoItems, pd)
+		}
+	}
+	span.SetAttributes(attribute.Int("response.count", len(protoItems)))
+	return &querierv2.ListDeadlocksResponse{Deadlocks: protoItems}, nil
+}

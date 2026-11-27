@@ -47,3 +47,8 @@ type QueryMetricsRepository interface {
 	PurgeQueryMetrics(ctx context.Context, start time.Time, end time.Time, batchSize int) error
 	PurgeAllQueryMetrics(ctx context.Context) error
 }
+
+type DeadlockRepository interface {
+	SaveDeadlocks(ctx context.Context, serverMeta common_domain.ServerMeta, deadlocks []*common_domain.DeadlockReport) (int, error)
+	PurgeDeadlocks(ctx context.Context, start time.Time, end time.Time, batchSize int) error
+}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
+	"github.com/guilhermearpassos/database-monitoring/internal/deadlock"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -61,6 +62,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/snapshotSamples", a.handleSnapshotSamples)
 	mux.HandleFunc("/queryMetrics", a.handleQueryMetrics)
 	mux.HandleFunc("/queryMetricsSeries", a.handleQueryMetricsSeries)
+	mux.HandleFunc("/deadlocks", a.handleDeadlocks)
 }
 
 func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
@@ -1944,6 +1946,155 @@ func (a *App) handleQueryMetricsSeries(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(points); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func buildDeadlockItems(raw []*dbmv1.DeadlockReport, server string, dbFilter []string) ([]DeadlockItemDTO, []string) {
+	dbSet := make(map[string]struct{})
+	items := make([]DeadlockItemDTO, 0, len(raw))
+	fpCounts := make(map[string]int, len(raw))
+
+	for _, r := range raw {
+		if r == nil {
+			continue
+		}
+		parsed, err := deadlock.ParseXML(r.GetXmlReport())
+		var (
+			xmlHash     = r.GetXmlHash()
+			fingerprint = r.GetFingerprint()
+			victimSPID  = r.GetVictimSpid()
+			dbs         = r.GetDatabases()
+			maxWaitMs   = r.GetMaxWaitMs()
+			processes   = []deadlock.Process{}
+			resources   = []deadlock.Resource{}
+			diagnosis   = deadlock.Diagnosis{
+				Pattern:      r.GetPattern(),
+				PatternLabel: "Deadlock",
+				Severity:     "error",
+			}
+		)
+		if err == nil && parsed != nil {
+			if xmlHash == "" {
+				xmlHash = parsed.XMLHash
+			}
+			if fingerprint == "" {
+				fingerprint = parsed.Fingerprint
+			}
+			if victimSPID == "" {
+				victimSPID = parsed.VictimSPID
+			}
+			if len(dbs) == 0 {
+				dbs = parsed.Databases
+			}
+			if maxWaitMs == 0 {
+				maxWaitMs = parsed.MaxWaitMs
+			}
+			processes = parsed.Processes
+			resources = parsed.Resources
+			diagnosis = parsed.Diagnosis
+		}
+		if dbs == nil {
+			dbs = []string{}
+		}
+		for _, db := range dbs {
+			if db != "" {
+				dbSet[db] = struct{}{}
+			}
+		}
+		if len(dbFilter) > 0 {
+			matched := false
+			for _, db := range dbs {
+				if slices.Contains(dbFilter, db) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+
+		if fingerprint != "" {
+			fpCounts[fingerprint]++
+		}
+		srv := r.GetServer().GetHost()
+		if srv == "" {
+			srv = server
+		}
+		items = append(items, DeadlockItemDTO{
+			ID:          r.GetId(),
+			Server:      srv,
+			Timestamp:   r.GetOccurredAt().AsTime(),
+			XMLHash:     xmlHash,
+			Fingerprint: fingerprint,
+			VictimSPID:  victimSPID,
+			Databases:   dbs,
+			MaxWaitMs:   maxWaitMs,
+			Processes:   processes,
+			Resources:   resources,
+			Diagnosis:   diagnosis,
+			XMLReport:   deadlock.ExtractDeadlockElement(r.GetXmlReport()),
+		})
+	}
+
+	for i := range items {
+		cnt := fpCounts[items[i].Fingerprint]
+		if cnt <= 0 {
+			cnt = 1
+		}
+		items[i].PatternOccurrences = cnt
+	}
+
+	availDBs := make([]string, 0, len(dbSet))
+	for db := range dbSet {
+		availDBs = append(availDBs, db)
+	}
+	slices.Sort(availDBs)
+	return items, availDBs
+}
+
+func (a *App) handleDeadlocks(w http.ResponseWriter, r *http.Request) {
+	server := r.URL.Query().Get("server")
+	if server == "" {
+		http.Error(w, "server is required", http.StatusBadRequest)
+		return
+	}
+	start, err := time.Parse(time.RFC3339, r.URL.Query().Get("start"))
+	if err != nil {
+		start = time.Now().Add(-24 * time.Hour)
+	}
+	end, err := time.Parse(time.RFC3339, r.URL.Query().Get("end"))
+	if err != nil {
+		end = time.Now()
+	}
+	var dbFilter []string
+	if raw := strings.TrimSpace(r.URL.Query().Get("databases")); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				dbFilter = append(dbFilter, trimmed)
+			}
+		}
+	}
+
+	resp, err := a.client.ListDeadlocks(r.Context(), &querierv2.ListDeadlocksRequest{
+		Start:     timestamppb.New(start),
+		End:       timestamppb.New(end),
+		Host:      server,
+		Databases: dbFilter,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	items, availDBs := buildDeadlockItems(resp.GetDeadlocks(), server, dbFilter)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(DeadlocksResponse{
+		Deadlocks:          items,
+		AvailableDatabases: availDBs,
+	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

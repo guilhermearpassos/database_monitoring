@@ -17,7 +17,7 @@ import {
 } from '@grafana/ui';
 import { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { css } from '@emotion/css';
-import { Activity, FileSearch, RefreshCw, Search, X } from 'lucide-react';
+import { Activity, FileSearch, RefreshCw, Search, ShieldAlert, X } from 'lucide-react';
 import {
   mapSortFieldToAggregationMode,
   METRIC_ISSUE_FLAGS,
@@ -381,6 +381,14 @@ const PageThree = () => {
           >
             <FileSearch size={14} />
             <span style={{ marginLeft: 6 }}>Plan Analysis</span>
+          </Button>
+          <Button
+            variant="secondary"
+            fill="outline"
+            onClick={() => navigate(`${prefixRoute(ROUTES.Deadlocks)}${buildPreservedNavSearch(searchParams)}`)}
+          >
+            <ShieldAlert size={14} />
+            <span style={{ marginLeft: 6 }}>Deadlocks</span>
           </Button>
           <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
             <RefreshCw size={14} />
