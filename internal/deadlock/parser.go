@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"io"
 	"slices"
 	"strconv"
@@ -113,6 +114,10 @@ func ExtractDeadlockElement(rawXML string) string {
 		return ""
 	}
 	lower := strings.ToLower(trimmed)
+	if !strings.Contains(lower, "<deadlock") && strings.Contains(lower, "&lt;deadlock") {
+		trimmed = html.UnescapeString(trimmed)
+		lower = strings.ToLower(trimmed)
+	}
 	start := strings.Index(lower, "<deadlock")
 	if start < 0 {
 		return trimmed

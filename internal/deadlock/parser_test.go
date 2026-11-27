@@ -142,4 +142,20 @@ func TestParseXMLPatterns(t *testing.T) {
 		_, err := ParseXML("   ")
 		require.Error(t, err)
 	})
+
+	t.Run("system_health event_data wrapper with xml_report", func(t *testing.T) {
+		wrapped := `<event name="xml_deadlock_report" package="sqlserver" timestamp="2026-11-27T19:00:00.000Z"><data name="xml_report"><value>` + reverseOrderXML + `</value></data></event>`
+		p, err := ParseXML(wrapped)
+		require.NoError(t, err)
+		require.Equal(t, PatternReverseOrder, p.Diagnosis.Pattern)
+		require.Equal(t, "64", p.VictimSPID)
+	})
+
+	t.Run("system_health event_data wrapper with escaped xml", func(t *testing.T) {
+		escaped := `<event name="xml_deadlock_report"><data name="xml_report"><value>&lt;deadlock&gt;&lt;victim-list&gt;&lt;victimProcess id="p1"/&gt;&lt;/victim-list&gt;&lt;process-list&gt;&lt;process id="p1" spid="77" waitresource="KEY: 5:1" waittime="1200" currentdbname="TestDB"&gt;&lt;inputbuf&gt;UPDATE t SET a = 1&lt;/inputbuf&gt;&lt;/process&gt;&lt;/process-list&gt;&lt;resource-list/&gt;&lt;/deadlock&gt;</value></data></event>`
+		p, err := ParseXML(escaped)
+		require.NoError(t, err)
+		require.Equal(t, "77", p.VictimSPID)
+		require.Equal(t, []string{"TestDB"}, p.Databases)
+	})
 }

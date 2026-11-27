@@ -1137,22 +1137,18 @@ func (s SqlServerSnapshotter) queryDeadlocksFromFileTarget(
 	initialOffset int64,
 	since time.Time,
 ) ([]rawDeadlockRow, string, int64, error) {
-	var fileArg any
-	var offsetArg any
-	if initialFile != "" {
-		fileArg = initialFile
-		offsetArg = initialOffset
-	}
+	fileArg := sql.NullString{String: initialFile, Valid: initialFile != ""}
+	offsetArg := sql.NullInt64{Int64: initialOffset, Valid: initialFile != ""}
 
 	query := monitoringSessionPrefix + `
 SELECT
     CAST(timestamp_utc AS datetime2(7)) AS occurred_at,
     file_name,
     file_offset,
-    CAST(CAST(event_data AS xml).query('/event/data[@name="xml_deadlock_report"]/value/deadlock') AS nvarchar(max)) AS deadlock_xml
-FROM sys.fn_xe_file_target_read_file(N'system_health*.xel', NULL, @p1, @p2)
+    event_data AS deadlock_xml
+FROM sys.fn_xe_file_target_read_file(N'system_health*.xel', NULL, ?, ?)
 WHERE object_name = 'xml_deadlock_report'
-  AND CAST(timestamp_utc AS datetime2(7)) >= @p3
+  AND CAST(timestamp_utc AS datetime2(7)) >= ?
 ORDER BY timestamp_utc ASC
 OPTION (MAXDOP 1)
 `
@@ -1209,7 +1205,10 @@ WITH xe AS (
 )
 SELECT
     evt.value('(@timestamp)[1]', 'datetime2(7)') AS occurred_at,
-    CAST(evt.query('./data[@name="xml_deadlock_report"]/value/deadlock') AS nvarchar(max)) AS deadlock_xml
+    COALESCE(
+        NULLIF(CAST(evt.query('./data/value/deadlock') AS nvarchar(max)), N''),
+        evt.value('(./data/value)[1]', 'nvarchar(max)')
+    ) AS deadlock_xml
 FROM xe
 CROSS APPLY xe.target_data.nodes('RingBufferTarget/event[@name="xml_deadlock_report"]') AS T(evt)
 WHERE evt.value('(@timestamp)[1]', 'datetime2(7)') >= @p1
