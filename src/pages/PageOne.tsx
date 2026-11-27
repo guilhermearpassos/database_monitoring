@@ -188,16 +188,14 @@ const PageOne = () => {
 
   const updateParams = useCallback(
     (mutator: (next: URLSearchParams) => void) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          mutator(next);
-          return next;
-        },
-        { replace: true }
-      );
+      const next = new URLSearchParams(searchParams);
+      mutator(next);
+      if (next.toString() === searchParams.toString()) {
+        return;
+      }
+      setSearchParams(next, { replace: true });
     },
-    [setSearchParams]
+    [searchParams, setSearchParams]
   );
 
   // Auto-refresh interval
@@ -305,10 +303,13 @@ const PageOne = () => {
     [filteredSummaries, timeRange, chartMetric]
   );
 
-  const handleTimeRangeChange = (next: TimeRange) => {
-    setTimeRange(next);
-    updateParams((p) => applyTimeRangeToSearchParams(p, next));
-  };
+  const handleTimeRangeChange = useCallback(
+    (next: TimeRange) => {
+      setTimeRange(next);
+      updateParams((p) => applyTimeRangeToSearchParams(p, next));
+    },
+    [updateParams]
+  );
 
   const handleSortChange = (field: SnapshotSortField) => {
     updateParams((p) => {

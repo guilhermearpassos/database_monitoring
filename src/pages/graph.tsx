@@ -19,7 +19,7 @@ import {
     AbsoluteTimeRange, dateTime,
 } from "@grafana/data";
 import {PanelRenderer} from "@grafana/runtime";
-import React, {useEffect, useMemo, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
 import {getWaitEventColorNoDefault} from "../utils/wait_event_colors";
 
 // export const GRAPH_STYLES = ['lines', 'bars', 'points', 'stacked_lines', 'stacked_bars'] as const;
@@ -227,26 +227,31 @@ export function MyGraph({
         });
     }, [data, theme, fieldConfig]);
 
-    const panelData: PanelData = {
-        series: dataWithConfig,
-        state: loadingState,
-        timeRange,
-        // ... existing code ...
-    };
+    const panelData: PanelData = useMemo(
+        () => ({
+            series: dataWithConfig,
+            state: loadingState,
+            timeRange,
+        }),
+        [dataWithConfig, loadingState, timeRange]
+    );
 
-    let handleOnChangeTimeRange = (abs: AbsoluteTimeRange) => {
-        const from = dateTime(abs.from);
-        const to = dateTime(abs.to);
-        onTimeRangeChange({
-            from,
-            to,
-            raw: {
-                // Keep raw as absolute epoch ms to avoid downstream parsing issues
-                from: from.toISOString(),
-                to: to.toISOString(),
-            },
-        })
-    };
+    const handleOnChangeTimeRange = useCallback(
+        (abs: AbsoluteTimeRange) => {
+            const from = dateTime(abs.from);
+            const to = dateTime(abs.to);
+            onTimeRangeChange({
+                from,
+                to,
+                raw: {
+                    // Keep raw as absolute epoch ms to avoid downstream parsing issues
+                    from: from.toISOString(),
+                    to: to.toISOString(),
+                },
+            });
+        },
+        [onTimeRangeChange]
+    );
     return (
         <div ref={containerRef} style={{ width: '100%', height: customHeight ? `${customHeight}px` : '40vh' }}>
         <PanelContextProvider value={panelContext}>

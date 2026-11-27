@@ -55,6 +55,8 @@ export interface QueryMetricsSeriesPoint {
   avg_used_grant_kb: number;
 }
 
+export type QueryMetricsAggregationMode = 'total' | 'avg';
+
 export type QueryMetricsSortField =
   | 'total_elapsed_ms'
   | 'avg_elapsed_ms'
@@ -65,9 +67,34 @@ export type QueryMetricsSortField =
   | 'avg_logical_reads'
   | 'total_physical_reads'
   | 'total_spills'
+  | 'avg_spills'
+  | 'total_grant_kb'
   | 'avg_grant_kb'
   | 'avg_rows'
   | 'last_execution_time';
+
+const TOTAL_TO_AVG_SORT: Partial<Record<QueryMetricsSortField, QueryMetricsSortField>> = {
+  total_elapsed_ms: 'avg_elapsed_ms',
+  total_worker_ms: 'avg_worker_ms',
+  total_logical_reads: 'avg_logical_reads',
+  total_spills: 'avg_spills',
+  total_grant_kb: 'avg_grant_kb',
+};
+
+const AVG_TO_TOTAL_SORT: Partial<Record<QueryMetricsSortField, QueryMetricsSortField>> = {
+  avg_elapsed_ms: 'total_elapsed_ms',
+  avg_worker_ms: 'total_worker_ms',
+  avg_logical_reads: 'total_logical_reads',
+  avg_spills: 'total_spills',
+  avg_grant_kb: 'total_grant_kb',
+};
+
+export function mapSortFieldToAggregationMode(
+  field: QueryMetricsSortField,
+  mode: QueryMetricsAggregationMode
+): QueryMetricsSortField {
+  return (mode === 'avg' ? TOTAL_TO_AVG_SORT[field] : AVG_TO_TOTAL_SORT[field]) ?? field;
+}
 
 export type SortDirection = 'asc' | 'desc';
 
