@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { GrafanaTheme2 } from '@grafana/data';
-import { Button, Tooltip, useStyles2 } from '@grafana/ui';
+import { Button, RadioButtonGroup, Tooltip, useStyles2 } from '@grafana/ui';
 import {
   Activity,
   ArrowDown,
@@ -14,6 +14,7 @@ import {
 import {
   getMetricIssueMeta,
   QueryMetricItem,
+  QueryMetricsAggregationMode,
   QueryMetricsSortField,
   SortDirection,
 } from './types';
@@ -215,8 +216,25 @@ function formatCompactNumber(n: number): string {
   return Math.round(n).toLocaleString();
 }
 
+function formatAvgCount(n: number): string {
+  if (n >= 10_000) {
+    return formatCompactNumber(n);
+  }
+  if (n > 0 && n < 10) {
+    return Number.isInteger(n) ? n.toLocaleString() : n.toFixed(2);
+  }
+  return Math.round(n).toLocaleString();
+}
+
+const AGG_MODE_OPTIONS: Array<{ label: string; value: QueryMetricsAggregationMode }> = [
+  { label: 'Totals', value: 'total' },
+  { label: 'Avg / Exec', value: 'avg' },
+];
+
 export const QueryMetricsTable: React.FC<{
   metrics: QueryMetricItem[];
+  aggMode: QueryMetricsAggregationMode;
+  onAggModeChange: (mode: QueryMetricsAggregationMode) => void;
   sortField: QueryMetricsSortField;
   sortDir: SortDirection;
   onSortChange: (field: QueryMetricsSortField) => void;
@@ -225,6 +243,8 @@ export const QueryMetricsTable: React.FC<{
   onOpenSnapshots: (item: QueryMetricItem) => void;
 }> = ({
   metrics,
+  aggMode,
+  onAggModeChange,
   sortField,
   sortDir,
   onSortChange,
@@ -235,6 +255,13 @@ export const QueryMetricsTable: React.FC<{
   const styles = useStyles2(getStyles);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const isAvg = aggMode === 'avg';
+
+  const durationSortField: QueryMetricsSortField = isAvg ? 'avg_elapsed_ms' : 'total_elapsed_ms';
+  const cpuSortField: QueryMetricsSortField = isAvg ? 'avg_worker_ms' : 'total_worker_ms';
+  const readsSortField: QueryMetricsSortField = isAvg ? 'avg_logical_reads' : 'total_logical_reads';
+  const spillsSortField: QueryMetricsSortField = isAvg ? 'avg_spills' : 'total_spills';
+  const grantSortField: QueryMetricsSortField = isAvg ? 'avg_grant_kb' : 'total_grant_kb';
 
   const sorted = useMemo(() => {
     const copy = [...metrics];
@@ -257,6 +284,10 @@ export const QueryMetricsTable: React.FC<{
           return (a.total_physical_reads - b.total_physical_reads) * dir;
         case 'total_spills':
           return (a.total_spills - b.total_spills) * dir;
+        case 'avg_spills':
+          return ((a.avg_spills ?? 0) - (b.avg_spills ?? 0)) * dir;
+        case 'total_grant_kb':
+          return ((a.total_grant_kb ?? 0) - (b.total_grant_kb ?? 0)) * dir;
         case 'avg_grant_kb':
           return (a.avg_grant_kb - b.avg_grant_kb) * dir;
         case 'avg_rows':
@@ -299,6 +330,8 @@ export const QueryMetricsTable: React.FC<{
       'Avg Logical Reads',
       'Total Physical Reads',
       'Total Spills',
+      'Avg Spills',
+      'Total Grant (KB)',
       'Avg Grant (KB)',
       'Avg Used Grant (KB)',
       'Avg Rows',
@@ -318,6 +351,8 @@ export const QueryMetricsTable: React.FC<{
       m.avg_logical_reads.toFixed(1),
       m.total_physical_reads,
       m.total_spills,
+      (m.avg_spills ?? 0).toFixed(2),
+      m.total_grant_kb ?? 0,
       m.avg_grant_kb.toFixed(1),
       m.avg_used_grant_kb.toFixed(1),
       m.avg_rows.toFixed(1),
@@ -345,7 +380,13 @@ export const QueryMetricsTable: React.FC<{
           Showing <strong>{(safePage - 1) * pageSize + 1}</strong>–
           <strong>{Math.min(safePage * pageSize, sorted.length)}</strong> of <strong>{sorted.length}</strong> queries
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <RadioButtonGroup<QueryMetricsAggregationMode>
+            size="sm"
+            options={AGG_MODE_OPTIONS}
+            value={aggMode}
+            onChange={onAggModeChange}
+          />
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             Rows:
             <select
@@ -381,28 +422,28 @@ export const QueryMetricsTable: React.FC<{
                 </button>
               </th>
               <th>
-                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange('total_elapsed_ms')}>
-                  Duration {renderSortIcon('total_elapsed_ms')}
+                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange(durationSortField)}>
+                  {isAvg ? 'Avg Duration' : 'Duration'} {renderSortIcon(durationSortField)}
                 </button>
               </th>
               <th>
-                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange('total_worker_ms')}>
-                  CPU {renderSortIcon('total_worker_ms')}
+                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange(cpuSortField)}>
+                  {isAvg ? 'Avg CPU' : 'CPU'} {renderSortIcon(cpuSortField)}
                 </button>
               </th>
               <th>
-                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange('total_logical_reads')}>
-                  Logical Reads {renderSortIcon('total_logical_reads')}
+                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange(readsSortField)}>
+                  {isAvg ? 'Avg Reads' : 'Logical Reads'} {renderSortIcon(readsSortField)}
                 </button>
               </th>
               <th>
-                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange('total_spills')}>
-                  Spills {renderSortIcon('total_spills')}
+                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange(spillsSortField)}>
+                  {isAvg ? 'Avg Spills' : 'Spills'} {renderSortIcon(spillsSortField)}
                 </button>
               </th>
               <th>
-                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange('avg_grant_kb')}>
-                  Mem Grant {renderSortIcon('avg_grant_kb')}
+                <button type="button" className={styles.sortHeaderBtn} onClick={() => onSortChange(grantSortField)}>
+                  {isAvg ? 'Avg Mem Grant' : 'Mem Grant'} {renderSortIcon(grantSortField)}
                 </button>
               </th>
               <th>Actions</th>
@@ -441,15 +482,21 @@ export const QueryMetricsTable: React.FC<{
                     {item.text}
                   </div>
                   <div className={styles.subLine}>
-                    avg {formatCompactNumber(item.avg_rows)} rows · last {formatDurationMs(item.last_elapsed_ms)}
+                    {isAvg
+                      ? `avg ${formatCompactNumber(item.avg_rows)} rows`
+                      : `total ${formatCompactNumber(item.total_rows ?? item.avg_rows * item.execution_count)} rows`}
+                    {' · '}last {formatDurationMs(item.last_elapsed_ms)}
                     {item.avg_dop > 1 ? ` · DOP ${item.avg_dop.toFixed(1)}` : ''}
                   </div>
                 </td>
                 <td className={styles.numericCell}>{item.execution_count.toLocaleString()}</td>
                 <td className={styles.numericCell}>
-                  <div>{formatDurationMs(item.total_elapsed_ms)}</div>
+                  <div>{formatDurationMs(isAvg ? item.avg_elapsed_ms : item.total_elapsed_ms)}</div>
                   <div className={styles.subLine}>
-                    avg {formatDurationMs(item.avg_elapsed_ms)} ({item.elapsed_share_pct.toFixed(1)}%)
+                    {isAvg
+                      ? `total ${formatDurationMs(item.total_elapsed_ms)}`
+                      : `avg ${formatDurationMs(item.avg_elapsed_ms)}`}{' '}
+                    ({item.elapsed_share_pct.toFixed(1)}%)
                   </div>
                   <div className={styles.shareBarTrack}>
                     <div
@@ -459,34 +506,56 @@ export const QueryMetricsTable: React.FC<{
                   </div>
                 </td>
                 <td className={styles.numericCell}>
-                  <div>{formatDurationMs(item.total_worker_ms)}</div>
+                  <div>{formatDurationMs(isAvg ? item.avg_worker_ms : item.total_worker_ms)}</div>
                   <div className={styles.subLine}>
-                    avg {formatDurationMs(item.avg_worker_ms)} ({item.cpu_share_pct.toFixed(1)}%)
+                    {isAvg
+                      ? `total ${formatDurationMs(item.total_worker_ms)}`
+                      : `avg ${formatDurationMs(item.avg_worker_ms)}`}{' '}
+                    ({item.cpu_share_pct.toFixed(1)}%)
                   </div>
                 </td>
                 <td className={styles.numericCell}>
-                  <div>{formatCompactNumber(item.total_logical_reads)}</div>
+                  <div>{formatCompactNumber(isAvg ? item.avg_logical_reads : item.total_logical_reads)}</div>
                   <div className={styles.subLine}>
-                    avg {formatCompactNumber(item.avg_logical_reads)}
-                    {item.total_physical_reads > 0 ? ` · ${formatCompactNumber(item.total_physical_reads)} phys` : ''}
+                    {isAvg
+                      ? `total ${formatCompactNumber(item.total_logical_reads)}`
+                      : `avg ${formatCompactNumber(item.avg_logical_reads)}`}
+                    {isAvg
+                      ? (item.avg_physical_reads ?? 0) > 0
+                        ? ` · ${formatAvgCount(item.avg_physical_reads)} phys`
+                        : ''
+                      : item.total_physical_reads > 0
+                        ? ` · ${formatCompactNumber(item.total_physical_reads)} phys`
+                        : ''}
                   </div>
                 </td>
                 <td className={styles.numericCell}>
                   {item.total_spills > 0 ? (
-                    <span className={styles.spillPill}>
-                      <Flame size={11} />
-                      {item.total_spills.toLocaleString()}
-                    </span>
+                    <>
+                      <span className={styles.spillPill}>
+                        <Flame size={11} />
+                        {isAvg ? formatAvgCount(item.avg_spills ?? 0) : item.total_spills.toLocaleString()}
+                      </span>
+                      <div className={styles.subLine}>
+                        {isAvg
+                          ? `total ${item.total_spills.toLocaleString()}`
+                          : `avg ${formatAvgCount(item.avg_spills ?? 0)}`}
+                      </div>
+                    </>
                   ) : (
                     '0'
                   )}
                 </td>
                 <td className={styles.numericCell}>
-                  {item.avg_grant_kb > 0 ? (
+                  {item.avg_grant_kb > 0 || (item.total_grant_kb ?? 0) > 0 ? (
                     <>
-                      <div>{formatCompactNumber(item.avg_grant_kb)} KB</div>
+                      <div>
+                        {formatCompactNumber(isAvg ? item.avg_grant_kb : (item.total_grant_kb ?? 0))} KB
+                      </div>
                       <div className={styles.subLine}>
-                        used {formatCompactNumber(item.avg_used_grant_kb)} KB
+                        {isAvg
+                          ? `total ${formatCompactNumber(item.total_grant_kb ?? 0)} KB · used ${formatCompactNumber(item.avg_used_grant_kb)} KB`
+                          : `avg ${formatCompactNumber(item.avg_grant_kb)} KB · used ${formatCompactNumber(item.avg_used_grant_kb)} KB`}
                         {item.memory_grant_waste_pct >= 50 ? ` (${item.memory_grant_waste_pct.toFixed(0)}% waste)` : ''}
                       </div>
                     </>

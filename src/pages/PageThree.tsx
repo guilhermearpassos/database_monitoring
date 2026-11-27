@@ -19,8 +19,10 @@ import { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { css } from '@emotion/css';
 import { Activity, FileSearch, RefreshCw, Search, X } from 'lucide-react';
 import {
+  mapSortFieldToAggregationMode,
   METRIC_ISSUE_FLAGS,
   QueryMetricItem,
+  QueryMetricsAggregationMode,
   QueryMetricsResponse,
   QueryMetricsSortField,
   SortDirection,
@@ -30,7 +32,7 @@ import { QueryMetricDrawer } from '../components/QueryMetrics/QueryMetricDrawer'
 import {
   applyTimeRangeToSearchParams,
   buildPreservedNavSearch,
-  parseCSVParam,
+  parseCSVString,
   parseTimeRangeFromSearchParams,
   setCSVParam,
   setOptionalParam,
@@ -138,12 +140,16 @@ const PageThree = () => {
 
   // URL-synced state
   const selectedServer = searchParams.get('server') || '';
-  const selectedDatabases = useMemo(() => parseCSVParam(searchParams, 'db'), [searchParams]);
-  const selectedIssues = useMemo(() => parseCSVParam(searchParams, 'issues'), [searchParams]);
+  const dbParam = searchParams.get('db') || '';
+  const issuesParam = searchParams.get('issues') || '';
+  const selectedDatabases = useMemo(() => parseCSVString(dbParam), [dbParam]);
+  const selectedIssues = useMemo(() => parseCSVString(issuesParam), [issuesParam]);
   const onlyWithIssues = searchParams.get('onlyIssues') === '1';
   const minExecs = Number(searchParams.get('minExecs') || '0') || 0;
   const searchQuery = searchParams.get('q') || '';
-  const sortField = (searchParams.get('sort') as QueryMetricsSortField) || 'total_elapsed_ms';
+  const aggMode: QueryMetricsAggregationMode = searchParams.get('agg') === 'avg' ? 'avg' : 'total';
+  const defaultSortField: QueryMetricsSortField = aggMode === 'avg' ? 'avg_elapsed_ms' : 'total_elapsed_ms';
+  const sortField = (searchParams.get('sort') as QueryMetricsSortField) || defaultSortField;
   const sortDir: SortDirection = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
   const selectedQueryHash = searchParams.get('queryHash') || '';
 
@@ -157,16 +163,14 @@ const PageThree = () => {
 
   const updateParams = useCallback(
     (mutator: (next: URLSearchParams) => void) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          mutator(next);
-          return next;
-        },
-        { replace: true }
-      );
+      const next = new URLSearchParams(searchParams);
+      mutator(next);
+      if (next.toString() === searchParams.toString()) {
+        return;
+      }
+      setSearchParams(next, { replace: true });
     },
-    [setSearchParams]
+    [searchParams, setSearchParams]
   );
 
   const loadServers = useCallback(async (tr: TimeRange) => {
@@ -297,9 +301,26 @@ const PageThree = () => {
     return metrics.find((m) => m.query_hash === selectedQueryHash) ?? null;
   }, [metrics, selectedQueryHash]);
 
-  const handleTimeRangeChange = (next: TimeRange) => {
-    setTimeRange(next);
-    updateParams((p) => applyTimeRangeToSearchParams(p, next));
+  const handleTimeRangeChange = useCallback(
+    (next: TimeRange) => {
+      setTimeRange(next);
+      updateParams((p) => applyTimeRangeToSearchParams(p, next));
+    },
+    [updateParams]
+  );
+
+  const handleAggModeChange = (nextMode: QueryMetricsAggregationMode) => {
+    updateParams((p) => {
+      setOptionalParam(p, 'agg', nextMode === 'total' ? null : nextMode);
+      const currentSort = (p.get('sort') as QueryMetricsSortField) || defaultSortField;
+      const mappedSort = mapSortFieldToAggregationMode(currentSort, nextMode);
+      const nextDefault: QueryMetricsSortField = nextMode === 'avg' ? 'avg_elapsed_ms' : 'total_elapsed_ms';
+      if (mappedSort === nextDefault && !p.get('sort')) {
+        p.delete('sort');
+      } else {
+        p.set('sort', mappedSort);
+      }
+    });
   };
 
   const handleSortChange = (field: QueryMetricsSortField) => {
@@ -491,7 +512,7 @@ const PageThree = () => {
         <div className={styles.emptyPrompt}>
           Select a SQL Server instance above to explore query execution metrics.
         </div>
-      ) : loading ? (
+      ) : loading && metrics.length === 0 ? (
         <LoadingPlaceholder text="Loading query metrics..." />
       ) : (
         <>
@@ -522,6 +543,8 @@ const PageThree = () => {
 
           <QueryMetricsTable
             metrics={filteredMetrics}
+            aggMode={aggMode}
+            onAggModeChange={handleAggModeChange}
             sortField={sortField}
             sortDir={sortDir}
             onSortChange={handleSortChange}

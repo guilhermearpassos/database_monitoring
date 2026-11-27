@@ -24,7 +24,7 @@ import { PlanAnalysisTable, PlanSortField, SortDirection } from '../components/P
 import {
   applyTimeRangeToSearchParams,
   buildPreservedNavSearch,
-  parseCSVParam,
+  parseCSVString,
   parseTimeRangeFromSearchParams,
   setCSVParam,
   setOptionalParam,
@@ -133,8 +133,10 @@ const PageTwo = () => {
 
   // URL-derived state
   const selectedServer = searchParams.get('server') || '';
-  const selectedDatabases = useMemo(() => parseCSVParam(searchParams, 'db'), [searchParams]);
-  const selectedIssues = useMemo(() => parseCSVParam(searchParams, 'issues'), [searchParams]);
+  const dbParam = searchParams.get('db') || '';
+  const issuesParam = searchParams.get('issues') || '';
+  const selectedDatabases = useMemo(() => parseCSVString(dbParam), [dbParam]);
+  const selectedIssues = useMemo(() => parseCSVString(issuesParam), [issuesParam]);
   const onlyWithLocks = searchParams.get('onlyLocks') === '1';
   const searchQuery = searchParams.get('q') || '';
   const sortField = (searchParams.get('sort') as PlanSortField) || 'related_lock_count';
@@ -152,16 +154,14 @@ const PageTwo = () => {
 
   const updateParams = useCallback(
     (mutator: (next: URLSearchParams) => void) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          mutator(next);
-          return next;
-        },
-        { replace: true }
-      );
+      const next = new URLSearchParams(searchParams);
+      mutator(next);
+      if (next.toString() === searchParams.toString()) {
+        return;
+      }
+      setSearchParams(next, { replace: true });
     },
-    [setSearchParams]
+    [searchParams, setSearchParams]
   );
 
   // Load servers for time range
@@ -286,10 +286,13 @@ const PageTwo = () => {
       .map((db) => ({ label: db, value: db }));
   }, [availableDatabases, selectedDatabases]);
 
-  const handleTimeRangeChange = (next: TimeRange) => {
-    setTimeRange(next);
-    updateParams((p) => applyTimeRangeToSearchParams(p, next));
-  };
+  const handleTimeRangeChange = useCallback(
+    (next: TimeRange) => {
+      setTimeRange(next);
+      updateParams((p) => applyTimeRangeToSearchParams(p, next));
+    },
+    [updateParams]
+  );
 
   const handleSortChange = (field: PlanSortField) => {
     updateParams((p) => {
@@ -445,7 +448,7 @@ const PageTwo = () => {
         <div className={styles.emptyPrompt}>
           Select a SQL Server instance above to analyze execution plans.
         </div>
-      ) : loading ? (
+      ) : loading && plans.length === 0 ? (
         <LoadingPlaceholder text="Analyzing execution plans..." />
       ) : (
         <>

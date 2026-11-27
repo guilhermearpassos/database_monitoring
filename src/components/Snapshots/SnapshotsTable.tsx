@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { FetchResponse, getBackendSrv } from '@grafana/runtime';
@@ -464,36 +464,51 @@ export const SnapshotsTable: React.FC<{
   const [samplesCache, setSamplesCache] = useState<Record<string, SnapshotSampleItem[]>>({});
   const [samplesLoading, setSamplesLoading] = useState<Record<string, boolean>>({});
   const [samplesError, setSamplesError] = useState<Record<string, string>>({});
+  const samplesCacheRef = useRef(samplesCache);
+  const samplesLoadingRef = useRef(samplesLoading);
+  const samplesErrorRef = useRef(samplesError);
+  samplesCacheRef.current = samplesCache;
+  samplesLoadingRef.current = samplesLoading;
+  samplesErrorRef.current = samplesError;
 
-  const fetchSamples = useCallback(
-    async (snapId: string, force = false) => {
-      if (!snapId || (!force && (samplesCache[snapId] || samplesLoading[snapId]))) {
-        return;
-      }
-      setSamplesLoading((prev) => ({ ...prev, [snapId]: true }));
-      setSamplesError((prev) => {
-        const next = { ...prev };
-        delete next[snapId];
-        return next;
+  const fetchSamples = useCallback(async (snapId: string, force = false) => {
+    if (
+      !snapId ||
+      (!force && (samplesCacheRef.current[snapId] || samplesLoadingRef.current[snapId] || samplesErrorRef.current[snapId]))
+    ) {
+      return;
+    }
+    samplesLoadingRef.current = { ...samplesLoadingRef.current, [snapId]: true };
+    const nextErrors = { ...samplesErrorRef.current };
+    delete nextErrors[snapId];
+    samplesErrorRef.current = nextErrors;
+    setSamplesLoading((prev) => ({ ...prev, [snapId]: true }));
+    setSamplesError((prev) => {
+      const next = { ...prev };
+      delete next[snapId];
+      return next;
+    });
+    try {
+      const params = new URLSearchParams({ snapId });
+      const response: Observable<FetchResponse<SnapshotSampleItem[]>> = getBackendSrv().fetch({
+        url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/snapshotSamples?${params.toString()}`,
       });
-      try {
-        const params = new URLSearchParams({ snapId });
-        const response: Observable<FetchResponse<SnapshotSampleItem[]>> = getBackendSrv().fetch({
-          url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/snapshotSamples?${params.toString()}`,
-        });
-        const result = await lastValueFrom(response);
-        setSamplesCache((prev) => ({ ...prev, [snapId]: result.data || [] }));
-      } catch (err) {
-        setSamplesError((prev) => ({
-          ...prev,
-          [snapId]: err instanceof Error ? err.message : 'Failed to load samples',
-        }));
-      } finally {
-        setSamplesLoading((prev) => ({ ...prev, [snapId]: false }));
-      }
-    },
-    [samplesCache, samplesLoading]
-  );
+      const result = await lastValueFrom(response);
+      const data = result.data || [];
+      samplesCacheRef.current = { ...samplesCacheRef.current, [snapId]: data };
+      setSamplesCache((prev) => ({ ...prev, [snapId]: data }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load samples';
+      samplesErrorRef.current = { ...samplesErrorRef.current, [snapId]: message };
+      setSamplesError((prev) => ({
+        ...prev,
+        [snapId]: message,
+      }));
+    } finally {
+      samplesLoadingRef.current = { ...samplesLoadingRef.current, [snapId]: false };
+      setSamplesLoading((prev) => ({ ...prev, [snapId]: false }));
+    }
+  }, []);
 
   useEffect(() => {
     if (expandedSnapId) {

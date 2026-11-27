@@ -29,8 +29,7 @@ export function applyTimeRangeToSearchParams(params: URLSearchParams, range: Tim
   params.set('to', serializeTimeRangePoint(range.raw.to, range.to));
 }
 
-export function parseCSVParam(params: URLSearchParams, key: string): string[] {
-  const raw = params.get(key);
+export function parseCSVString(raw: string | null | undefined): string[] {
   if (!raw) {
     return [];
   }
@@ -38,6 +37,10 @@ export function parseCSVParam(params: URLSearchParams, key: string): string[] {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+export function parseCSVParam(params: URLSearchParams, key: string): string[] {
+  return parseCSVString(params.get(key));
 }
 
 export function setCSVParam(params: URLSearchParams, key: string, values: string[]): void {
