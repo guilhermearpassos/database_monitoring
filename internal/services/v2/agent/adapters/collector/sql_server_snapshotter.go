@@ -53,6 +53,8 @@ type SqlServerSnapshotter struct {
 	lastQueryCounters map[string]queryCounterState
 	deadlocksMu       *sync.Mutex
 	deadlockCursor    *deadlockCursorState
+	waitResolver      *WaitResourceResolver
+	lockMetrics       *LockMetricsRecorder
 }
 
 func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlServerSnapshotter {
@@ -62,6 +64,8 @@ func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlS
 		Server:            server,
 		metricsMu:         &sync.Mutex{},
 		lastQueryCounters: make(map[string]queryCounterState),
+		waitResolver:      NewWaitResourceResolver(sqlServerLockMetadataLookup{db: db}),
+		lockMetrics:       defaultLockMetrics,
 		deadlocksMu:       &sync.Mutex{},
 		deadlockCursor:    &deadlockCursorState{},
 	}
@@ -145,33 +149,40 @@ func (s SqlServerSnapshotter) TakeSnapshot(ctx context.Context, databases []stri
 	ctx, span := s.tracer.Start(ctx, "TakeSnapshot")
 	defer span.End()
 	traceContext := PackTraceContext(ctx)
-	qDBName := monitoringSessionPrefix + `SET CONTEXT_INFO ?;select database_id, name from sys.databases OPTION (MAXDOP 1)`
 	db := s.db
-	rowsDB, err := db.QueryContext(ctx, qDBName, traceContext)
-	if err != nil {
-		return nil, fmt.Errorf("queryDatabases: %w", err)
-	}
-	dbInfo := make(map[string]common_domain.DataBaseMetadata)
-	defer func(rowsDB *sql.Rows) {
-		_ = rowsDB.Close()
-	}(rowsDB)
-	for rowsDB.Next() {
-		var dbID string
-		var name string
-		err = rowsDB.Scan(&dbID, &name)
+	var dbInfo map[string]common_domain.DataBaseMetadata
+	var err error
+	if s.waitResolver != nil {
+		dbInfo, err = s.waitResolver.GetDatabaseMetadataMap(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("queryDatabases scan: %w", err)
+			return nil, fmt.Errorf("queryDatabases: %w", err)
 		}
-		dbInfo[dbID] = common_domain.DataBaseMetadata{
-			DatabaseID:   dbID,
-			DatabaseName: name,
+	} else {
+		qDBName := monitoringSessionPrefix + `SET CONTEXT_INFO ?;select database_id, name from sys.databases OPTION (MAXDOP 1)`
+		rowsDB, qErr := db.QueryContext(ctx, qDBName, traceContext)
+		if qErr != nil {
+			return nil, fmt.Errorf("queryDatabases: %w", qErr)
 		}
+		dbInfo = make(map[string]common_domain.DataBaseMetadata)
+		defer func(rowsDB *sql.Rows) {
+			_ = rowsDB.Close()
+		}(rowsDB)
+		for rowsDB.Next() {
+			var dbID string
+			var name string
+			if err = rowsDB.Scan(&dbID, &name); err != nil {
+				return nil, fmt.Errorf("queryDatabases scan: %w", err)
+			}
+			dbInfo[dbID] = common_domain.DataBaseMetadata{
+				DatabaseID:   dbID,
+				DatabaseName: name,
+			}
+		}
+		if err = rowsDB.Err(); err != nil {
+			return nil, fmt.Errorf("queryDatabases orwsErr: %w", err)
+		}
+		_ = rowsDB.Close()
 	}
-	err = rowsDB.Err()
-	if err != nil {
-		return nil, fmt.Errorf("queryDatabases orwsErr: %w", err)
-	}
-	_ = rowsDB.Close()
 	snapID := uuid.NewString()
 	snapTime := time.Now().In(time.UTC)
 	query := monitoringSessionPrefix + `
@@ -400,6 +411,9 @@ OPTION (MAXDOP 1)
 		}
 	}
 	querySamples = append(querySamples, sleepingSamples...)
+	if s.lockMetrics != nil {
+		s.lockMetrics.RecordSnapshot(ctx, s.Server.Host, querySamples, s.waitResolver)
+	}
 	return &common_domain.DataBaseSnapshot{
 		Samples: querySamples,
 		SnapInfo: common_domain.SnapInfo{
