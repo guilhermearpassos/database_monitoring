@@ -7,9 +7,14 @@ import (
 )
 
 func DatabaseSnapshotToProto(d *common_domain.DataBaseSnapshot) *dbmv1.DBSnapshot {
-	samples := make([]*dbmv1.QuerySample, len(d.Samples))
-	for i, sample := range d.Samples {
-		samples[i] = SampleToProto(sample)
+	if d == nil {
+		return nil
+	}
+	samples := make([]*dbmv1.QuerySample, 0, len(d.Samples))
+	for _, sample := range d.Samples {
+		if ps := SampleToProto(sample); ps != nil {
+			samples = append(samples, ps)
+		}
 	}
 	return &dbmv1.DBSnapshot{
 		Id:        d.SnapInfo.ID,
@@ -22,6 +27,9 @@ func DatabaseSnapshotToProto(d *common_domain.DataBaseSnapshot) *dbmv1.DBSnapsho
 }
 
 func SampleToProto(sample *common_domain.QuerySample) *dbmv1.QuerySample {
+	if sample == nil {
+		return nil
+	}
 	var waitType string
 	if sample.Wait.WaitType != nil {
 		waitType = *sample.Wait.WaitType
@@ -92,7 +100,7 @@ func QueryMetricToProto(metric *common_domain.QueryMetric) (*dbmv1.QueryMetric, 
 		Text:                  metric.Text,
 		Db:                    &dbmv1.DBMetadata{DatabaseId: metric.Database.DatabaseID, DatabaseName: metric.Database.DatabaseName},
 		LastExecutionTime:     timestamppb.New(metric.LastExecutionTime),
-		LastElapsedTimeMicros: int64(metric.LastElapsedTime),
+		LastElapsedTimeMicros: metric.LastElapsedTime.Microseconds(),
 		Counters:              metric.Counters,
 		Rates:                 metric.Rates,
 		CollectedAt:           timestamppb.New(metric.CollectionTime),
@@ -100,6 +108,9 @@ func QueryMetricToProto(metric *common_domain.QueryMetric) (*dbmv1.QueryMetric, 
 }
 
 func ExecutionPlanToProto(plan *common_domain.ExecutionPlan) (*dbmv1.ExecutionPlan, error) {
+	if plan == nil {
+		return nil, nil
+	}
 	return &dbmv1.ExecutionPlan{
 		PlanHandle: plan.PlanHandle,
 		Server: &dbmv1.ServerMetadata{
@@ -110,23 +121,10 @@ func ExecutionPlanToProto(plan *common_domain.ExecutionPlan) (*dbmv1.ExecutionPl
 	}, nil
 }
 
-func SnapSummaryToProto(summary *common_domain.SnapshotSummary) *dbmv1.SnapshotSummary {
-	return &dbmv1.SnapshotSummary{
-		Id:                     summary.ID,
-		Timestamp:              timestamppb.New(summary.Timestamp),
-		Server:                 &dbmv1.ServerMetadata{Host: summary.Server.Host, Type: summary.Server.Type},
-		ConnectionsByWaitEvent: summary.ConnsByWaitType,
-		TimeMsByWaitEvent:      summary.TimeMsByWaitType,
-		Connections:            int32(summary.Connections),
-		Waiters:                int32(summary.Waiters),
-		Blockers:               int32(summary.Blockers),
-		WaitDuration:           summary.WaitDuration,
-		AvgDuration:            summary.AvgDuration,
-		MaxDuration:            summary.MaxDuration,
-	}
-}
-
 func CommandMetaToProto(cm *common_domain.CommandMetadata) *dbmv1.CommandMetadata {
+	if cm == nil {
+		return &dbmv1.CommandMetadata{}
+	}
 	return &dbmv1.CommandMetadata{
 		TransactionId:           cm.TransactionId,
 		RequestId:               cm.RequestId,

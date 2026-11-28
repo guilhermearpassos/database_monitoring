@@ -8,17 +8,22 @@ import (
 )
 
 func DatabaseSnapshotToDomain(p *dbmv1.DBSnapshot) common_domain.DataBaseSnapshot {
-	samples := make([]*common_domain.QuerySample, len(p.Samples))
-	for i, sample := range p.Samples {
-		samples[i] = SampleToDomain(sample)
+	if p == nil {
+		return common_domain.DataBaseSnapshot{}
+	}
+	samples := make([]*common_domain.QuerySample, 0, len(p.Samples))
+	for _, sample := range p.Samples {
+		if ds := SampleToDomain(sample); ds != nil {
+			samples = append(samples, ds)
+		}
 	}
 	return common_domain.DataBaseSnapshot{
 		SnapInfo: common_domain.SnapInfo{
-			ID:        p.Id,
-			Timestamp: p.Timestamp.AsTime(),
+			ID:        p.GetId(),
+			Timestamp: p.GetTimestamp().AsTime(),
 			Server: common_domain.ServerMeta{
-				Host: p.Server.Host,
-				Type: p.Server.Type,
+				Host: p.GetServer().GetHost(),
+				Type: p.GetServer().GetType(),
 			},
 		},
 		Samples: samples,
@@ -26,100 +31,119 @@ func DatabaseSnapshotToDomain(p *dbmv1.DBSnapshot) common_domain.DataBaseSnapsho
 }
 
 func SampleToDomain(sample *dbmv1.QuerySample) *common_domain.QuerySample {
+	if sample == nil {
+		return nil
+	}
+	ses := sample.GetSession()
 	sesCtx := common_domain.ContextInfo{}
-	if sample.Session.Context != nil {
+	if sc := ses.GetContext(); sc != nil {
 		sesCtx = common_domain.ContextInfo{
-			IsTraceParent: sample.Session.Context.IsTraceParent,
-			TraceId:       sample.Session.Context.TraceId,
-			SpanId:        sample.Session.Context.SpanId,
-			Raw:           sample.Session.Context.Raw,
+			IsTraceParent: sc.GetIsTraceParent(),
+			TraceId:       sc.GetTraceId(),
+			SpanId:        sc.GetSpanId(),
+			Raw:           sc.GetRaw(),
 		}
 	}
 	sampCtx := common_domain.ContextInfo{}
-	if sample.Context != nil {
+	if sc := sample.GetContext(); sc != nil {
 		sampCtx = common_domain.ContextInfo{
-			IsTraceParent: sample.Context.IsTraceParent,
-			TraceId:       sample.Context.TraceId,
-			SpanId:        sample.Context.SpanId,
-			Raw:           sample.Context.Raw,
+			IsTraceParent: sc.GetIsTraceParent(),
+			TraceId:       sc.GetTraceId(),
+			SpanId:        sc.GetSpanId(),
+			Raw:           sc.GetRaw(),
 		}
 	}
+	waitInfo := sample.GetWaitInfo()
+	var waitTypePtr *string
+	if waitInfo != nil {
+		wt := waitInfo.GetWaitType()
+		waitTypePtr = &wt
+	}
 	return &common_domain.QuerySample{
-		Status:        sample.Status,
-		SqlHandle:     sample.SqlHandle,
-		QueryHash:     sample.QueryHash,
-		Text:          sample.Text,
-		IsBlocked:     sample.Blocked,
-		IsBlocker:     sample.Blocker,
-		TimeElapsedMs: sample.TimeElapsedMillis,
+		Status:        sample.GetStatus(),
+		SqlHandle:     sample.GetSqlHandle(),
+		QueryHash:     sample.GetQueryHash(),
+		Text:          sample.GetText(),
+		IsBlocked:     sample.GetBlocked(),
+		IsBlocker:     sample.GetBlocker(),
+		TimeElapsedMs: sample.GetTimeElapsedMillis(),
 		Session: common_domain.SessionMetadata{
-			SessionID:            sample.Session.SessionId,
-			LoginTime:            sample.Session.LoginTime.AsTime(),
-			HostName:             sample.Session.Host,
-			ProgramName:          sample.Session.ProgramName,
-			LoginName:            sample.Session.LoginName,
-			Status:               sample.Session.Status,
-			LastRequestStartTime: sample.Session.LastRequestStart.AsTime(),
-			LastRequestEndTime:   sample.Session.LastRequestEnd.AsTime(),
-			ConnectionId:         sample.Session.ConnectionId,
-			ClientIP:             sample.Session.ClientIp,
+			SessionID:            ses.GetSessionId(),
+			LoginTime:            ses.GetLoginTime().AsTime(),
+			HostName:             ses.GetHost(),
+			ProgramName:          ses.GetProgramName(),
+			LoginName:            ses.GetLoginName(),
+			Status:               ses.GetStatus(),
+			LastRequestStartTime: ses.GetLastRequestStart().AsTime(),
+			LastRequestEndTime:   ses.GetLastRequestEnd().AsTime(),
+			ConnectionId:         ses.GetConnectionId(),
+			ClientIP:             ses.GetClientIp(),
 
 			Context: sesCtx,
 		},
 		Database: common_domain.DataBaseMetadata{
-			DatabaseID:   sample.Db.DatabaseId,
-			DatabaseName: sample.Db.DatabaseName,
+			DatabaseID:   sample.GetDb().GetDatabaseId(),
+			DatabaseName: sample.GetDb().GetDatabaseName(),
 		},
 		Block: common_domain.BlockMetadata{
-			BlockedBy:       sample.BlockInfo.BlockedBy,
-			BlockedSessions: sample.BlockInfo.BlockedSessions,
+			BlockedBy:       sample.GetBlockInfo().GetBlockedBy(),
+			BlockedSessions: sample.GetBlockInfo().GetBlockedSessions(),
 		},
 		Wait: common_domain.WaitMetadata{
-			WaitType:     &sample.WaitInfo.WaitType,
-			WaitTime:     int(sample.WaitInfo.WaitTime),
-			LastWaitType: sample.WaitInfo.LastWaitType,
-			WaitResource: sample.WaitInfo.WaitResource,
+			WaitType:     waitTypePtr,
+			WaitTime:     int(waitInfo.GetWaitTime()),
+			LastWaitType: waitInfo.GetLastWaitType(),
+			WaitResource: waitInfo.GetWaitResource(),
 		},
 		Snapshot: common_domain.SnapshotMetadata{
-			ID:        sample.SnapInfo.Id,
-			Timestamp: sample.SnapInfo.Timestamp.AsTime(),
+			ID:        sample.GetSnapInfo().GetId(),
+			Timestamp: sample.GetSnapInfo().GetTimestamp().AsTime(),
 		},
 		Cmd:             "",
-		PlanHandle:      sample.PlanHandle,
-		Id:              sample.Id,
-		CommandMetadata: CommandMetaToDomain(sample.Command),
+		PlanHandle:      sample.GetPlanHandle(),
+		Id:              sample.GetId(),
+		CommandMetadata: CommandMetaToDomain(sample.GetCommand()),
 		Context:         sampCtx,
 	}
 }
 
 func QueryMetricToDomain(metric *dbmv1.QueryMetric) (*common_domain.QueryMetric, error) {
+	if metric == nil {
+		return nil, nil
+	}
 	return &common_domain.QueryMetric{
-		QueryHash:         metric.QueryHash,
-		Text:              metric.Text,
-		Database:          common_domain.DataBaseMetadata{DatabaseID: metric.Db.DatabaseId, DatabaseName: metric.Db.DatabaseName},
-		LastExecutionTime: metric.LastExecutionTime.AsTime(),
-		LastElapsedTime:   time.Duration(metric.LastElapsedTimeMicros) * time.Microsecond,
-		Counters:          metric.Counters,
-		Rates:             metric.Rates,
+		QueryHash:         metric.GetQueryHash(),
+		Text:              metric.GetText(),
+		Database:          common_domain.DataBaseMetadata{DatabaseID: metric.GetDb().GetDatabaseId(), DatabaseName: metric.GetDb().GetDatabaseName()},
+		LastExecutionTime: metric.GetLastExecutionTime().AsTime(),
+		LastElapsedTime:   time.Duration(metric.GetLastElapsedTimeMicros()) * time.Microsecond,
+		Counters:          metric.GetCounters(),
+		Rates:             metric.GetRates(),
 		CollectionTime:    metric.GetCollectedAt().AsTime(),
 	}, nil
 }
 
 func ExecutionPlanToDomain(plan *dbmv1.ExecutionPlan) (*common_domain.ExecutionPlan, error) {
+	if plan == nil {
+		return nil, nil
+	}
 	return &common_domain.ExecutionPlan{
-		PlanHandle: plan.PlanHandle,
+		PlanHandle: plan.GetPlanHandle(),
 		Server: common_domain.ServerMeta{
-			Host: plan.Server.Host,
-			Type: plan.Server.Type,
+			Host: plan.GetServer().GetHost(),
+			Type: plan.GetServer().GetType(),
 		},
-		XmlData: plan.XmlPlan,
+		XmlData: plan.GetXmlPlan(),
 	}, nil
 }
 func CommandMetaToDomain(cm *dbmv1.CommandMetadata) common_domain.CommandMetadata {
+	if cm == nil {
+		return common_domain.CommandMetadata{}
+	}
 	return common_domain.CommandMetadata{
-		TransactionId:           cm.TransactionId,
-		RequestId:               cm.RequestId,
-		EstimatedCompletionTime: cm.EstimatedCompletionTime,
-		PercentComplete:         cm.PercentComplete,
+		TransactionId:           cm.GetTransactionId(),
+		RequestId:               cm.GetRequestId(),
+		EstimatedCompletionTime: cm.GetEstimatedCompletionTime(),
+		PercentComplete:         cm.GetPercentComplete(),
 	}
 }
