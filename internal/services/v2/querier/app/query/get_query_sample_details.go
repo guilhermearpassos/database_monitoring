@@ -52,10 +52,12 @@ func (h *GetQuerySampleDetailsHandler) Handle(ctx context.Context, snapID string
 	if baseQuery.IsBlocker && !baseQuery.IsBlocked {
 		roots = append(roots, baseQuery.Session.SessionID)
 	}
-	participants := make([]*querierv2.BlockChain_BlockingNode, len(roots))
+	participants := make([]*querierv2.BlockChain_BlockingNode, 0, len(roots))
 	traveled := make(map[string]struct{}, 0)
-	for i, root := range roots {
-		participants[i] = h.buildblockNode(sampleMap, root, traveled)
+	for _, root := range roots {
+		if node := h.buildblockNode(sampleMap, root, traveled); node != nil {
+			participants = append(participants, node)
+		}
 	}
 	planFound := false
 	var plan *common_domain.ExecutionPlan

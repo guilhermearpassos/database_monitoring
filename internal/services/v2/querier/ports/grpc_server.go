@@ -33,8 +33,8 @@ func NewGRPCServer(app *app.Application) GRPCServer {
 func (s GRPCServer) ListPlansWithIssues(ctx context.Context, in *querierv2.ListPlansWithIssuesRequest) (*querierv2.ListPlansWithIssuesResponse, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(
-		attribute.String("request.start", in.Start.AsTime().Format(time.RFC3339)),
-		attribute.String("request.end", in.End.AsTime().Format(time.RFC3339)),
+		attribute.String("request.start", in.GetStart().AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", in.GetEnd().AsTime().Format(time.RFC3339)),
 		attribute.String("request.server", in.GetHost()),
 		attribute.StringSlice("request.databases", in.GetDatabases()),
 		attribute.Int("request.page_size", int(in.GetPageSize())),
@@ -44,7 +44,7 @@ func (s GRPCServer) ListPlansWithIssues(ctx context.Context, in *querierv2.ListP
 		Start:      in.GetStart().AsTime(),
 		End:        in.GetEnd().AsTime(),
 		ServerID:   in.GetHost(),
-		Databases: in.GetDatabases(),
+		Databases:  in.GetDatabases(),
 		PageNumber: int(in.GetPageNumber()),
 		PageSize:   int(in.GetPageSize()),
 	})
@@ -56,7 +56,11 @@ func (s GRPCServer) ListPlansWithIssues(ctx context.Context, in *querierv2.ListP
 	)
 	protoRet := make([]*querierv2.PlansWithIssues, len(ret))
 	for i, r := range ret {
-		protoPlan, err := parsers.PlanToProto("", common_domain.ServerMeta{Host: in.Host}, r.ParsedPlan)
+		planHandle := ""
+		if r.Sample != nil {
+			planHandle = r.Sample.PlanHandle
+		}
+		protoPlan, err := parsers.PlanToProto(planHandle, common_domain.ServerMeta{Host: in.GetHost()}, r.ParsedPlan)
 		if err != nil {
 			return nil, fmt.Errorf("parsed plan to proto: %w", err)
 		}
@@ -188,17 +192,21 @@ func (s GRPCServer) ListQueryMetrics(ctx context.Context, in *querierv2.ListQuer
 func (s GRPCServer) GetQueryMetricsTimeSeries(ctx context.Context, in *querierv2.GetQueryMetricsTimeSeriesRequest) (*querierv2.GetQueryMetricsTimeSeriesResponse, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(
-		attribute.String("request.start", in.Start.AsTime().Format(time.RFC3339)),
-		attribute.String("request.end", in.End.AsTime().Format(time.RFC3339)),
-		attribute.String("request.host", in.Host),
-		attribute.String("request.sql_handle", in.SqlHandle),
-		attribute.String("request.interval", in.Interval),
+		attribute.String("request.start", in.GetStart().AsTime().Format(time.RFC3339)),
+		attribute.String("request.end", in.GetEnd().AsTime().Format(time.RFC3339)),
+		attribute.String("request.host", in.GetHost()),
+		attribute.String("request.sql_handle", in.GetSqlHandle()),
+		attribute.String("request.interval", in.GetInterval()),
 	)
-	interval, err := time.ParseDuration(in.Interval)
-	if err != nil {
-		return nil, err
+	interval := time.Minute
+	if in.GetInterval() != "" {
+		var err error
+		interval, err = time.ParseDuration(in.GetInterval())
+		if err != nil {
+			return nil, err
+		}
 	}
-	ret, err := s.app.Queries.GetQueryMetricsSlice.Handle(ctx, in.Start.AsTime(), in.End.AsTime(), in.Host, in.SqlHandle, interval)
+	ret, err := s.app.Queries.GetQueryMetricsSlice.Handle(ctx, in.GetStart().AsTime(), in.GetEnd().AsTime(), in.GetHost(), in.GetSqlHandle(), interval)
 	if err != nil {
 		return nil, err
 	}

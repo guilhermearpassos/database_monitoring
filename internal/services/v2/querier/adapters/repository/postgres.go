@@ -64,6 +64,12 @@ func (p *PostgresRepo) ListServers(ctx context.Context, start time.Time, end tim
 }
 
 func (p *PostgresRepo) ListSnapshots(ctx context.Context, databaseID string, start time.Time, end time.Time, pageNumber int, pageSize int, serverID string) ([]common_domain.DataBaseSnapshot, int, error) {
+	if pageNumber < 1 {
+		pageNumber = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 50
+	}
 	//language=SQL
 	q := fmt.Sprintf(`
 with snapinfos as (
@@ -92,10 +98,7 @@ inner join query_samples qs on qs.snap_id = si.id
 		return snapshots, fullCount, fmt.Errorf("parsing snapshots: %w", err2)
 	}
 	slices.SortFunc(snapshots, func(a, b common_domain.DataBaseSnapshot) int {
-		if a.SnapInfo.Timestamp.Before(b.SnapInfo.Timestamp) {
-			return 1
-		}
-		return -1
+		return b.SnapInfo.Timestamp.Compare(a.SnapInfo.Timestamp)
 	})
 	return snapshots, fullCount, nil
 
@@ -209,6 +212,9 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 		connsMapByID[snapID][waitEvent] = count
 		timeMsMapByID[snapID][waitEvent] = waitTime
 	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing snapshot summaries rows: %w", err)
+	}
 	for k, v := range detailsMapByID {
 		connMap := connsMapByID[k]
 		TimeMap := timeMsMapByID[k]
@@ -228,10 +234,7 @@ group by s.snap_time, s.f_id, t.host, t.type_id, qs.wait_event`
 		})
 	}
 	slices.SortFunc(ret, func(a, b common_domain.SnapshotSummary) int {
-		if a.Timestamp.Before(b.Timestamp) {
-			return 1
-		}
-		return -1
+		return b.Timestamp.Compare(a.Timestamp)
 	})
 	return ret, nil
 }

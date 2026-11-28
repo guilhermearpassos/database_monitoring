@@ -26,7 +26,7 @@ func NewListPlansWithIssuesHandler(repo domain.SampleRepository) ListPlansWithIs
 }
 
 func (h *ListPlansWithIssuesHandler) Handle(ctx context.Context, query ListPlansWithIssuesQuery) ([]*domain.PlanWithIssue, error) {
-	issues, err := h.repo.ListPlansWithIssues(ctx, query.ServerID, query.Start, query.End, query.PageNumber, query.PageSize)
+	issues, err := h.repo.ListPlansWithIssues(ctx, query.ServerID, query.Start, query.End, query.PageSize, query.PageNumber)
 	if err != nil {
 		return nil, fmt.Errorf("listing plans: %w", err)
 	}

@@ -61,3 +61,22 @@ func TestGetQueryMetricsSliceHandler_AggregatesBucketsCorrectly(t *testing.T) {
 	require.Equal(t, int64(900), res[1].Counters["totalWorkerTime"])
 	require.Equal(t, base.Add(2*time.Minute), res[1].CollectionTime)
 }
+
+func TestGetQueryMetricsSliceHandler_CapsBucketsForTinyInterval(t *testing.T) {
+	base := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	repo := stubQueryMetricsRepo{
+		slice: []*common_domain.QueryMetric{
+			{
+				QueryHash:      "hash-1",
+				CollectionTime: base.Add(time.Hour),
+				Counters:       map[string]int64{"executionCount": 4},
+			},
+		},
+	}
+
+	h := NewGetQueryMetricsSliceHandler(repo)
+	res, err := h.Handle(context.Background(), base, base.Add(24*time.Hour), "localhost", "hash-1", time.Nanosecond)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.Equal(t, int64(4), res[0].Counters["executionCount"])
+}

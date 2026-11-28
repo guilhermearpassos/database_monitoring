@@ -24,6 +24,7 @@ func (h GetQueryMetricsSliceHandler) Handle(ctx context.Context, start time.Time
 	if len(slice) == 0 {
 		return []*common_domain.QueryMetric{}, nil
 	}
+	const maxBuckets = 10000
 	if interval <= 0 {
 		interval = time.Minute
 	}
@@ -31,9 +32,15 @@ func (h GetQueryMetricsSliceHandler) Handle(ctx context.Context, start time.Time
 	if spanSec < 0 {
 		spanSec = 0
 	}
+	if spanSec > 0 && spanSec/interval.Seconds() >= float64(maxBuckets) {
+		interval = time.Duration(spanSec/float64(maxBuckets-1)*float64(time.Second)) + time.Nanosecond
+	}
 	numBuckets := int(spanSec/interval.Seconds()) + 1
 	if numBuckets < 1 {
 		numBuckets = 1
+	}
+	if numBuckets > maxBuckets {
+		numBuckets = maxBuckets
 	}
 
 	buckets := make([]*common_domain.QueryMetric, numBuckets)
