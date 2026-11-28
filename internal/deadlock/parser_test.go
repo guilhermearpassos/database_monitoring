@@ -159,3 +159,13 @@ func TestParseXMLPatterns(t *testing.T) {
 		require.Equal(t, []string{"TestDB"}, p.Databases)
 	})
 }
+
+func TestExtractDeadlockElement_UnicodeAndMultipleBlocks(t *testing.T) {
+	// Contains Turkish dotted I ('İ', U+0130) whose lowercase changes UTF-8 byte length,
+	// plus two <deadlock> blocks inside <deadlock-list>.
+	raw := `<deadlock-list><deadlock><process-list><process id="p1"><inputbuf>SELECT N'İstanbul'</inputbuf></process></process-list></deadlock><deadlock><process-list><process id="p2"/></process-list></deadlock></deadlock-list>`
+	extracted := ExtractDeadlockElement(raw)
+	if extracted != `<deadlock><process-list><process id="p1"><inputbuf>SELECT N'İstanbul'</inputbuf></process></process-list></deadlock>` {
+		t.Fatalf("unexpected ExtractDeadlockElement result: %s", extracted)
+	}
+}

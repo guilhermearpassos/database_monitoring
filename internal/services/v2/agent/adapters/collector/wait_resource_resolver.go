@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -357,9 +358,7 @@ func (r *WaitResourceResolver) refreshDatabases(ctx context.Context) error {
 		return err
 	}
 	r.mu.Lock()
-	for id, name := range dbs {
-		r.dbCache[id] = name
-	}
+	r.dbCache = dbs
 	r.mu.Unlock()
 	return nil
 }
@@ -372,11 +371,13 @@ func (r *WaitResourceResolver) resolveDBName(ctx context.Context, dbID int) stri
 		return name
 	}
 	// Cache miss (e.g. cold cache or newly created database): refresh sys.databases once.
-	if err := r.refreshDatabases(ctx); err == nil {
-		r.mu.RLock()
-		name = r.dbCache[dbID]
-		r.mu.RUnlock()
+	if err := r.refreshDatabases(ctx); err != nil {
+		slog.WarnContext(ctx, "failed to refresh sys.databases cache", "db_id", dbID, "error", err)
+		return ""
 	}
+	r.mu.RLock()
+	name = r.dbCache[dbID]
+	r.mu.RUnlock()
 	return name
 }
 

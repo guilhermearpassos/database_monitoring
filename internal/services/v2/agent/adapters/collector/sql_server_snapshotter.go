@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -232,16 +233,16 @@ OPTION (MAXDOP 1)
 	blockingMap := make(map[int][]string)
 	for rows.Next() {
 		var sessionID int
-		var loginTime time.Time
-		var hostName string
-		var programName string
-		var loginName string
-		var status string
+		var loginTime sql.NullTime
+		var hostName sql.NullString
+		var programName sql.NullString
+		var loginName sql.NullString
+		var status sql.NullString
 		var cpuTime int
 		var memoryUsage int
 		var totalElapsedTime int
-		var lastRequestStartTime time.Time
-		var lastRequestEndTime time.Time
+		var lastRequestStartTime sql.NullTime
+		var lastRequestEndTime sql.NullTime
 		var reads string
 		var writes string
 		var logicalReads string
@@ -250,9 +251,9 @@ OPTION (MAXDOP 1)
 		var blockingSessionId int
 		var waitType *string
 		var waitTime int
-		var lastWaitType string
-		var waitResource string
-		var pStatus string
+		var lastWaitType sql.NullString
+		var waitResource sql.NullString
+		var pStatus sql.NullString
 		var sqlHandle []byte
 		var planHandle []byte
 		var text string
@@ -321,7 +322,7 @@ OPTION (MAXDOP 1)
 		sampleId := []byte(fmt.Sprintf("%s_%d_%d_%d", connectionId, sessionID, transactionId, requestId))
 		qs := common_domain.QuerySample{
 			Id:         base64.StdEncoding.EncodeToString(sampleId),
-			Status:     pStatus,
+			Status:     pStatus.String,
 			Cmd:        "",
 			SqlHandle:  base64.StdEncoding.EncodeToString(sqlHandle),
 			PlanHandle: encodeValidPlanHandle(planHandle),
@@ -331,13 +332,13 @@ OPTION (MAXDOP 1)
 			IsBlocker:  false,
 			Session: common_domain.SessionMetadata{
 				SessionID:            strconv.Itoa(sessionID),
-				LoginTime:            loginTime,
-				HostName:             hostName,
-				ProgramName:          programName,
-				LoginName:            loginName,
-				Status:               status,
-				LastRequestStartTime: lastRequestStartTime,
-				LastRequestEndTime:   lastRequestEndTime,
+				LoginTime:            loginTime.Time,
+				HostName:             hostName.String,
+				ProgramName:          programName.String,
+				LoginName:            loginName.String,
+				Status:               status.String,
+				LastRequestStartTime: lastRequestStartTime.Time,
+				LastRequestEndTime:   lastRequestEndTime.Time,
 				ConnectionId:         connectionId.String(),
 				ClientIP:             clientNetAddress,
 				Context:              parseContext(sesContext),
@@ -353,8 +354,8 @@ OPTION (MAXDOP 1)
 			Wait: common_domain.WaitMetadata{
 				WaitType:     waitType,
 				WaitTime:     waitTime,
-				LastWaitType: lastWaitType,
-				WaitResource: waitResource,
+				LastWaitType: lastWaitType.String,
+				WaitResource: waitResource.String,
 			},
 			Snapshot: common_domain.SnapshotMetadata{
 				ID:        snapID,
@@ -382,8 +383,11 @@ OPTION (MAXDOP 1)
 	querySamples := make([]*common_domain.QuerySample, 0)
 	for _, qs2 := range querySamplesByDB {
 		for _, qs := range qs2 {
-			var sessionID int
-			sessionID, err = strconv.Atoi(qs.Session.SessionID)
+			sessionID, convErr := strconv.Atoi(qs.Session.SessionID)
+			if convErr != nil {
+				slog.WarnContext(ctx, "invalid session id in snapshot", "session_id", qs.Session.SessionID, "error", convErr)
+				continue
+			}
 			if bl, ok := blockingMap[sessionID]; ok {
 				qs.SetBlockedIds(bl)
 				delete(blockingMap, sessionID)
@@ -403,8 +407,11 @@ OPTION (MAXDOP 1)
 		return nil, fmt.Errorf("getSleepingBlockingSessions: %w", err)
 	}
 	for _, qs := range sleepingSamples {
-		var sessionID int
-		sessionID, err = strconv.Atoi(qs.Session.SessionID)
+		sessionID, convErr := strconv.Atoi(qs.Session.SessionID)
+		if convErr != nil {
+			slog.WarnContext(ctx, "invalid session id in sleeping snapshot", "session_id", qs.Session.SessionID, "error", convErr)
+			continue
+		}
 		if bl, ok := blockingMap[sessionID]; ok {
 			qs.SetBlockedIds(bl)
 			delete(blockingMap, sessionID)
@@ -489,16 +496,16 @@ OPTION (MAXDOP 1)`, strings.Join(placeholders, ","))
 	for rows.Next() {
 
 		var sessionID int
-		var loginTime time.Time
-		var hostName string
-		var programName string
-		var loginName string
-		var status string
+		var loginTime sql.NullTime
+		var hostName sql.NullString
+		var programName sql.NullString
+		var loginName sql.NullString
+		var status sql.NullString
 		var cpuTime int
 		var memoryUsage int
 		var totalElapsedTime int
-		var lastRequestStartTime time.Time
-		var lastRequestEndTime time.Time
+		var lastRequestStartTime sql.NullTime
+		var lastRequestEndTime sql.NullTime
 		var reads string
 		var writes string
 		var logicalReads string
@@ -507,9 +514,9 @@ OPTION (MAXDOP 1)`, strings.Join(placeholders, ","))
 		var blockingSessionId int
 		var waitType *string
 		var waitTime int
-		var lastWaitType string
-		var waitResource string
-		var pStatus string
+		var lastWaitType sql.NullString
+		var waitResource sql.NullString
+		var pStatus sql.NullString
 		var sqlHandle []byte
 		var planHandle []byte
 		var text string
@@ -562,7 +569,7 @@ OPTION (MAXDOP 1)`, strings.Join(placeholders, ","))
 		sampleId := []byte(fmt.Sprintf("%s_%d_%d_%d", connectionId, sessionID, transactionId, requestId))
 		qs := common_domain.QuerySample{
 			Id:         base64.StdEncoding.EncodeToString(sampleId),
-			Status:     pStatus,
+			Status:     pStatus.String,
 			Cmd:        "",
 			SqlHandle:  base64.StdEncoding.EncodeToString(sqlHandle),
 			PlanHandle: encodeValidPlanHandle(planHandle),
@@ -572,13 +579,13 @@ OPTION (MAXDOP 1)`, strings.Join(placeholders, ","))
 			IsBlocker:  false,
 			Session: common_domain.SessionMetadata{
 				SessionID:            strconv.Itoa(sessionID),
-				LoginTime:            loginTime,
-				HostName:             hostName,
-				ProgramName:          programName,
-				LoginName:            loginName,
-				Status:               status,
-				LastRequestStartTime: lastRequestStartTime,
-				LastRequestEndTime:   lastRequestEndTime,
+				LoginTime:            loginTime.Time,
+				HostName:             hostName.String,
+				ProgramName:          programName.String,
+				LoginName:            loginName.String,
+				Status:               status.String,
+				LastRequestStartTime: lastRequestStartTime.Time,
+				LastRequestEndTime:   lastRequestEndTime.Time,
 				ConnectionId:         connectionId.String(),
 				ClientIP:             clientNetAddress,
 			},
@@ -593,8 +600,8 @@ OPTION (MAXDOP 1)`, strings.Join(placeholders, ","))
 			Wait: common_domain.WaitMetadata{
 				WaitType:     waitType,
 				WaitTime:     waitTime,
-				LastWaitType: lastWaitType,
-				WaitResource: waitResource,
+				LastWaitType: lastWaitType.String,
+				WaitResource: waitResource.String,
 			},
 			Snapshot: common_domain.SnapshotMetadata{
 				ID:        snapID,
@@ -803,9 +810,9 @@ with qstats as (
            plan_handle,
            last_execution_time,
            last_elapsed_time,
-           CONCAT(
-               CONVERT(binary(64), plan_handle),
-               CONVERT(binary(4), statement_start_offset),
+           CONVERT(varbinary(72),
+               CONVERT(binary(64), plan_handle) +
+               CONVERT(binary(4), statement_start_offset) +
                CONVERT(binary(4), statement_end_offset)
            ) as plan_handle_and_offsets,
            (select value from sys.dm_exec_plan_attributes(plan_handle) where attribute = 'dbid') as dbid,
@@ -1100,13 +1107,18 @@ func (s SqlServerSnapshotter) CollectDeadlocks(ctx context.Context, databases []
 		since = time.Now().UTC().Add(-24 * time.Hour)
 	}
 
+	cursorReset := false
 	rawRows, nextFile, nextOffset, err := s.queryDeadlocksFromFileTarget(ctx, curFile, curOffset, since)
 	if err != nil && curFile != "" {
 		// Saved .xel file may have rolled over; reset cursor and retry from beginning filtered by timestamp.
+		slog.WarnContext(ctx, "deadlock file target query failed, resetting cursor", "server", s.Server.Host, "file", curFile, "error", err)
+		cursorReset = true
 		rawRows, nextFile, nextOffset, err = s.queryDeadlocksFromFileTarget(ctx, "", 0, since)
 	}
 	if err != nil {
 		// Fallback to ring_buffer if event_file is disabled or inaccessible.
+		slog.WarnContext(ctx, "deadlock file target unavailable, falling back to ring_buffer", "server", s.Server.Host, "error", err)
+		span.RecordError(err)
 		rbRows, rbErr := s.queryDeadlocksFromRingBuffer(ctx, since)
 		if rbErr != nil {
 			return nil, fmt.Errorf("collecting deadlocks (file target err: %v; ring_buffer err: %w)", err, rbErr)
@@ -1120,7 +1132,7 @@ func (s SqlServerSnapshotter) CollectDeadlocks(ctx context.Context, databases []
 		if rr.occurredAt.After(latestTime) {
 			latestTime = rr.occurredAt
 		}
-		report := buildDeadlockReport(s.Server, rr.occurredAt, rr.xmlReport)
+		report := buildDeadlockReport(ctx, s.Server, rr.occurredAt, rr.xmlReport)
 		if report == nil {
 			continue
 		}
@@ -1135,6 +1147,9 @@ func (s SqlServerSnapshotter) CollectDeadlocks(ctx context.Context, databases []
 		if nextFile != "" {
 			s.deadlockCursor.fileName = nextFile
 			s.deadlockCursor.fileOffset = nextOffset
+		} else if cursorReset {
+			s.deadlockCursor.fileName = ""
+			s.deadlockCursor.fileOffset = 0
 		}
 		if !latestTime.IsZero() {
 			s.deadlockCursor.lastTime = latestTime
@@ -1225,7 +1240,7 @@ SELECT
     ) AS deadlock_xml
 FROM xe
 CROSS APPLY xe.target_data.nodes('RingBufferTarget/event[@name="xml_deadlock_report"]') AS T(evt)
-WHERE evt.value('(@timestamp)[1]', 'datetime2(7)') >= @p1
+WHERE evt.value('(@timestamp)[1]', 'datetime2(7)') >= ?
 ORDER BY occurred_at ASC
 OPTION (MAXDOP 1)
 `
@@ -1258,7 +1273,7 @@ OPTION (MAXDOP 1)
 	return out, nil
 }
 
-func buildDeadlockReport(server common_domain.ServerMeta, occurredAt time.Time, rawXML string) *common_domain.DeadlockReport {
+func buildDeadlockReport(ctx context.Context, server common_domain.ServerMeta, occurredAt time.Time, rawXML string) *common_domain.DeadlockReport {
 	cleanXML := deadlock.ExtractDeadlockElement(rawXML)
 	if cleanXML == "" {
 		return nil
@@ -1270,7 +1285,10 @@ func buildDeadlockReport(server common_domain.ServerMeta, occurredAt time.Time, 
 		XMLReport:  cleanXML,
 		XMLHash:    deadlock.HashXML(cleanXML),
 	}
-	if parsed, err := deadlock.ParseXML(cleanXML); err == nil && parsed != nil {
+	parsed, err := deadlock.ParseXML(cleanXML)
+	if err != nil {
+		slog.WarnContext(ctx, "failed to parse deadlock XML", "server", server.Host, "xml_hash", report.XMLHash, "error", err)
+	} else if parsed != nil {
 		report.XMLHash = parsed.XMLHash
 		report.Fingerprint = parsed.Fingerprint
 		report.Pattern = parsed.Diagnosis.Pattern

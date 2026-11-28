@@ -63,6 +63,12 @@ func (c *Client) SendSnapshot(ctx context.Context, snap *common_domain.DataBaseS
 	if qErr != nil {
 		return nil, fmt.Errorf("upload failed and resume query failed: %v (resume query err=%v)", err, qErr)
 	}
+	if status == ingestorv2.UploadStatus_COMPLETE {
+		return &ingestorv2.SnapshotUploadResult{
+			Status:  ingestorv2.SnapshotUploadResult_OK,
+			Message: "already complete",
+		}, nil
+	}
 	if status == ingestorv2.UploadStatus_UNKNOWN {
 		// Server has no state — try once more from scratch
 		res2, err2 := c.streamUploadSamples(ctx, snap, so, nil)
@@ -71,7 +77,10 @@ func (c *Client) SendSnapshot(ctx context.Context, snap *common_domain.DataBaseS
 		}
 		return res2, nil
 	}
-	// Server has partial data; resend only missing sequences
+	// Server has partial data; resend only missing sequences (if none missing, only finalize).
+	if missing == nil {
+		missing = []uint32{}
+	}
 	res2, err2 := c.streamUploadSamples(ctx, snap, so, missing)
 	if err2 != nil {
 		return nil, err2
@@ -116,9 +125,9 @@ func (c *Client) streamUploadSamples(ctx context.Context, snap *common_domain.Da
 		return nil, fmt.Errorf("send header: %w", err)
 	}
 
-	// Determine which chunks to send
+	// Determine which chunks to send: nil resendSeqs means full upload; non-nil means send only listed seqs.
 	var seqSet map[uint32]struct{}
-	if len(resendSeqs) > 0 {
+	if resendSeqs != nil {
 		seqSet = make(map[uint32]struct{}, len(resendSeqs))
 		for _, s := range resendSeqs {
 			seqSet[s] = struct{}{}
@@ -208,12 +217,7 @@ func (c *Client) SendExecutionPlans(ctx context.Context, plans []*common_domain.
 
 func (c *Client) streamUploadPlans(ctx context.Context, plans []*common_domain.ExecutionPlan,
 	server common_domain.ServerMeta, so SendOptions) (*ingestorv2.ExecutionPlanUploadResult, error) {
-	stream, err := c.client.IngestExecutionPlanStream(withAgentMeta(ctx, so.AgentVersion))
-	if err != nil {
-		return nil, err
-	}
-
-	// Pre-build proto samples and pack into chunks under MaxUncompressedBytes
+	// Pre-build proto samples and pack into chunks under MaxUncompressedBytes before opening stream
 	protoSamples := make([]*dbmv1.ExecutionPlan, 0, len(plans))
 	for _, s := range plans {
 		proto, err := converters.ExecutionPlanToProto(s)
@@ -221,6 +225,11 @@ func (c *Client) streamUploadPlans(ctx context.Context, plans []*common_domain.E
 			return nil, fmt.Errorf("convert execution plan to proto: %w", err)
 		}
 		protoSamples = append(protoSamples, proto)
+	}
+
+	stream, err := c.client.IngestExecutionPlanStream(withAgentMeta(ctx, so.AgentVersion))
+	if err != nil {
+		return nil, err
 	}
 	// Use a reusable probe to compute vtproto size when tentatively appending the next item
 	probe := &ingestorv2.ExecPlanChunk{ChunkSeq: 1}

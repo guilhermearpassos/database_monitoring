@@ -101,7 +101,7 @@ func (c *AgentConfig) GetService(ctx context.Context, inproc *inprocgrpc.Channel
 		if maxMsgSize <= 0 {
 			maxMsgSize = 100 * 1024 * 1024
 		}
-		cc, err := telemetry.OpenInstrumentedClientConn(c.IngestorClient.Endpoint, maxMsgSize, c.IngestorClient.TlsEnabled)
+		cc, err := telemetry.OpenInstrumentedClientConnWithTLS(c.IngestorClient.Endpoint, maxMsgSize, c.IngestorClient.TlsEnabled, c.IngestorClient.TlsInsecureSkipVerify)
 		if err != nil {
 			return nil, fmt.Errorf("dial ingestor %s: %w", c.IngestorClient.Endpoint, err)
 		}

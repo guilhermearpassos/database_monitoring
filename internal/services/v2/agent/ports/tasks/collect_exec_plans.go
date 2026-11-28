@@ -62,7 +62,7 @@ func (c CollectExecutionPlansTask) Run(ctx context.Context) error {
 			Tags:                 nil,
 		})
 		if err2 != nil {
-			return fmt.Errorf("send plans: %w", err)
+			return fmt.Errorf("send plans: %w", err2)
 		}
 	}
 

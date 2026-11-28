@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -68,7 +69,7 @@ func newLockMetricsRecorder(reg prometheus.Registerer) *LockMetricsRecorder {
 				Namespace: "sqlsights",
 				Name:      "database_lock_duration_seconds",
 				Help:      "Observed wait duration (seconds) of blocked query samples per table/index and wait type.",
-				Buckets:   []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300},
+				Buckets:   []float64{5, 10, 30, 60, 120, 300},
 			},
 			lockMetricLabels,
 		),
@@ -108,6 +109,12 @@ func (m *LockMetricsRecorder) RecordSnapshot(
 			target, err = resolver.Resolve(ctx, sample.Wait.WaitResource, sample.Database.DatabaseName)
 			if err != nil {
 				span.RecordError(err)
+				slog.WarnContext(ctx, "failed to resolve lock wait resource",
+					"server", server,
+					"database", sample.Database.DatabaseName,
+					"wait_resource", sample.Wait.WaitResource,
+					"error", err,
+				)
 			}
 		} else {
 			target = ResolvedLockTarget{

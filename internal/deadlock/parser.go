@@ -106,6 +106,35 @@ func HashXML(rawXML string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// indexASCIIFold finds the first occurrence of ASCII lowercase needle in s using ASCII-only
+// case folding so returned byte indices always match s directly (even with multi-byte Unicode).
+func indexASCIIFold(s, lowerNeedle string) int {
+	n := len(lowerNeedle)
+	if n == 0 {
+		return 0
+	}
+	if n > len(s) {
+		return -1
+	}
+	for i := 0; i <= len(s)-n; i++ {
+		match := true
+		for j := 0; j < n; j++ {
+			c := s[i+j]
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != lowerNeedle[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
 // ExtractDeadlockElement strips optional outer <event>/<deadlock-list> wrappers so stored XML
 // starts cleanly at <deadlock> and can be exported directly as an SSMS .xdl file.
 func ExtractDeadlockElement(rawXML string) string {
@@ -113,22 +142,20 @@ func ExtractDeadlockElement(rawXML string) string {
 	if trimmed == "" {
 		return ""
 	}
-	lower := strings.ToLower(trimmed)
-	if !strings.Contains(lower, "<deadlock") && strings.Contains(lower, "&lt;deadlock") {
+	if indexASCIIFold(trimmed, "<deadlock") < 0 && indexASCIIFold(trimmed, "&lt;deadlock") >= 0 {
 		trimmed = html.UnescapeString(trimmed)
-		lower = strings.ToLower(trimmed)
 	}
-	start := strings.Index(lower, "<deadlock")
+	start := indexASCIIFold(trimmed, "<deadlock")
 	if start < 0 {
 		return trimmed
 	}
 	// Avoid matching <deadlock-list
 	for start >= 0 {
 		after := start + len("<deadlock")
-		if after < len(lower) && (lower[after] == '>' || lower[after] == ' ' || lower[after] == '\t' || lower[after] == '\n' || lower[after] == '\r') {
+		if after < len(trimmed) && (trimmed[after] == '>' || trimmed[after] == ' ' || trimmed[after] == '\t' || trimmed[after] == '\n' || trimmed[after] == '\r') {
 			break
 		}
-		next := strings.Index(lower[after:], "<deadlock")
+		next := indexASCIIFold(trimmed[after:], "<deadlock")
 		if next < 0 {
 			start = -1
 			break
@@ -139,11 +166,11 @@ func ExtractDeadlockElement(rawXML string) string {
 		return trimmed
 	}
 	endTag := "</deadlock>"
-	end := strings.LastIndex(lower, endTag)
-	if end <= start {
+	relEnd := indexASCIIFold(trimmed[start:], endTag)
+	if relEnd <= 0 {
 		return trimmed
 	}
-	return strings.TrimSpace(trimmed[start : end+len(endTag)])
+	return strings.TrimSpace(trimmed[start : start+relEnd+len(endTag)])
 }
 
 type rawDeadlock struct {
@@ -386,7 +413,7 @@ func ParseXML(rawXML string) (*ParsedDeadlock, error) {
 			objName = ri.Type
 		}
 		var dbFromObj, shortObj string
-		if parts := strings.Split(objName, "."); len(parts) >= 2 {
+		if parts := strings.Split(objName, "."); len(parts) >= 3 {
 			dbFromObj = parts[0]
 			shortObj = strings.Join(parts[1:], ".")
 		} else {
