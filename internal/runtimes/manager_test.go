@@ -2,6 +2,7 @@ package runtimes
 
 import (
     "context"
+    "errors"
     "sync/atomic"
     "testing"
     "time"
@@ -40,5 +41,18 @@ func TestRuntimeManager_StartStop_CallsAll(t *testing.T) {
     }
     if a.stops.Load() != 1 || b.stops.Load() != 1 {
         t.Fatalf("expected stops=1; got a=%d b=%d", a.stops.Load(), b.stops.Load())
+    }
+}
+
+func TestRuntimeManager_NoGRPCRuntimeAndStopErrorPropagation(t *testing.T) {
+    rm := &RuntimeManager{runtimes: map[RuntimeType]Runtime{}}
+    b := &fakeRuntime{t: BackGroundTask, stopErr: errors.New("stop boom")}
+    rm.RegisterRuntime(b.Type(), b)
+
+    if err := rm.StartRuntimes(context.Background()); err != nil {
+        t.Fatalf("expected start without GRPCRuntime to succeed, got: %v", err)
+    }
+    if err := rm.StopRuntimes(context.Background()); err == nil {
+        t.Fatalf("expected StopRuntimes to return joined stop error, got nil")
     }
 }

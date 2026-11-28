@@ -51,6 +51,12 @@ func (m *MigrateConfig) Migrate() error {
 	if err != nil {
 		return fmt.Errorf("migrate instance: %w", err)
 	}
+	defer func() {
+		srcErr, dbErr := mig.Close()
+		if srcErr != nil || dbErr != nil {
+			slog.Warn("closing migrate instance", "source_err", srcErr, "db_err", dbErr)
+		}
+	}()
 	err = mig.Up()
 	if err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("migrate up: %w", err)
@@ -125,13 +131,18 @@ func NewApplicationInstance(ctx context.Context, cfg AppInstanceConfig) Applicat
 		}
 		services = append(services, &querierSvc)
 	}
+	activeRuntimes := map[runtimes.RuntimeType]runtimes.Runtime{
+		runtimes.BackGroundTask: taskRuntime,
+	}
+	if grpcRuntime != nil {
+		activeRuntimes[runtimes.GRPCRuntime] = grpcRuntime
+	}
+	if grpcUIRuntime != nil {
+		activeRuntimes[runtimes.GRPCUIRuntime] = grpcUIRuntime
+	}
 	return ApplicationInstance{
 		Services: services,
-		Manager: runtimes.NewRuntimeManager(map[runtimes.RuntimeType]runtimes.Runtime{
-			runtimes.GRPCUIRuntime:  grpcUIRuntime,
-			runtimes.GRPCRuntime:    grpcRuntime,
-			runtimes.BackGroundTask: taskRuntime,
-		}),
+		Manager:  runtimes.NewRuntimeManager(activeRuntimes),
 	}
 }
 func (a *ApplicationInstance) Start(ctx context.Context) error {
@@ -143,6 +154,12 @@ func (a *ApplicationInstance) Start(ctx context.Context) error {
 }
 func (a *ApplicationInstance) Stop(ctx context.Context) error {
 	err := a.Manager.StopRuntimes(ctx)
+	if telErr := telemetry.ShutdownTelemetry(ctx); telErr != nil {
+		if err != nil {
+			return fmt.Errorf("stopping runtimes: %w; telemetry shutdown: %v", err, telErr)
+		}
+		return fmt.Errorf("telemetry shutdown: %w", telErr)
+	}
 	if err != nil {
 		return fmt.Errorf("stopping runtimes: %w", err)
 	}

@@ -2,6 +2,13 @@ package telemetry
 
 import (
 	"context"
+	"errors"
+	"log/slog"
+	"net"
+	"net/http"
+	"sync"
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/propagators/b3"
 	"go.opentelemetry.io/otel"
@@ -12,10 +19,37 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace/noop"
-	"log/slog"
-	"net/http"
-	"time"
 )
+
+var (
+	telemetryMu   sync.Mutex
+	metricsServer *http.Server
+	tracerProv    *trace.TracerProvider
+)
+
+// ShutdownTelemetry gracefully stops the Prometheus metrics HTTP server and flushes
+// the OpenTelemetry TracerProvider.
+func ShutdownTelemetry(ctx context.Context) error {
+	telemetryMu.Lock()
+	srv := metricsServer
+	tp := tracerProv
+	metricsServer = nil
+	tracerProv = nil
+	telemetryMu.Unlock()
+
+	var errs error
+	if srv != nil {
+		if err := srv.Shutdown(ctx); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	if tp != nil {
+		if err := tp.Shutdown(ctx); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	return errs
+}
 
 type TelemetryConfig struct {
 	Enabled     bool          `toml:"enabled" yaml:"enabled"`
@@ -40,15 +74,24 @@ func InitTelemetryFromConfig(config TelemetryConfig) error {
 	}
 	logger := slog.Default()
 	if config.Metrics.Enabled {
-
+		promHost := config.Metrics.Host
+		lis, err := net.Listen("tcp", promHost)
+		if err != nil {
+			return err
+		}
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		srv := &http.Server{
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		telemetryMu.Lock()
+		metricsServer = srv
+		telemetryMu.Unlock()
+		logger.Info("serving metrics", "host", promHost)
 		go func() {
-			promHost := config.Metrics.Host
-			mux := http.NewServeMux()
-			mux.Handle("/metrics", promhttp.Handler())
-			logger.Info("serving metrics", "host", promHost)
-			err2 := http.ListenAndServe(promHost, mux)
-			if err2 != nil {
-				panic(err2)
+			if err2 := srv.Serve(lis); err2 != nil && !errors.Is(err2, http.ErrServerClosed) {
+				logger.Error("metrics server stopped with error", "host", promHost, "error", err2)
 			}
 		}()
 	}
@@ -58,7 +101,7 @@ func InitTelemetryFromConfig(config TelemetryConfig) error {
 	}
 	if config.OTLP.Enabled {
 		client := otlptracegrpc.NewClient(otlptracegrpc.WithEndpoint(config.OTLP.Endpoint), otlptracegrpc.WithInsecure())
-		exporter, err := otlptrace.New(context.TODO(), client)
+		exporter, err := otlptrace.New(context.Background(), client)
 		if err != nil {
 			return err
 		}
@@ -75,6 +118,9 @@ func InitTelemetryFromConfig(config TelemetryConfig) error {
 		tp := trace.NewTracerProvider(
 			trace.WithBatcher(exporter, trace.WithExportTimeout(30*time.Second)),
 			trace.WithResource(r))
+		telemetryMu.Lock()
+		tracerProv = tp
+		telemetryMu.Unlock()
 		otel.SetTracerProvider(tp)
 		propagator := propagation.NewCompositeTextMapPropagator(
 			propagation.Baggage{},
