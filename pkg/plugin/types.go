@@ -68,29 +68,38 @@ type PlanAffectingConvert struct {
 }
 
 func protoParsedPlanToDomain(p *dbmv1.ParsedExecutionPlan) ParsedExecutionPlan {
-	stats := make([]StatisticsInfo, len(p.StatsUsage))
-	warns := make([]PlanWarning, len(p.Warnings))
-	nodes := make([]PlanNode, len(p.Nodes))
-	for i, info := range p.StatsUsage {
-		stats[i] = StatisticsInfo{
+	if p == nil {
+		return ParsedExecutionPlan{}
+	}
+	stats := make([]StatisticsInfo, 0, len(p.StatsUsage))
+	warns := make([]PlanWarning, 0, len(p.Warnings))
+	nodes := make([]PlanNode, 0, len(p.Nodes))
+	for _, info := range p.StatsUsage {
+		if info == nil {
+			continue
+		}
+		stats = append(stats, StatisticsInfo{
 			LastUpdate:        info.LastUpdate,
 			ModificationCount: info.ModificationCount,
 			SamplingPercent:   info.SamplingPercent,
 			Statistics:        info.Statistics,
 			Table:             info.Table,
-		}
+		})
 	}
-	for i, warn := range p.Warnings {
+	for _, warn := range p.Warnings {
+		if warn == nil {
+			continue
+		}
 		switch warn.Warning.(type) {
 		case *dbmv1.PlanWarning_Convert:
-			warns[i] = PlanWarning{
+			warns = append(warns, PlanWarning{
 				Convert: &PlanAffectingConvert{
 					ConvertIssue: warn.GetConvert().GetConvertIssue(),
 					Expression:   warn.GetConvert().GetExpression(),
 				},
-			}
+			})
 		case *dbmv1.PlanWarning_MissingIndex:
-			warns[i] = PlanWarning{
+			warns = append(warns, PlanWarning{
 				MissingIndex: &MissingIndex{
 					Database:          warn.GetMissingIndex().GetDatabase(),
 					Schema:            warn.GetMissingIndex().GetSchema(),
@@ -100,11 +109,14 @@ func protoParsedPlanToDomain(p *dbmv1.ParsedExecutionPlan) ParsedExecutionPlan {
 					InequalityColumns: warn.GetMissingIndex().GetInequalityColumns(),
 					IncludeColumns:    warn.GetMissingIndex().GetIncludeColumns(),
 				},
-			}
+			})
 		}
 	}
-	for i, node := range p.Nodes {
-		nodes[i] = planNodeFromProto(node, 0)
+	for _, node := range p.Nodes {
+		if node == nil {
+			continue
+		}
+		nodes = append(nodes, planNodeFromProto(node, 0))
 	}
 	var execPlan ExecutionPlan
 	if p.Plan != nil {
@@ -122,9 +134,15 @@ func protoParsedPlanToDomain(p *dbmv1.ParsedExecutionPlan) ParsedExecutionPlan {
 }
 
 func planNodeFromProto(node *dbmv1.PlanNode, level int) PlanNode {
-	childNodes := make([]PlanNode, len(node.Nodes))
-	for i, child := range node.Nodes {
-		childNodes[i] = planNodeFromProto(child, level+1)
+	if node == nil {
+		return PlanNode{Level: level}
+	}
+	childNodes := make([]PlanNode, 0, len(node.Nodes))
+	for _, child := range node.Nodes {
+		if child == nil {
+			continue
+		}
+		childNodes = append(childNodes, planNodeFromProto(child, level+1))
 	}
 	var header PlanNodeHeader
 	if node.Header != nil {

@@ -31,7 +31,8 @@ var (
 
 // AppConfig holds the configuration for the app.
 type AppConfig struct {
-	APIURL string `json:"apiUrl"`
+	APIURL                string `json:"apiUrl"`
+	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
 }
 
 // App is an app plugin with a backend which can respond to data queries.
@@ -69,7 +70,10 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 
 	var creds grpc.DialOption
 	if useTLS {
-		creds = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}))
+		creds = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: cfg.TLSInsecureSkipVerify, //nolint:gosec // opt-in for self-signed certs
+		}))
 	} else {
 		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 	}

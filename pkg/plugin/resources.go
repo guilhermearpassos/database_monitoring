@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,11 +21,24 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func writeJSON(w http.ResponseWriter, body any) {
+	b, err := json.Marshal(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(b)
+}
+
 // handlePing is an example HTTP GET resource that returns a {"message": "ok"} JSON response.
 func (a *App) handlePing(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path != "/ping" && req.URL.Path != "/" {
+		http.NotFound(w, req)
+		return
+	}
 	w.Header().Add("Content-Type", "application/json")
 	if _, err := w.Write([]byte(`{"message": "ok"}`)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -42,11 +57,7 @@ func (a *App) handleEcho(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Header().Add("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, body)
 }
 
 // registerRoutes takes a *http.ServeMux and registers some HTTP handlers.
@@ -116,17 +127,31 @@ func (a *App) handleFetchQueryDetails(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(m)
 }
 
+func formatWaitDurationMs(ms int64) string {
+	if ms < 0 {
+		ms = 0
+	}
+	totalSec := ms / 1000
+	hours := totalSec / 3600
+	mins := (totalSec % 3600) / 60
+	secs := totalSec % 60
+	return fmt.Sprintf("%02d:%02d:%02d", hours, mins, secs)
+}
+
 func blockChainFromProto(chain *querierv2.BlockChain) (BlockChain, error) {
 	if chain == nil {
 		return BlockChain{Roots: []BlockingNode{}}, nil
 	}
-	roots := make([]BlockingNode, len(chain.Roots))
-	for i, root := range chain.Roots {
-		node, err2 := nodeFromProto(root, i)
+	roots := make([]BlockingNode, 0, len(chain.Roots))
+	for _, root := range chain.Roots {
+		if root == nil {
+			continue
+		}
+		node, err2 := nodeFromProto(root, 0)
 		if err2 != nil {
 			return BlockChain{}, err2
 		}
-		roots[i] = node
+		roots = append(roots, node)
 	}
 	return BlockChain{
 		Roots: roots,
@@ -146,7 +171,7 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (QuerySample, error) {
 	}
 	if sample.Blocked {
 		if sample.WaitInfo != nil {
-			blockTime = time.Time{}.Add(time.Duration(sample.WaitInfo.WaitTime * 1_000_000_000)).Format(time.TimeOnly)
+			blockTime = formatWaitDurationMs(sample.WaitInfo.WaitTime)
 		}
 		if sample.BlockInfo != nil {
 			blockDetails += fmt.Sprintf("blocked by %s", sample.BlockInfo.BlockedBy)
@@ -190,23 +215,29 @@ func protoSampleToDomain(sample *dbmv1.QuerySample) (QuerySample, error) {
 	return dSample, nil
 }
 
-func nodeFromProto(root *querierv2.BlockChain_BlockingNode, i int) (BlockingNode, error) {
+func nodeFromProto(root *querierv2.BlockChain_BlockingNode, level int) (BlockingNode, error) {
+	if root == nil {
+		return BlockingNode{}, fmt.Errorf("nil blocking node")
+	}
 	ds, err := protoSampleToDomain(root.QuerySample)
 	if err != nil {
 		return BlockingNode{}, err
 	}
-	childNodes := make([]BlockingNode, len(root.ChildNodes))
-	for j, child := range root.ChildNodes {
-		cn, err2 := nodeFromProto(child, i+1)
+	childNodes := make([]BlockingNode, 0, len(root.ChildNodes))
+	for _, child := range root.ChildNodes {
+		if child == nil {
+			continue
+		}
+		cn, err2 := nodeFromProto(child, level+1)
 		if err2 != nil {
 			return BlockingNode{}, err2
 		}
-		childNodes[j] = cn
+		childNodes = append(childNodes, cn)
 	}
 	node := BlockingNode{
 		QuerySample: ds,
 		ChildNodes:  childNodes,
-		Level:       i,
+		Level:       level,
 	}
 	return node, nil
 }
@@ -292,8 +323,7 @@ func (a *App) handleQuery(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, result)
 }
 
 // QueryData handles data source queries
@@ -333,6 +363,10 @@ func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*ba
 		case "servers":
 			res := a.queryServers(ctx, req.PluginContext, q)
 			response.Responses[q.RefID] = res
+		default:
+			response.Responses[q.RefID] = backend.DataResponse{
+				Error: fmt.Errorf("unknown query type %q", q.QueryType),
+			}
 		}
 	}
 
@@ -382,21 +416,36 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 		response.Error = err
 		return response
 	}
-	interval := time.Minute * 1 // 1-minute intervals
-	points := int(to.Sub(from)/interval) + 1
+	const maxPoints = 2000
+	interval := time.Minute
+	span := to.Sub(from)
+	if span < 0 {
+		span = 0
+	}
+	if span > 0 && int64(span/interval)+1 > maxPoints {
+		interval = time.Duration(math.Ceil(float64(span) / float64(maxPoints-1)))
+	}
+	points := int(span/interval) + 1
 	if points < 1 {
 		points = 1
 	}
+	if points > maxPoints {
+		points = maxPoints
+	}
 
 	times := make([]time.Time, points)
-	valuesByWaitType := make(map[string][]float64, points)
+	valuesByWaitType := make(map[string][]float64)
 	for i := 0; i < points; i++ {
 		times[i] = from.Add(time.Duration(i) * interval)
 	}
 	useWaitTime := q.Metric == "wait_time_ms"
 	wantWait := strings.TrimSpace(q.WaitEvent)
 	for _, sum := range r.GetSnapSummaries() {
-		idx := int(sum.Timestamp.AsTime().Sub(from).Minutes())
+		ts := sum.GetTimestamp().AsTime()
+		if ts.Before(from) {
+			continue
+		}
+		idx := int(math.Floor(float64(ts.Sub(from)) / float64(interval)))
 		if idx < 0 || idx >= points {
 			continue
 		}
@@ -414,7 +463,9 @@ func (a *App) query(ctx context.Context, pCtx backend.PluginContext, query backe
 			if _, ok := valuesByWaitType[we]; !ok {
 				valuesByWaitType[we] = make([]float64, points)
 			}
-			valuesByWaitType[we][idx] = float64(c)
+			if float64(c) > valuesByWaitType[we][idx] {
+				valuesByWaitType[we][idx] = float64(c)
+			}
 		}
 	}
 	frameName := "connections by wait event"
@@ -753,7 +804,7 @@ func (a *App) querySnapList(ctx context.Context, pCtx backend.PluginContext, que
 		Links: []data.DataLink{
 			{
 				Title: "Inspect Snapshot in Sqlsights",
-				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/snapshots?server=%s&snapId=${__value.raw}&from=${__from}&to=${__to}", q.Database),
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/snapshots?server=%s&snapId=${__value.raw}&from=${__from}&to=${__to}", url.QueryEscape(q.Database)),
 			},
 		},
 	}
@@ -896,7 +947,7 @@ func (a *App) queryPlanAnalysis(ctx context.Context, pCtx backend.PluginContext,
 		Links: []data.DataLink{
 			{
 				Title: "Inspect Execution Plan in Sqlsights",
-				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/plan_analysis?server=%s&snapId=${__data.fields.snapID}&sampleId=${__data.fields.sampleId}&from=${__from}&to=${__to}", q.Database),
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/plan_analysis?server=%s&snapId=${__data.fields.snapID}&sampleId=${__data.fields.sampleId}&from=${__from}&to=${__to}", url.QueryEscape(q.Database)),
 			},
 		},
 	}
@@ -1058,7 +1109,7 @@ func (a *App) querySnap(ctx context.Context, pCtx backend.PluginContext, query b
 		Links: []data.DataLink{
 			{
 				Title: "Inspect Sample in Sqlsights",
-				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/snapshots?server=%s&snapId=%s&sampleId=${__value.raw}&from=${__from}&to=${__to}", q.Database, q.SnapID),
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/snapshots?server=%s&snapId=%s&sampleId=${__value.raw}&from=${__from}&to=${__to}", url.QueryEscape(q.Database), url.QueryEscape(q.SnapID)),
 			},
 		},
 	}
@@ -1160,7 +1211,7 @@ func (a *App) queryMetrics(ctx context.Context, pCtx backend.PluginContext, quer
 		Links: []data.DataLink{
 			{
 				Title: "Inspect in Sqlsights Query Metrics",
-				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/query_metrics?server=%s&queryHash=${__data.fields.queryHash}&from=${__from}&to=${__to}", q.Database),
+				URL:   fmt.Sprintf("/a/guilhermearpassos-sqlsights-app/query_metrics?server=%s&queryHash=${__data.fields.queryHash}&from=${__from}&to=${__to}", url.QueryEscape(q.Database)),
 			},
 		},
 	}
@@ -2078,11 +2129,12 @@ func (a *App) handleDeadlocks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch unfiltered by database so AvailableDatabases reflects all databases in the window,
+	// then filter items in buildDeadlockItems (matches handlePlanAnalysis behavior).
 	resp, err := a.client.ListDeadlocks(r.Context(), &querierv2.ListDeadlocksRequest{
-		Start:     timestamppb.New(start),
-		End:       timestamppb.New(end),
-		Host:      server,
-		Databases: dbFilter,
+		Start: timestamppb.New(start),
+		End:   timestamppb.New(end),
+		Host:  server,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -2090,12 +2142,8 @@ func (a *App) handleDeadlocks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items, availDBs := buildDeadlockItems(resp.GetDeadlocks(), server, dbFilter)
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(DeadlocksResponse{
+	writeJSON(w, DeadlocksResponse{
 		Deadlocks:          items,
 		AvailableDatabases: availDBs,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	})
 }
