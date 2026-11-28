@@ -227,7 +227,7 @@ FROM %s.sys.partitions p
 INNER JOIN %s.sys.objects o ON p.object_id = o.object_id
 INNER JOIN %s.sys.schemas s ON o.schema_id = s.schema_id
 LEFT JOIN %s.sys.indexes i ON p.object_id = i.object_id AND p.index_id = i.index_id
-WHERE p.hobt_id = @p1
+WHERE p.hobt_id = ?
 OPTION (MAXDOP 1)`, qDB, qDB, qDB, qDB)
 
 	var schema, table, index string
@@ -246,7 +246,7 @@ SELECT TOP 1
     ISNULL(o.name, '') AS object_name
 FROM %s.sys.objects o
 INNER JOIN %s.sys.schemas s ON o.schema_id = s.schema_id
-WHERE o.object_id = @p1
+WHERE o.object_id = ?
 OPTION (MAXDOP 1)`, qDB, qDB)
 
 	var schema, table string
@@ -271,7 +271,7 @@ INNER JOIN %s.sys.partitions p
 INNER JOIN %s.sys.objects o ON p.object_id = o.object_id
 INNER JOIN %s.sys.schemas s ON o.schema_id = s.schema_id
 LEFT JOIN %s.sys.indexes i ON p.object_id = i.object_id AND p.index_id = i.index_id
-WHERE au.allocation_unit_id = @p1
+WHERE au.allocation_unit_id = ?
 OPTION (MAXDOP 1)`, qDB, qDB, qDB, qDB, qDB)
 
 	var schema, table, index string
@@ -289,7 +289,7 @@ SELECT TOP 1
     ISNULL(s.name, '') AS schema_name,
     ISNULL(o.name, '') AS object_name,
     CASE WHEN pi.index_id = 0 THEN 'HEAP' ELSE ISNULL(i.name, '') END AS index_name
-FROM sys.dm_db_page_info(@p1, @p2, @p3, 'LIMITED') pi
+FROM sys.dm_db_page_info(?, ?, ?, 'LIMITED') pi
 INNER JOIN %s.sys.objects o ON pi.object_id = o.object_id
 INNER JOIN %s.sys.schemas s ON o.schema_id = s.schema_id
 LEFT JOIN %s.sys.indexes i ON pi.object_id = i.object_id AND pi.index_id = i.index_id
@@ -382,7 +382,7 @@ func (r *WaitResourceResolver) resolveDBName(ctx context.Context, dbID int) stri
 
 // Resolve parses a wait_resource string and resolves its database, schema.table, and index
 // using the in-memory caches and querying SQL Server only on cache misses.
-func (r *WaitResourceResolver) Resolve(ctx context.Context, rawWaitResource string, fallbackDB string) ResolvedLockTarget {
+func (r *WaitResourceResolver) Resolve(ctx context.Context, rawWaitResource string, fallbackDB string) (ResolvedLockTarget, error) {
 	parsed, ok := ParseWaitResource(rawWaitResource)
 	if !ok {
 		resType := parsed.ResourceType
@@ -392,7 +392,7 @@ func (r *WaitResourceResolver) Resolve(ctx context.Context, rawWaitResource stri
 		return ResolvedLockTarget{
 			Database:     fallbackDB,
 			ResourceType: resType,
-		}
+		}, nil
 	}
 
 	dbName := r.resolveDBName(ctx, parsed.DBID)
@@ -405,14 +405,14 @@ func (r *WaitResourceResolver) Resolve(ctx context.Context, rawWaitResource stri
 		return ResolvedLockTarget{
 			Database:     dbName,
 			ResourceType: parsed.ResourceType,
-		}
+		}, nil
 	}
 
 	r.mu.RLock()
 	if cached, hit := r.resourceCache[cacheKey]; hit {
 		r.mu.RUnlock()
 		cached.ResourceType = parsed.ResourceType
-		return cached
+		return cached, nil
 	}
 	r.mu.RUnlock()
 
@@ -420,7 +420,7 @@ func (r *WaitResourceResolver) Resolve(ctx context.Context, rawWaitResource stri
 		return ResolvedLockTarget{
 			Database:     dbName,
 			ResourceType: parsed.ResourceType,
-		}
+		}, nil
 	}
 
 	var schema, table, index string
@@ -441,12 +441,12 @@ func (r *WaitResourceResolver) Resolve(ctx context.Context, rawWaitResource stri
 			return ResolvedLockTarget{
 				Database:     dbName,
 				ResourceType: parsed.ResourceType,
-			}
+			}, nil
 		}
 		return ResolvedLockTarget{
 			Database:     dbName,
 			ResourceType: parsed.ResourceType,
-		}
+		}, fmt.Errorf("resolving lock target: %w", err)
 	}
 
 	fullTable := formatTableName(schema, table)
@@ -463,7 +463,7 @@ func (r *WaitResourceResolver) Resolve(ctx context.Context, rawWaitResource stri
 		r.resourceCache[cacheKey] = target
 		r.mu.Unlock()
 	}
-	return target
+	return target, nil
 }
 
 func formatTableName(schema, table string) string {

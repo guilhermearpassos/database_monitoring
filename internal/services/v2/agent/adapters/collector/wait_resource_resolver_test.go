@@ -260,9 +260,9 @@ func TestWaitResourceResolver_CachesDatabasesAndTargets(t *testing.T) {
 	}
 
 	// KEY (two different row hashes) and HOBT share the same HoBT cache key -> 1 lookup total.
-	t1 := resolver.Resolve(ctx, "KEY: 6:72057594041335808 (8194443284a0)", "")
-	t2 := resolver.Resolve(ctx, "KEY: 6:72057594041335808 (deadbeefcafe)", "")
-	t3 := resolver.Resolve(ctx, "HOBT: 6:72057594041335808", "")
+	t1, _ := resolver.Resolve(ctx, "KEY: 6:72057594041335808 (8194443284a0)", "")
+	t2, _ := resolver.Resolve(ctx, "KEY: 6:72057594041335808 (deadbeefcafe)", "")
+	t3, _ := resolver.Resolve(ctx, "HOBT: 6:72057594041335808", "")
 	if t1.Database != "OrdersDB" || t1.Table != "dbo.Orders" || t1.Index != "PK_Orders" || t1.ResourceType != "KEY" {
 		t.Fatalf("unexpected t1: %+v", t1)
 	}
@@ -277,8 +277,8 @@ func TestWaitResourceResolver_CachesDatabasesAndTargets(t *testing.T) {
 	}
 
 	// OBJECT and TAB share the same object cache key -> 1 lookup total.
-	o1 := resolver.Resolve(ctx, "OBJECT: 6:2105058535:0", "")
-	o2 := resolver.Resolve(ctx, "TAB: 6:2105058535:0", "")
+	o1, _ := resolver.Resolve(ctx, "OBJECT: 6:2105058535:0", "")
+	o2, _ := resolver.Resolve(ctx, "TAB: 6:2105058535:0", "")
 	if o1.Table != "dbo.Customers" || o1.Index != "" || o2.Table != "dbo.Customers" {
 		t.Fatalf("unexpected object targets: o1=%+v o2=%+v", o1, o2)
 	}
@@ -287,8 +287,8 @@ func TestWaitResourceResolver_CachesDatabasesAndTargets(t *testing.T) {
 	}
 
 	// PAGE and RID on same page share the same page cache key -> 1 lookup total.
-	p1 := resolver.Resolve(ctx, "PAGE: 6:1:441920", "")
-	p2 := resolver.Resolve(ctx, "RID: 6:1:441920:12", "")
+	p1, _ := resolver.Resolve(ctx, "PAGE: 6:1:441920", "")
+	p2, _ := resolver.Resolve(ctx, "RID: 6:1:441920:12", "")
 	if p1.Table != "sales.LineItems" || p1.Index != "IX_LineItems_OrderId" || p1.ResourceType != "PAGE" {
 		t.Fatalf("unexpected p1: %+v", p1)
 	}
@@ -300,8 +300,8 @@ func TestWaitResourceResolver_CachesDatabasesAndTargets(t *testing.T) {
 	}
 
 	// ALLOCATION_UNIT cached after first call.
-	a1 := resolver.Resolve(ctx, "ALLOCATION_UNIT: 6:99999", "")
-	a2 := resolver.Resolve(ctx, "ALLOCATION_UNIT: 6:99999", "")
+	a1, _ := resolver.Resolve(ctx, "ALLOCATION_UNIT: 6:99999", "")
+	a2, _ := resolver.Resolve(ctx, "ALLOCATION_UNIT: 6:99999", "")
 	if a1.Table != "dbo.AuditLog" || a1.Index != "HEAP" || a2.Table != "dbo.AuditLog" {
 		t.Fatalf("unexpected alloc unit targets: a1=%+v a2=%+v", a1, a2)
 	}
@@ -311,7 +311,7 @@ func TestWaitResourceResolver_CachesDatabasesAndTargets(t *testing.T) {
 
 	// Unknown DB ID triggers a refresh of sys.databases and resolves the newly added database.
 	fake.databases[9] = "BillingDB"
-	b1 := resolver.Resolve(ctx, "KEY: 9:555 (001122)", "")
+	b1, _ := resolver.Resolve(ctx, "KEY: 9:555 (001122)", "")
 	if b1.Database != "BillingDB" || b1.Table != "billing.Invoices" || b1.Index != "IX_Invoices_Date" {
 		t.Fatalf("unexpected new DB target: %+v", b1)
 	}
@@ -336,17 +336,17 @@ func TestWaitResourceResolver_TransientErrorNotCached(t *testing.T) {
 
 	resolver := NewWaitResourceResolver(fake)
 
-	first := resolver.Resolve(ctx, "KEY: 6:100 (aaa)", "FallbackDB")
+	first, _ := resolver.Resolve(ctx, "KEY: 6:100 (aaa)", "FallbackDB")
 	if first.Database != "OrdersDB" || first.Table != "" || first.ResourceType != "KEY" {
 		t.Fatalf("expected graceful fallback on error, got %+v", first)
 	}
 
-	second := resolver.Resolve(ctx, "KEY: 6:100 (aaa)", "FallbackDB")
+	second, _ := resolver.Resolve(ctx, "KEY: 6:100 (aaa)", "FallbackDB")
 	if second.Table != "dbo.Orders" || second.Index != "PK_Orders" {
 		t.Fatalf("expected retry to succeed after transient error, got %+v", second)
 	}
 
-	third := resolver.Resolve(ctx, "KEY: 6:100 (bbb)", "FallbackDB")
+	third, _ := resolver.Resolve(ctx, "KEY: 6:100 (bbb)", "FallbackDB")
 	if third.Table != "dbo.Orders" {
 		t.Fatalf("expected cached hit on third call, got %+v", third)
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var lockMetricLabels = []string{"server", "database", "table", "index", "wait_type", "resource_type"}
@@ -32,8 +33,8 @@ type LockMetricsRecorder struct {
 	locksTotal        *prometheus.CounterVec
 	lockDurationSec   *prometheus.HistogramVec
 
-	mu               sync.Mutex
-	activeByServer   map[string]map[lockMetricKey]struct{}
+	mu             sync.Mutex
+	activeByServer map[string]map[lockMetricKey]struct{}
 }
 
 func newLockMetricsRecorder(reg prometheus.Registerer) *LockMetricsRecorder {
@@ -93,6 +94,7 @@ func (m *LockMetricsRecorder) RecordSnapshot(
 	if m == nil {
 		return
 	}
+	span := trace.SpanFromContext(ctx)
 
 	current := make(map[lockMetricKey]*lockMetricAgg)
 	for _, sample := range samples {
@@ -102,7 +104,11 @@ func (m *LockMetricsRecorder) RecordSnapshot(
 
 		var target ResolvedLockTarget
 		if resolver != nil {
-			target = resolver.Resolve(ctx, sample.Wait.WaitResource, sample.Database.DatabaseName)
+			var err error
+			target, err = resolver.Resolve(ctx, sample.Wait.WaitResource, sample.Database.DatabaseName)
+			if err != nil {
+				span.RecordError(err)
+			}
 		} else {
 			target = ResolvedLockTarget{
 				Database:     sample.Database.DatabaseName,
