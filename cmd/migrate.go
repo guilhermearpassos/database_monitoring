@@ -31,15 +31,18 @@ func erMigrate(cmd *cobra.Command, args []string) error {
 	fmt.Println("migrate")
 	d, err := iofs.New(sql.MigrationsFS, "migrations")
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("migrate fs: %w", err)
 	}
 	m, err := migrate.NewWithSourceInstance("iofs", d, pgAddr)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("migrate instance: %w", err)
 	}
+	defer func() {
+		_, _ = m.Close()
+	}()
 	err = m.Up()
 	if err != nil && err != migrate.ErrNoChange {
-		panic(err)
+		return fmt.Errorf("migrate up: %w", err)
 	}
 	return nil
 }

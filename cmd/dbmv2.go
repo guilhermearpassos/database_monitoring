@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -17,7 +18,8 @@ import (
 )
 
 var (
-	DbmV2 = &cobra.Command{
+	dbmV2ConfigFile string
+	DbmV2           = &cobra.Command{
 		Use:     "all",
 		Short:   "run sqlsights as monolith",
 		Long:    "run sqlsights as monolith",
@@ -28,46 +30,46 @@ var (
 )
 
 func init() {
-	DbmV2.Flags().StringVar(&configFileName, "config", "local/v2.yaml", "--config=local/v2.yaml")
+	DbmV2.Flags().StringVar(&dbmV2ConfigFile, "config", "local/v2.yaml", "--config=local/v2.yaml")
 }
 
 func DBMV2(cmd *cobra.Command, args []string) error {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	var cfg bootstrap.AppInstanceConfig
 	// Check if file exists
-	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
-		panic(fmt.Errorf("config file does not exist: %s", configFileName))
+	if _, err := os.Stat(dbmV2ConfigFile); os.IsNotExist(err) {
+		return fmt.Errorf("config file does not exist: %s", dbmV2ConfigFile)
 	}
-	file, err := os.Open(configFileName)
+	file, err := os.Open(dbmV2ConfigFile)
 	if err != nil {
-		panic(fmt.Errorf("failed to open config file: %s", err))
+		return fmt.Errorf("failed to open config file: %s: %w", dbmV2ConfigFile, err)
 	}
 	defer file.Close()
 	switch {
-	case strings.HasSuffix(configFileName, ".toml"):
+	case strings.HasSuffix(dbmV2ConfigFile, ".toml"):
 		if _, err := toml.NewDecoder(file).Decode(&cfg); err != nil {
-			panic(fmt.Errorf("failed to parse TOML config file: %s", err))
+			return fmt.Errorf("failed to parse TOML config file: %s: %w", dbmV2ConfigFile, err)
 		}
-	case strings.HasSuffix(configFileName, ".yaml") || strings.HasSuffix(configFileName, ".yml"):
+	case strings.HasSuffix(dbmV2ConfigFile, ".yaml") || strings.HasSuffix(dbmV2ConfigFile, ".yml"):
 		decoder := yaml.NewDecoder(file)
 		if err := decoder.Decode(&cfg); err != nil {
-			panic(fmt.Errorf("failed to parse YAML config file: %s", err))
+			return fmt.Errorf("failed to parse YAML config file: %s: %w", dbmV2ConfigFile, err)
 		}
 	default:
-		panic(fmt.Errorf("unsupported config file format: %s", configFileName))
+		return fmt.Errorf("unsupported config file format: %s", dbmV2ConfigFile)
 	}
 	app := bootstrap.NewApplicationInstance(ctx, cfg)
 	if err := app.Start(ctx); err != nil {
-		panic(err)
+		return err
 	}
 	<-ctx.Done()
 	fmt.Println(ctx.Err())
-	gracefulCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	gracefulCtx, gracefulCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer gracefulCancel()
 	err = app.Stop(gracefulCtx)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	return nil
 }

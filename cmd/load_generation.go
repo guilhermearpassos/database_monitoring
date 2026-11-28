@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/BurntSushi/toml"
 	"github.com/guilhermearpassos/database-monitoring/internal/common/telemetry"
@@ -27,7 +29,8 @@ type loadGenConfig struct {
 }
 
 var (
-	LoadGenCmd = &cobra.Command{
+	loadGenConfigFile string
+	LoadGenCmd        = &cobra.Command{
 		Use:     "load_gen",
 		Short:   "run dbm load_gen",
 		Long:    "run dbm load_gen",
@@ -38,29 +41,31 @@ var (
 )
 
 func init() {
-	LoadGenCmd.Flags().StringVar(&configFileName, "config", "local/agent.toml", "--config=local/agent.toml")
+	LoadGenCmd.Flags().StringVar(&loadGenConfigFile, "config", "local/agent.toml", "--config=local/agent.toml")
 }
 
 func StartLoadGen(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 	var config loadGenConfig
 	// Check if file exists
-	if _, err := os.Stat(configFileName); os.IsNotExist(err) {
-		panic(fmt.Errorf("config file does not exist: %s", configFileName))
+	if _, err := os.Stat(loadGenConfigFile); os.IsNotExist(err) {
+		return fmt.Errorf("config file does not exist: %s", loadGenConfigFile)
 	}
-	if _, err := toml.DecodeFile(configFileName, &config); err != nil {
-		panic(fmt.Errorf("failed to parse config file: %s", err))
+	if _, err := toml.DecodeFile(loadGenConfigFile, &config); err != nil {
+		return fmt.Errorf("failed to parse config file: %s: %w", loadGenConfigFile, err)
 	}
 	err := telemetry.InitTelemetryFromConfig(config.Telemetry)
 	if err != nil {
-		panic(fmt.Errorf("failed to init telemetry: %v", err))
+		return fmt.Errorf("failed to init telemetry: %w", err)
 	}
 	wg := sync.WaitGroup{}
 	for _, tgt := range config.TargetHosts {
 		db, err := telemetry.OpenInstrumentedDB(tgt.Driver, tgt.ConnString)
 		if err != nil {
-			panic(fmt.Errorf("error connecting to %s: %w", tgt.Alias, err))
+			return fmt.Errorf("error connecting to %s: %w", tgt.Alias, err)
 		}
+		defer db.Close()
 		wg.Add(1)
 		go generateLoad(ctx, db, &wg)
 	}
@@ -129,7 +134,13 @@ having sum(qty) <> 0`
 		if rand.Intn(10) == 2 {
 			q = `SELECT * FROM trades WHERE account in ('ACC001', 'ACC011')`
 		}
-		_ = db.QueryRowContext(ctx, q)
+		rows, err := db.QueryContext(ctx, q)
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+		}
+		_ = rows.Close()
 	}
 }
 
@@ -155,6 +166,7 @@ func bulkInsert(ctx context.Context, db *sqlx.DB) (err error) {
 	defer func() {
 		if err != nil {
 			_ = txx.Rollback()
+			return
 		}
 		err = txx.Commit()
 	}()
