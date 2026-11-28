@@ -29,6 +29,7 @@ func (c *QuerierConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chann
 	var repo interface {
 		domain.SampleRepository
 		domain.QueryMetricsRepository
+		domain.DeadlockRepository
 	}
 	if c.Postgres.Connstring != "" {
 		db, err := c.Postgres.Get(ctx)
@@ -40,7 +41,7 @@ func (c *QuerierConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chann
 	if repo == nil {
 		return nil, fmt.Errorf("no repo found in config")
 	}
-	application := app.NewApplication(repo, repo)
+	application := app.NewApplication(repo, repo, repo)
 	p := ports.NewGRPCServer(application)
 	return QuerierService{Port: &p}, nil
 }

@@ -3,6 +3,7 @@ package plugin
 import (
 	"time"
 
+	"github.com/guilhermearpassos/database-monitoring/internal/deadlock"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
 )
 
@@ -302,4 +303,25 @@ type QueryMetricsSeriesPointDTO struct {
 	AvgSpills         float64   `json:"avg_spills"`
 	AvgGrantKb        float64   `json:"avg_grant_kb"`
 	AvgUsedGrantKb    float64   `json:"avg_used_grant_kb"`
+}
+
+type DeadlockItemDTO struct {
+	ID                 string               `json:"id"`
+	Server             string               `json:"server"`
+	Timestamp          time.Time            `json:"timestamp"`
+	XMLHash            string               `json:"xml_hash"`
+	Fingerprint        string               `json:"fingerprint"`
+	PatternOccurrences int                  `json:"pattern_occurrences"`
+	VictimSPID         string               `json:"victim_spid"`
+	Databases          []string             `json:"databases"`
+	MaxWaitMs          int64                `json:"max_wait_ms"`
+	Processes          []deadlock.Process   `json:"processes"`
+	Resources          []deadlock.Resource  `json:"resources"`
+	Diagnosis          deadlock.Diagnosis   `json:"diagnosis"`
+	XMLReport          string               `json:"xml_report"`
+}
+
+type DeadlocksResponse struct {
+	Deadlocks          []DeadlockItemDTO `json:"deadlocks"`
+	AvailableDatabases []string          `json:"available_databases"`
 }

@@ -1,0 +1,15 @@
+syntax = "proto3";
+package database_monitoring.v2;
+option go_package = "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/ingestor/v2;ingestorv2";
+
+import "database_monitoring/v1/snapshot.proto";
+import "database_monitoring/v1/deadlock.proto";
+
+message IngestDeadlocksRequest {
+  database_monitoring.v1.ServerMetadata server = 1;
+  repeated database_monitoring.v1.DeadlockReport deadlocks = 2;
+}
+
+message IngestDeadlocksResponse {
+  int32 stored_count = 1;
+}

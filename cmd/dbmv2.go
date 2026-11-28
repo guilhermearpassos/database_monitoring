@@ -62,6 +62,7 @@ func DBMV2(cmd *cobra.Command, args []string) error {
 		panic(err)
 	}
 	<-ctx.Done()
+	fmt.Println(ctx.Err())
 	gracefulCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	err = app.Stop(gracefulCtx)

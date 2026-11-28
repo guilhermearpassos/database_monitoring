@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/guilhermearpassos/database-monitoring/internal/deadlock"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/agent/domain/collector"
 	"github.com/jmoiron/sqlx"
@@ -38,12 +39,20 @@ type queryCounterState struct {
 	lastSeen time.Time
 }
 
+type deadlockCursorState struct {
+	fileName   string
+	fileOffset int64
+	lastTime   time.Time
+}
+
 type SqlServerSnapshotter struct {
 	db                *sqlx.DB
 	Server            common_domain.ServerMeta
 	tracer            trace.Tracer
 	metricsMu         *sync.Mutex
 	lastQueryCounters map[string]queryCounterState
+	deadlocksMu       *sync.Mutex
+	deadlockCursor    *deadlockCursorState
 }
 
 func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlServerSnapshotter {
@@ -53,6 +62,8 @@ func NewSqlServerSnapshotter(db *sqlx.DB, server common_domain.ServerMeta) *SqlS
 		Server:            server,
 		metricsMu:         &sync.Mutex{},
 		lastQueryCounters: make(map[string]queryCounterState),
+		deadlocksMu:       &sync.Mutex{},
+		deadlockCursor:    &deadlockCursorState{},
 	}
 }
 
@@ -1041,4 +1052,231 @@ func (s SqlServerSnapshotter) pruneStaleQueryCounters(now time.Time, maxAge time
 		}
 	}
 	s.metricsMu.Unlock()
+}
+
+type rawDeadlockRow struct {
+	occurredAt time.Time
+	fileName   string
+	fileOffset int64
+	xmlReport  string
+}
+
+// CollectDeadlocks reads xml_deadlock_report events from SQL Server's system_health
+// Extended Events session. It prefers the persistent event_file target using incremental
+// (file_name, file_offset) cursoring and falls back to the in-memory ring_buffer target
+// if the event_file target is unavailable.
+func (s SqlServerSnapshotter) CollectDeadlocks(ctx context.Context, databases []string) ([]*common_domain.DeadlockReport, error) {
+	ctx, span := s.tracer.Start(ctx, "CollectDeadlocks")
+	defer span.End()
+
+	var curFile string
+	var curOffset int64
+	var curTime time.Time
+	if s.deadlocksMu != nil && s.deadlockCursor != nil {
+		s.deadlocksMu.Lock()
+		curFile = s.deadlockCursor.fileName
+		curOffset = s.deadlockCursor.fileOffset
+		curTime = s.deadlockCursor.lastTime
+		s.deadlocksMu.Unlock()
+	}
+
+	// On cold start, look back 24 hours so recent deadlocks populate immediately without scanning ancient files.
+	since := curTime
+	if since.IsZero() {
+		since = time.Now().UTC().Add(-24 * time.Hour)
+	}
+
+	rawRows, nextFile, nextOffset, err := s.queryDeadlocksFromFileTarget(ctx, curFile, curOffset, since)
+	if err != nil && curFile != "" {
+		// Saved .xel file may have rolled over; reset cursor and retry from beginning filtered by timestamp.
+		rawRows, nextFile, nextOffset, err = s.queryDeadlocksFromFileTarget(ctx, "", 0, since)
+	}
+	if err != nil {
+		// Fallback to ring_buffer if event_file is disabled or inaccessible.
+		rbRows, rbErr := s.queryDeadlocksFromRingBuffer(ctx, since)
+		if rbErr != nil {
+			return nil, fmt.Errorf("collecting deadlocks (file target err: %v; ring_buffer err: %w)", err, rbErr)
+		}
+		rawRows = rbRows
+	}
+
+	latestTime := curTime
+	reports := make([]*common_domain.DeadlockReport, 0, len(rawRows))
+	for _, rr := range rawRows {
+		if rr.occurredAt.After(latestTime) {
+			latestTime = rr.occurredAt
+		}
+		report := buildDeadlockReport(s.Server, rr.occurredAt, rr.xmlReport)
+		if report == nil {
+			continue
+		}
+		if len(databases) > 0 && !deadlockMatchesDatabases(report.Databases, databases) {
+			continue
+		}
+		reports = append(reports, report)
+	}
+
+	if s.deadlocksMu != nil && s.deadlockCursor != nil {
+		s.deadlocksMu.Lock()
+		if nextFile != "" {
+			s.deadlockCursor.fileName = nextFile
+			s.deadlockCursor.fileOffset = nextOffset
+		}
+		if !latestTime.IsZero() {
+			s.deadlockCursor.lastTime = latestTime
+		}
+		s.deadlocksMu.Unlock()
+	}
+
+	return reports, nil
+}
+
+func (s SqlServerSnapshotter) queryDeadlocksFromFileTarget(
+	ctx context.Context,
+	initialFile string,
+	initialOffset int64,
+	since time.Time,
+) ([]rawDeadlockRow, string, int64, error) {
+	fileArg := sql.NullString{String: initialFile, Valid: initialFile != ""}
+	offsetArg := sql.NullInt64{Int64: initialOffset, Valid: initialFile != ""}
+
+	query := monitoringSessionPrefix + `
+SELECT
+    CAST(timestamp_utc AS datetime2(7)) AS occurred_at,
+    file_name,
+    file_offset,
+    event_data AS deadlock_xml
+FROM sys.fn_xe_file_target_read_file(N'system_health*.xel', NULL, ?, ?)
+WHERE object_name = 'xml_deadlock_report'
+  AND CAST(timestamp_utc AS datetime2(7)) >= ?
+ORDER BY timestamp_utc ASC
+OPTION (MAXDOP 1)
+`
+	rows, err := s.db.QueryContext(ctx, query, fileArg, offsetArg, since.UTC())
+	if err != nil {
+		return nil, "", 0, err
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	var out []rawDeadlockRow
+	lastFile := initialFile
+	lastOffset := initialOffset
+	for rows.Next() {
+		var occurredAt time.Time
+		var fileName sql.NullString
+		var fileOffset sql.NullInt64
+		var xmlText sql.NullString
+		if err := rows.Scan(&occurredAt, &fileName, &fileOffset, &xmlText); err != nil {
+			return nil, "", 0, fmt.Errorf("scan deadlock file target row: %w", err)
+		}
+		if fileName.Valid && fileName.String != "" {
+			lastFile = fileName.String
+			if fileOffset.Valid {
+				lastOffset = fileOffset.Int64
+			}
+		}
+		if !xmlText.Valid || strings.TrimSpace(xmlText.String) == "" {
+			continue
+		}
+		out = append(out, rawDeadlockRow{
+			occurredAt: occurredAt.UTC(),
+			fileName:   lastFile,
+			fileOffset: lastOffset,
+			xmlReport:  xmlText.String,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", 0, fmt.Errorf("deadlock file target rows.Err: %w", err)
+	}
+	return out, lastFile, lastOffset, nil
+}
+
+func (s SqlServerSnapshotter) queryDeadlocksFromRingBuffer(ctx context.Context, since time.Time) ([]rawDeadlockRow, error) {
+	query := monitoringSessionPrefix + `
+WITH xe AS (
+    SELECT CAST(xet.target_data AS xml) AS target_data
+    FROM sys.dm_xe_sessions AS xs
+    INNER JOIN sys.dm_xe_session_targets AS xet
+        ON xs.address = xet.event_session_address
+    WHERE xs.name = N'system_health'
+      AND xet.target_name = N'ring_buffer'
+)
+SELECT
+    evt.value('(@timestamp)[1]', 'datetime2(7)') AS occurred_at,
+    COALESCE(
+        NULLIF(CAST(evt.query('./data/value/deadlock') AS nvarchar(max)), N''),
+        evt.value('(./data/value)[1]', 'nvarchar(max)')
+    ) AS deadlock_xml
+FROM xe
+CROSS APPLY xe.target_data.nodes('RingBufferTarget/event[@name="xml_deadlock_report"]') AS T(evt)
+WHERE evt.value('(@timestamp)[1]', 'datetime2(7)') >= @p1
+ORDER BY occurred_at ASC
+OPTION (MAXDOP 1)
+`
+	rows, err := s.db.QueryContext(ctx, query, since.UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		_ = rows.Close()
+	}(rows)
+
+	var out []rawDeadlockRow
+	for rows.Next() {
+		var occurredAt time.Time
+		var xmlText sql.NullString
+		if err := rows.Scan(&occurredAt, &xmlText); err != nil {
+			return nil, fmt.Errorf("scan deadlock ring_buffer row: %w", err)
+		}
+		if !xmlText.Valid || strings.TrimSpace(xmlText.String) == "" {
+			continue
+		}
+		out = append(out, rawDeadlockRow{
+			occurredAt: occurredAt.UTC(),
+			xmlReport:  xmlText.String,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("deadlock ring_buffer rows.Err: %w", err)
+	}
+	return out, nil
+}
+
+func buildDeadlockReport(server common_domain.ServerMeta, occurredAt time.Time, rawXML string) *common_domain.DeadlockReport {
+	cleanXML := deadlock.ExtractDeadlockElement(rawXML)
+	if cleanXML == "" {
+		return nil
+	}
+	report := &common_domain.DeadlockReport{
+		ID:         uuid.NewString(),
+		Server:     server,
+		OccurredAt: occurredAt.UTC(),
+		XMLReport:  cleanXML,
+		XMLHash:    deadlock.HashXML(cleanXML),
+	}
+	if parsed, err := deadlock.ParseXML(cleanXML); err == nil && parsed != nil {
+		report.XMLHash = parsed.XMLHash
+		report.Fingerprint = parsed.Fingerprint
+		report.Pattern = parsed.Diagnosis.Pattern
+		report.Databases = parsed.Databases
+		report.VictimSPID = parsed.VictimSPID
+		report.MaxWaitMs = parsed.MaxWaitMs
+		report.ProcessCount = int32(len(parsed.Processes))
+		report.ResourceCount = int32(len(parsed.Resources))
+	}
+	return report
+}
+
+func deadlockMatchesDatabases(reportDBs []string, filterDBs []string) bool {
+	if len(filterDBs) == 0 || len(reportDBs) == 0 {
+		return true
+	}
+	for _, db := range reportDBs {
+		if slices.Contains(filterDBs, db) {
+			return true
+		}
+	}
+	return false
 }

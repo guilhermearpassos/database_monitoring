@@ -26,6 +26,7 @@ const (
 	QuerierAPI_ListQueryMetrics_FullMethodName          = "/database_monitoring.v2.QuerierAPI/ListQueryMetrics"
 	QuerierAPI_GetQueryMetricsTimeSeries_FullMethodName = "/database_monitoring.v2.QuerierAPI/GetQueryMetricsTimeSeries"
 	QuerierAPI_ListPlansWithIssues_FullMethodName       = "/database_monitoring.v2.QuerierAPI/ListPlansWithIssues"
+	QuerierAPI_ListDeadlocks_FullMethodName             = "/database_monitoring.v2.QuerierAPI/ListDeadlocks"
 )
 
 // QuerierAPIClient is the client API for QuerierAPI service.
@@ -39,6 +40,7 @@ type QuerierAPIClient interface {
 	ListQueryMetrics(ctx context.Context, in *ListQueryMetricsRequest, opts ...grpc.CallOption) (*ListQueryMetricsResponse, error)
 	GetQueryMetricsTimeSeries(ctx context.Context, in *GetQueryMetricsTimeSeriesRequest, opts ...grpc.CallOption) (*GetQueryMetricsTimeSeriesResponse, error)
 	ListPlansWithIssues(ctx context.Context, in *ListPlansWithIssuesRequest, opts ...grpc.CallOption) (*ListPlansWithIssuesResponse, error)
+	ListDeadlocks(ctx context.Context, in *ListDeadlocksRequest, opts ...grpc.CallOption) (*ListDeadlocksResponse, error)
 }
 
 type querierAPIClient struct {
@@ -119,6 +121,16 @@ func (c *querierAPIClient) ListPlansWithIssues(ctx context.Context, in *ListPlan
 	return out, nil
 }
 
+func (c *querierAPIClient) ListDeadlocks(ctx context.Context, in *ListDeadlocksRequest, opts ...grpc.CallOption) (*ListDeadlocksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDeadlocksResponse)
+	err := c.cc.Invoke(ctx, QuerierAPI_ListDeadlocks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QuerierAPIServer is the server API for QuerierAPI service.
 // All implementations must embed UnimplementedQuerierAPIServer
 // for forward compatibility.
@@ -130,6 +142,7 @@ type QuerierAPIServer interface {
 	ListQueryMetrics(context.Context, *ListQueryMetricsRequest) (*ListQueryMetricsResponse, error)
 	GetQueryMetricsTimeSeries(context.Context, *GetQueryMetricsTimeSeriesRequest) (*GetQueryMetricsTimeSeriesResponse, error)
 	ListPlansWithIssues(context.Context, *ListPlansWithIssuesRequest) (*ListPlansWithIssuesResponse, error)
+	ListDeadlocks(context.Context, *ListDeadlocksRequest) (*ListDeadlocksResponse, error)
 	mustEmbedUnimplementedQuerierAPIServer()
 }
 
@@ -160,6 +173,9 @@ func (UnimplementedQuerierAPIServer) GetQueryMetricsTimeSeries(context.Context, 
 }
 func (UnimplementedQuerierAPIServer) ListPlansWithIssues(context.Context, *ListPlansWithIssuesRequest) (*ListPlansWithIssuesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPlansWithIssues not implemented")
+}
+func (UnimplementedQuerierAPIServer) ListDeadlocks(context.Context, *ListDeadlocksRequest) (*ListDeadlocksResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDeadlocks not implemented")
 }
 func (UnimplementedQuerierAPIServer) mustEmbedUnimplementedQuerierAPIServer() {}
 func (UnimplementedQuerierAPIServer) testEmbeddedByValue()                    {}
@@ -308,6 +324,24 @@ func _QuerierAPI_ListPlansWithIssues_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _QuerierAPI_ListDeadlocks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDeadlocksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QuerierAPIServer).ListDeadlocks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QuerierAPI_ListDeadlocks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QuerierAPIServer).ListDeadlocks(ctx, req.(*ListDeadlocksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // QuerierAPI_ServiceDesc is the grpc.ServiceDesc for QuerierAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -342,6 +376,10 @@ var QuerierAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPlansWithIssues",
 			Handler:    _QuerierAPI_ListPlansWithIssues_Handler,
+		},
+		{
+			MethodName: "ListDeadlocks",
+			Handler:    _QuerierAPI_ListDeadlocks_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

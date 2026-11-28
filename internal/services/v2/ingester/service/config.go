@@ -29,6 +29,7 @@ type IngesterConfig struct {
 		Snapshots RetentionConfig `yaml:"snapshots" toml:"snapshots"`
 		Metrics   RetentionConfig `yaml:"metrics" toml:"metrics"`
 		Plans     RetentionConfig `yaml:"plans" toml:"plans"`
+		Deadlocks RetentionConfig `yaml:"deadlocks" toml:"deadlocks"`
 	} `yaml:"retention" toml:"retention"`
 	PlanAnalysis PlanAnalysis `yaml:"plan_analysis" toml:"plan_analysis"`
 }
@@ -86,6 +87,7 @@ func (c *IngesterConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chan
 	var repo interface {
 		domain.SnapshotRepository
 		domain.QueryMetricsRepository
+		domain.DeadlockRepository
 	}
 	if c.Postgres.Connstring != "" {
 		db, err := c.Postgres.Get(ctx)
@@ -97,12 +99,13 @@ func (c *IngesterConfig) GetService(ctx context.Context, inproc *inprocgrpc.Chan
 	if repo == nil {
 		return nil, fmt.Errorf("no valid repo config found")
 	}
-	application := app.NewApplicationWithAdapters(store, repo, repo)
+	application := app.NewApplicationWithAdapters(store, repo, repo, repo)
 	p := ports.NewService(application)
 	tsks := []runtimes.Task{
 		tasks.NewPurgeQueryMetricsTask(application, c.Retention.Metrics.GetInterval(), c.Retention.Metrics.GetRetention(), c.Retention.Metrics.GetBatchSize(), slog.Default()),
 		tasks.NewPurgeSnapshotsTask(application, c.Retention.Snapshots.GetInterval(), c.Retention.Snapshots.GetRetention(), c.Retention.Snapshots.GetBatchSize(), slog.Default()),
 		tasks.NewPurgePlansTask(application, c.Retention.Plans.GetInterval(), c.Retention.Plans.GetBatchSize(), slog.Default()),
+		tasks.NewPurgeDeadlocksTask(application, c.Retention.Deadlocks.GetInterval(), c.Retention.Deadlocks.GetRetention(), c.Retention.Deadlocks.GetBatchSize(), slog.Default()),
 	}
 	if !c.PlanAnalysis.Disabled {
 		tsks = append(tsks,

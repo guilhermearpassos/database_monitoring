@@ -148,3 +148,41 @@ func TestIngestSnapshotStream_ErrorHandling(t *testing.T) {
 		require.Nil(t, stream.resp)
 	})
 }
+
+type fakeDeadlockRepo struct {
+	saved []*common_domain.DeadlockReport
+}
+
+func (f *fakeDeadlockRepo) SaveDeadlocks(_ context.Context, _ common_domain.ServerMeta, deadlocks []*common_domain.DeadlockReport) (int, error) {
+	f.saved = append(f.saved, deadlocks...)
+	return len(deadlocks), nil
+}
+
+func (f *fakeDeadlockRepo) PurgeDeadlocks(_ context.Context, _, _ time.Time, _ int) error {
+	return nil
+}
+
+func TestIngestDeadlocks(t *testing.T) {
+	dlRepo := &fakeDeadlockRepo{}
+	svc := NewService(app.NewApplicationWithAdapters(state.NewMemoryStore(), &fakeSnapshotRepo{}, nil, dlRepo))
+	resp, err := svc.IngestDeadlocks(context.Background(), &ingestorv2.IngestDeadlocksRequest{
+		Server: &dbmv1.ServerMetadata{Host: "sql-prod", Type: "mssql"},
+		Deadlocks: []*dbmv1.DeadlockReport{
+			{
+				Id:         "dl-1",
+				OccurredAt: timestamppb.Now(),
+				XmlReport: `<deadlock>
+					<victim-list><victimProcess id="p1" /></victim-list>
+					<process-list><process id="p1" spid="55" waittime="1200" currentdbname="OrdersDB"><inputbuf>UPDATE t SET x=1</inputbuf></process></process-list>
+					<resource-list><keylock objectname="OrdersDB.dbo.T" indexname="PK_T" id="l1" mode="X"><owner-list><owner id="p1" mode="S"/></owner-list><waiter-list><waiter id="p1" mode="X" requestType="convert"/></waiter-list></keylock></resource-list>
+				</deadlock>`,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), resp.GetStoredCount())
+	require.Len(t, dlRepo.saved, 1)
+	require.Equal(t, "lock_upgrade", dlRepo.saved[0].Pattern)
+	require.Equal(t, "55", dlRepo.saved[0].VictimSPID)
+	require.NotEmpty(t, dlRepo.saved[0].Fingerprint)
+}

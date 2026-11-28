@@ -10,8 +10,10 @@ type Command struct {
 	SaveSnapshot        *command.SaveSnapshotStreamHandler
 	SaveExecutionPlans  *command.SaveExecutionPlansStreamHandler
 	StoreQueryMetrics   *command.StoreQueryMetricsHandler
+	SaveDeadlocks       *command.SaveDeadlocksHandler
 	PurgeSnapshots      *command.PurgeSnapshotsHandler
 	PurgeQueryMetrics   *command.PurgeQueryMetricsHandler
+	PurgeDeadlocks      *command.PurgeDeadlocksHandler
 	PurgeUnboundedPlans *command.PurgePlansHandler
 	SetPlanAnalisys     *command.SetPlanAnalisysHandler
 }
@@ -30,14 +32,22 @@ type Application struct {
 }
 
 // NewApplicationWithAdapters allows wiring custom store and repository implementations.
-func NewApplicationWithAdapters(store domain.SessionStore, repo domain.SnapshotRepository, metricsRepo domain.QueryMetricsRepository) Application {
+func NewApplicationWithAdapters(store domain.SessionStore, repo domain.SnapshotRepository, metricsRepo domain.QueryMetricsRepository, deadlockRepo ...domain.DeadlockRepository) Application {
+	var dlRepo domain.DeadlockRepository
+	if len(deadlockRepo) > 0 {
+		dlRepo = deadlockRepo[0]
+	} else if r, ok := repo.(domain.DeadlockRepository); ok {
+		dlRepo = r
+	}
 	return Application{
 		Command: Command{
 			SaveSnapshot:        command.NewSaveSnapshotStreamHandler(store, repo),
 			SaveExecutionPlans:  command.NewSaveExecutionPlansStreamHandler(repo),
 			StoreQueryMetrics:   command.NewStoreQueryMetricsHandler(metricsRepo),
+			SaveDeadlocks:       command.NewSaveDeadlocksHandler(dlRepo),
 			PurgeSnapshots:      command.NewPurgeSnapshotsHandler(repo),
 			PurgeQueryMetrics:   command.NewPurgeQueryMetricsHandler(metricsRepo),
+			PurgeDeadlocks:      command.NewPurgeDeadlocksHandler(dlRepo),
 			SetPlanAnalisys:     command.NewSetPlanAnalisysHandler(repo),
 			PurgeUnboundedPlans: command.NewPurgePlansHandler(repo),
 		},

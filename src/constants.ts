@@ -6,6 +6,7 @@ export enum ROUTES {
   Snapshots = 'snapshots',
   PlanAnalysis = 'plan_analysis',
   QueryMetrics = 'query_metrics',
+  Deadlocks = 'deadlocks',
   Three = 'three',
   Four = 'four',
 }

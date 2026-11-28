@@ -18,12 +18,19 @@ type Queries struct {
 	ListQueryMetrics      query.ListQueryMetricsHandler
 	GetQuerySampleDetails query.GetQuerySampleDetailsHandler
 	ListPlansWithIssues   query.ListPlansWithIssuesHandler
+	ListDeadlocks         query.ListDeadlocksHandler
 }
 
 type Commands struct {
 }
 
-func NewApplication(repo domain.SampleRepository, queryRepo domain.QueryMetricsRepository) *Application {
+func NewApplication(repo domain.SampleRepository, queryRepo domain.QueryMetricsRepository, deadlockRepo ...domain.DeadlockRepository) *Application {
+	var dlRepo domain.DeadlockRepository
+	if len(deadlockRepo) > 0 {
+		dlRepo = deadlockRepo[0]
+	} else if r, ok := repo.(domain.DeadlockRepository); ok {
+		dlRepo = r
+	}
 	return &Application{
 		Commands: Commands{},
 		Queries: Queries{
@@ -34,6 +41,7 @@ func NewApplication(repo domain.SampleRepository, queryRepo domain.QueryMetricsR
 			ListQueryMetrics:      query.NewListQueryMetricsHandler(queryRepo),
 			GetQuerySampleDetails: query.NewGetQuerySampleDetailsHandler(repo),
 			ListPlansWithIssues:   query.NewListPlansWithIssuesHandler(repo),
+			ListDeadlocks:         query.NewListDeadlocksHandler(dlRepo),
 		},
 	}
 }

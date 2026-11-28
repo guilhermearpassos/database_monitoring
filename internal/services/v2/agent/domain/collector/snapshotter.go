@@ -10,6 +10,7 @@ type Snapshotter interface {
 	TakeSnapshot(ctx context.Context, databases []string) (*common_domain.DataBaseSnapshot, error)
 	FetchExecutionPlans(ctx context.Context, handles []string) (*ExecPlanChunk, error)
 	CollectQueryMetrics(ctx context.Context, databases []string) ([]*common_domain.QueryMetric, error)
+	CollectDeadlocks(ctx context.Context, databases []string) ([]*common_domain.DeadlockReport, error)
 }
 type ExecPlanChunk struct {
 	Plans  map[string]*common_domain.ExecutionPlan

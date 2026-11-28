@@ -6,6 +6,7 @@ import "google/protobuf/timestamp.proto";
 import "database_monitoring/v1/sample.proto";        // QuerySample
 import "database_monitoring/v1/snapshot.proto";      // ServerMetadata
 import "database_monitoring/v1/execution_plan.proto";
+import "database_monitoring/querier/v2/deadlock_api.proto";
 
 service QuerierAPI {
   rpc ListSnapshotSummaries(ListSnapshotSummariesRequest) returns (ListSnapshotSummariesResponse);
@@ -15,6 +16,7 @@ service QuerierAPI {
   rpc ListQueryMetrics(ListQueryMetricsRequest) returns (ListQueryMetricsResponse);
   rpc GetQueryMetricsTimeSeries(GetQueryMetricsTimeSeriesRequest) returns (GetQueryMetricsTimeSeriesResponse);
   rpc ListPlansWithIssues(ListPlansWithIssuesRequest) returns (ListPlansWithIssuesResponse);
+  rpc ListDeadlocks(ListDeadlocksRequest) returns (ListDeadlocksResponse);
 }
 message GetQueryMetricsTimeSeriesRequest{
   google.protobuf.Timestamp start = 1;

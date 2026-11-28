@@ -338,3 +338,26 @@ func (c *Client) SendQueryMetrics(ctx context.Context, metrics []*common_domain.
 	}
 	return nil
 }
+
+func (c *Client) SendDeadlocks(ctx context.Context, deadlocks []*common_domain.DeadlockReport, server common_domain.ServerMeta) error {
+	if len(deadlocks) == 0 {
+		return nil
+	}
+	protoDeadlocks := make([]*dbmv1.DeadlockReport, 0, len(deadlocks))
+	for _, d := range deadlocks {
+		if pd := converters.DeadlockReportToProto(d); pd != nil {
+			protoDeadlocks = append(protoDeadlocks, pd)
+		}
+	}
+	if len(protoDeadlocks) == 0 {
+		return nil
+	}
+	_, err := c.client.IngestDeadlocks(ctx, &ingestorv2.IngestDeadlocksRequest{
+		Server:    toProtoServer(server),
+		Deadlocks: protoDeadlocks,
+	})
+	if err != nil {
+		return fmt.Errorf("ingest deadlocks: %w", err)
+	}
+	return nil
+}

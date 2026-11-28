@@ -4,6 +4,7 @@ import { AppRootProps } from '@grafana/data';
 import { LoadingPlaceholder } from '@grafana/ui';
 import PagePlanAnalysis from '../../pages/PageTwo';
 import PageQueryMetrics from '../../pages/PageThree';
+import PageDeadlocks from '../../pages/PageFour';
 import { AppPluginJsonData, AppSettingsProvider } from '../../context/AppSettingsContext';
 
 const PageOne = React.lazy(() => import('../../pages/PageOne'));
@@ -18,6 +19,7 @@ function App(props: AppRootProps<AppPluginJsonData>) {
           <Route path="/snapshots" element={<PageOne />} />
           <Route path="/plan_analysis" element={<PagePlanAnalysis />} />
           <Route path="/query_metrics" element={<PageQueryMetrics />} />
+          <Route path="/deadlocks" element={<PageDeadlocks />} />
         </Routes>
       </Suspense>
     </AppSettingsProvider>

@@ -17,7 +17,7 @@ import {
 } from '@grafana/ui';
 import { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { css } from '@emotion/css';
-import { Activity, BarChart3, RefreshCw, Search, X } from 'lucide-react';
+import { Activity, BarChart3, RefreshCw, Search, ShieldAlert, X } from 'lucide-react';
 import { QueryDetailsComponent } from '../components/QueryDetails/Details';
 import { PlanAnalysisItem, PlanAnalysisResponse } from '../components/PlanAnalysis/types';
 import { PlanAnalysisTable, PlanSortField, SortDirection } from '../components/PlanAnalysis/PlanAnalysisTable';
@@ -334,6 +334,14 @@ const PageTwo = () => {
           >
             <BarChart3 size={14} />
             <span style={{ marginLeft: 6 }}>Query Metrics</span>
+          </Button>
+          <Button
+            variant="secondary"
+            fill="outline"
+            onClick={() => navigate(`${prefixRoute(ROUTES.Deadlocks)}${buildPreservedNavSearch(searchParams)}`)}
+          >
+            <ShieldAlert size={14} />
+            <span style={{ marginLeft: 6 }}>Deadlocks</span>
           </Button>
           <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
             <RefreshCw size={14} />

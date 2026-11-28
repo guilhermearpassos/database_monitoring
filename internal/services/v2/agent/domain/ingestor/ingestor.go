@@ -28,4 +28,5 @@ type Client interface {
 	SendExecutionPlans(ctx context.Context, plans []*common_domain.ExecutionPlan, server common_domain.ServerMeta, so SendOptions) (*ingestorv2.ExecutionPlanUploadResult, error)
 	GetMissingPlansHandles(ctx context.Context, server common_domain.ServerMeta, start time.Time, end time.Time) ([]string, error)
 	SendQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, server common_domain.ServerMeta, timestamp time.Time) error
+	SendDeadlocks(ctx context.Context, deadlocks []*common_domain.DeadlockReport, server common_domain.ServerMeta) error
 }
