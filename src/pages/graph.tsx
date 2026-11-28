@@ -43,10 +43,9 @@ interface Props {
 function setSeriesHiddenInConfig(
     cfg: FieldConfigSource<GraphFieldConfig>,
     label: string,
-    mode: SeriesVisibilityChangeMode
+    mode: SeriesVisibilityChangeMode,
+    allLabels: string[]
 ): FieldConfigSource<GraphFieldConfig> {
-    // This mirrors the dashboard behavior at a high level by expressing visibility as field overrides.
-    // Time series panel understands `custom.hideFrom.viz`.
     const hidePropId = "custom.hideFrom";
     const hiddenValue = {viz: true, legend: false, tooltip: false};
 
@@ -57,21 +56,36 @@ function setSeriesHiddenInConfig(
         properties: [{id: hidePropId, value: hiddenValue}],
     });
 
-    // Helper to remove any existing override for a given label
+    const isHidden = (name: string) =>
+        overrides.some(
+            (o) =>
+                o?.matcher?.id === "byName" &&
+                o?.matcher?.options === name &&
+                o?.properties?.some((p) => p.id === hidePropId && p.value?.viz === true)
+        );
+
     const removeOverrideFor = (name: string) =>
         overrides.filter((o) => !(o?.matcher?.id === "byName" && o?.matcher?.options === name));
 
-    if (mode === SeriesVisibilityChangeMode.ToggleSelection) {
-        const existing = overrides.find((o) => o?.matcher?.id === "byName" && o?.matcher?.options === label);
-        const currentlyHidden = existing?.properties?.some((p) => p.id === hidePropId && p.value?.viz === true);
-
-        // Toggle: if hidden -> remove override; if shown -> add override
+    if (mode === SeriesVisibilityChangeMode.AppendToSelection) {
+        const currentlyHidden = isHidden(label);
         return {
             ...cfg,
             overrides: currentlyHidden ? removeOverrideFor(label) : [...removeOverrideFor(label), withMatcher(label)],
         };
     }
 
+    if (mode === SeriesVisibilityChangeMode.ToggleSelection) {
+        const others = allLabels.filter((n) => n !== label);
+        const allOthersHidden = others.length > 0 && others.every((n) => isHidden(n)) && !isHidden(label);
+        if (allOthersHidden) {
+            return { ...cfg, overrides: [] };
+        }
+        return {
+            ...cfg,
+            overrides: others.map(withMatcher),
+        };
+    }
 
     return cfg;
 }
@@ -101,7 +115,9 @@ export function MyGraph({
         const resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
                 const { width, height } = entry.contentRect;
-                setDimensions({ width, height });
+                if (width > 0 && height > 0) {
+                    setDimensions({ width, height });
+                }
             }
         });
 
@@ -110,6 +126,23 @@ export function MyGraph({
     }, []);
     // Store visibility overrides separately
     const [visibilityOverrides, setVisibilityOverrides] = useState<FieldConfigSource<GraphFieldConfig>['overrides']>([]);
+
+    const allSeriesLabels = useMemo(() => {
+        const names: string[] = [];
+        for (const frame of data) {
+            for (const f of frame.fields ?? []) {
+                if (f.type !== 'time' && f.name) {
+                    names.push(f.name);
+                }
+            }
+        }
+        return names;
+    }, [data]);
+
+    const seriesKey = allSeriesLabels.join('\0');
+    useEffect(() => {
+        setVisibilityOverrides([]);
+    }, [seriesKey]);
 
     // Compute fieldConfig with colors based on data
     const fieldConfig = useMemo<FieldConfigSource<GraphFieldConfig>>(() => {
@@ -187,7 +220,7 @@ export function MyGraph({
       const labels = Array.isArray(label) ? label : [label];
                 setVisibilityOverrides((overrides) => {
                     const nextConfig = labels.reduce<FieldConfigSource<GraphFieldConfig>>(
-                        (nextCfg, seriesLabel) => setSeriesHiddenInConfig(nextCfg, seriesLabel, mode),
+                        (nextCfg, seriesLabel) => setSeriesHiddenInConfig(nextCfg, seriesLabel, mode, allSeriesLabels),
                         {
                             defaults: {},
                             overrides,
@@ -199,7 +232,7 @@ export function MyGraph({
 
             },
         }),
-        [eventBus, onTimeRangeChange]
+        [eventBus, onTimeRangeChange, allSeriesLabels]
     );
 //  useEffect(() => {
 //    if (!onTimeRangeChange) {

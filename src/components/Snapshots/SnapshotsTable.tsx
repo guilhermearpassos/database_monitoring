@@ -22,6 +22,7 @@ import { buildBlockingTrees, SnapshotBlockingTree } from './SnapshotBlockingTree
 import { formatDurationMs } from '../../utils/sqlHelpers';
 import { getWaitEventColor } from '../../utils/wait_event_colors';
 import { TempoTraceLink } from '../TempoTraceLink';
+import { extractErrorMessage } from '../../utils/urlState';
 
 export type SnapshotSortField = 'timestamp' | 'connections' | 'blockers' | 'waiters' | 'wait_duration_ms';
 export type SortDirection = 'asc' | 'desc';
@@ -471,6 +472,14 @@ export const SnapshotsTable: React.FC<{
   samplesLoadingRef.current = samplesLoading;
   samplesErrorRef.current = samplesError;
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const fetchSamples = useCallback(async (snapId: string, force = false) => {
     if (
       !snapId ||
@@ -494,11 +503,17 @@ export const SnapshotsTable: React.FC<{
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/snapshotSamples?${params.toString()}`,
       });
       const result = await lastValueFrom(response);
+      if (!mountedRef.current) {
+        return;
+      }
       const data = result.data || [];
       samplesCacheRef.current = { ...samplesCacheRef.current, [snapId]: data };
       setSamplesCache((prev) => ({ ...prev, [snapId]: data }));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load samples';
+      if (!mountedRef.current) {
+        return;
+      }
+      const message = extractErrorMessage(err, 'Failed to load samples');
       samplesErrorRef.current = { ...samplesErrorRef.current, [snapId]: message };
       setSamplesError((prev) => ({
         ...prev,
@@ -506,7 +521,9 @@ export const SnapshotsTable: React.FC<{
       }));
     } finally {
       samplesLoadingRef.current = { ...samplesLoadingRef.current, [snapId]: false };
-      setSamplesLoading((prev) => ({ ...prev, [snapId]: false }));
+      if (mountedRef.current) {
+        setSamplesLoading((prev) => ({ ...prev, [snapId]: false }));
+      }
     }
   }, []);
 
@@ -537,13 +554,19 @@ export const SnapshotsTable: React.FC<{
     return copy;
   }, [summaries, sortField, sortDir]);
 
-  // If URL expandedSnapId is on another page, jump to that page
+  // If URL expandedSnapId changes and is on another page, jump to that page once (don't yank on auto-refresh)
+  const lastJumpedSnapIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!expandedSnapId) {
+      lastJumpedSnapIdRef.current = null;
+      return;
+    }
+    if (lastJumpedSnapIdRef.current === expandedSnapId) {
       return;
     }
     const idx = sortedSummaries.findIndex((s) => s.id === expandedSnapId);
     if (idx >= 0) {
+      lastJumpedSnapIdRef.current = expandedSnapId;
       const targetPage = Math.floor(idx / pageSize) + 1;
       setPage(targetPage);
     }

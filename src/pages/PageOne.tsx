@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FetchResponse, getBackendSrv, PluginPage } from '@grafana/runtime';
-import { lastValueFrom, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
   Alert,
   Button,
@@ -33,8 +33,12 @@ import { SnapshotSortField, SnapshotsTable, SortDirection } from '../components/
 import {
   applyTimeRangeToSearchParams,
   buildPreservedNavSearch,
+  extractErrorMessage,
   parseTimeRangeFromSearchParams,
+  resolveTimeRange,
   setOptionalParam,
+  shiftTimeRange,
+  zoomOutTimeRange,
 } from '../utils/urlState';
 import { ROUTES } from '../constants';
 import { prefixRoute } from '../utils/utils.routing';
@@ -119,10 +123,12 @@ function buildActivityDataFrame(
   if (summaries.length === 0) {
     return [];
   }
+  const MAX_POINTS = 1000;
   const fromMs = timeRange.from.valueOf();
   const toMs = timeRange.to.valueOf();
-  const intervalMs = 60_000;
-  const points = Math.max(1, Math.floor((toMs - fromMs) / intervalMs) + 1);
+  const spanMs = Math.max(0, toMs - fromMs);
+  const intervalMs = Math.max(60_000, Math.ceil(spanMs / Math.max(1, MAX_POINTS - 1)));
+  const points = Math.min(MAX_POINTS, Math.max(1, Math.floor(spanMs / intervalMs) + 1));
 
   const times: number[] = [];
   for (let i = 0; i < points; i++) {
@@ -132,8 +138,11 @@ function buildActivityDataFrame(
   const seriesByWait = new Map<string, number[]>();
   for (const sum of summaries) {
     const tsMs = new Date(sum.timestamp).getTime();
+    if (!Number.isFinite(tsMs)) {
+      continue;
+    }
     const idx = Math.floor((tsMs - fromMs) / intervalMs);
-    if (idx < 0 || idx >= points) {
+    if (!Number.isFinite(idx) || idx < 0 || idx >= points) {
       continue;
     }
     const source = metric === 'wait_time_ms' ? sum.time_ms_by_wait_event : sum.connections_by_wait_event;
@@ -185,6 +194,12 @@ const PageOne = () => {
   const [summaries, setSummaries] = useState<SnapshotSummaryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serversError, setServersError] = useState<string | null>(null);
+
+  const handleRefresh = useCallback(() => {
+    setTimeRange((prev) => resolveTimeRange(prev));
+    setRefreshCounter((c) => c + 1);
+  }, []);
 
   const updateParams = useCallback(
     (mutator: (next: URLSearchParams) => void) => {
@@ -204,32 +219,47 @@ const PageOne = () => {
       return;
     }
     const id = window.setInterval(() => {
-      setRefreshCounter((c) => c + 1);
+      handleRefresh();
     }, autoRefreshMs);
     return () => window.clearInterval(id);
-  }, [autoRefreshMs, selectedServer]);
+  }, [autoRefreshMs, selectedServer, handleRefresh]);
 
   // Load servers
-  const loadServers = useCallback(async (tr: TimeRange) => {
+  useEffect(() => {
+    let cancelled = false;
+    setServersError(null);
+    const params = new URLSearchParams({
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+      type: 'databases',
+    });
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      const params = new URLSearchParams({
-        start: tr.from.toISOString(),
-        end: tr.to.toISOString(),
-        type: 'databases',
-      });
       const response: Observable<FetchResponse<Array<{ label: string; value: string }>>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setServersError(extractErrorMessage(err, 'Failed to load servers'));
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load servers');
+      if (!cancelled) {
+        setServersError(extractErrorMessage(err, 'Failed to load servers'));
+      }
     }
-  }, []);
-
-  useEffect(() => {
-    loadServers(timeRange);
-  }, [timeRange, loadServers, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [timeRange, refreshCounter]);
 
   // Auto-select single server if none chosen
   useEffect(() => {
@@ -239,35 +269,53 @@ const PageOne = () => {
   }, [selectedServer, servers, updateParams]);
 
   // Load snapshot summaries (used for both chart and table -> single round trip!)
-  const loadSummaries = useCallback(async () => {
+  useEffect(() => {
     if (!selectedServer) {
       setSummaries([]);
+      setError(null);
+      setLoading(false);
       return;
     }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({
+      server: selectedServer,
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+    });
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({
-        server: selectedServer,
-        start: timeRange.from.toISOString(),
-        end: timeRange.to.toISOString(),
-      });
       const response: Observable<FetchResponse<SnapshotSummaryItem[]>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/snapshotSummaries?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setSummaries(result.data || []);
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setSummaries(result.data || []);
+            setLoading(false);
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setError(extractErrorMessage(err, 'Failed to load snapshots'));
+            setSummaries([]);
+            setLoading(false);
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load snapshots');
-      setSummaries([]);
-    } finally {
-      setLoading(false);
+      if (!cancelled) {
+        setError(extractErrorMessage(err, 'Failed to load snapshots'));
+        setSummaries([]);
+        setLoading(false);
+      }
     }
-  }, [selectedServer, timeRange]);
-
-  useEffect(() => {
-    loadSummaries();
-  }, [loadSummaries, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [selectedServer, timeRange, refreshCounter]);
 
   const waitEventOptions = useMemo<Array<ComboboxOption<string>>>(() => {
     const set = new Set<string>();
@@ -365,7 +413,7 @@ const PageOne = () => {
             value={autoRefreshMs}
             onChange={(opt) => setAutoRefreshMs(opt?.value ?? 0)}
           />
-          <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
+          <Button variant="secondary" fill="outline" onClick={handleRefresh} disabled={loading}>
             <RefreshCw size={14} />
           </Button>
           <TimeRangePicker
@@ -373,17 +421,17 @@ const PageOne = () => {
             onChange={handleTimeRangeChange}
             timeZone="browser"
             onChangeTimeZone={() => {}}
-            onZoom={() => {}}
-            onMoveBackward={() => {}}
-            onMoveForward={() => {}}
+            onZoom={() => handleTimeRangeChange(zoomOutTimeRange(timeRange))}
+            onMoveBackward={() => handleTimeRangeChange(shiftTimeRange(timeRange, -1))}
+            onMoveForward={() => handleTimeRangeChange(shiftTimeRange(timeRange, 1))}
           />
         </div>
       </div>
 
-      {error && (
+      {(error || serversError) && (
         <Alert title="Error" severity="error" className={styles.section}>
-          <div>{error}</div>
-          <Button size="sm" variant="secondary" onClick={() => setRefreshCounter((c) => c + 1)} style={{ marginTop: 8 }}>
+          <div>{error || serversError}</div>
+          <Button size="sm" variant="secondary" onClick={handleRefresh} style={{ marginTop: 8 }}>
             Retry
           </Button>
         </Alert>
@@ -482,6 +530,7 @@ const PageOne = () => {
                       eventBus={panelEventBus}
                       timeRange={timeRange}
                       onTimeRangeChange={handleTimeRangeChange}
+                      unit={chartMetric === 'wait_time_ms' ? 'ms' : 'short'}
                     />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>

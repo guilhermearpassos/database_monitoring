@@ -54,13 +54,12 @@ export function ConfigEditor(props: Props) {
           width={40}
         />
       </InlineField>
-      <InlineField label="API Key" labelWidth={14} interactive tooltip={'Secure json field (backend only)'}>
+      <InlineField label="API Key" labelWidth={14} interactive tooltip={'Optional secure json field (backend only)'}>
         <SecretInput
-          required
           id="config-editor-api-key"
           isConfigured={secureJsonFields.apiKey}
           value={secureJsonData?.apiKey}
-          placeholder="Enter your API key"
+          placeholder="Optional API key"
           width={40}
           onReset={onResetAPIKey}
           onChange={onAPIKeyChange}

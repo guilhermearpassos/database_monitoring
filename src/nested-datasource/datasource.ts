@@ -142,36 +142,40 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
     let opts: Array<ComboboxOption<string>> = [];
     switch (kind) {
       case 'servers':
-        opts = await this.getDropdownOptions('servers', timeParams);
+        opts = await this.fetchDropdownOptions('servers', timeParams);
         break;
       case 'databases':
         if (arg) {
-          opts = await this.getDropdownOptions('server-databases', { ...timeParams, server: arg });
+          opts = await this.fetchDropdownOptions('server-databases', { ...timeParams, server: arg });
         } else {
-          opts = await this.getDropdownOptions('servers', timeParams);
+          opts = await this.fetchDropdownOptions('servers', timeParams);
         }
         break;
       case 'snapshots':
         if (arg) {
-          opts = await this.getDropdownOptions('snapshots', { ...timeParams, server: arg });
+          opts = await this.fetchDropdownOptions('snapshots', { ...timeParams, server: arg });
         }
         break;
       case 'issue_tags':
       case 'issue-tags':
       case 'issues':
-        opts = await this.getDropdownOptions('issue-tags');
+        opts = await this.fetchDropdownOptions('issue-tags');
         break;
       default:
-        opts = await this.getDropdownOptions('servers', timeParams);
+        opts = await this.fetchDropdownOptions('servers', timeParams);
     }
 
     return opts.map((o) => ({ text: o.label ?? o.value, value: o.value }));
   }
 
-  async getDropdownOptions(type: string, params?: Record<string, string>): Promise<Array<ComboboxOption<string>>> {
+  private async fetchDropdownOptions(type: string, params?: Record<string, string>): Promise<Array<ComboboxOption<string>>> {
     const query = new URLSearchParams({ type, ...params });
+    return getOpts(query.toString());
+  }
+
+  async getDropdownOptions(type: string, params?: Record<string, string>): Promise<Array<ComboboxOption<string>>> {
     try {
-      return await getOpts(query.toString());
+      return await this.fetchDropdownOptions(type, params);
     } catch (error) {
       console.error('Failed to fetch dropdown options:', error);
       return [];

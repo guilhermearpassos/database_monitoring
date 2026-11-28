@@ -138,6 +138,12 @@ export function buildBlockingTrees(samples: SnapshotSampleItem[]): TreeNode[] {
     }
     roots.push(buildNode(root, 0, visited));
   }
+  // Include any remaining unvisited blocking/blocked sessions (e.g., mutual deadlock cycles A <-> B).
+  for (const s of samples) {
+    if ((s.is_blocker || s.is_blocked) && !visited.has(s.session_id)) {
+      roots.push(buildNode(s, 0, visited));
+    }
+  }
   return roots;
 }
 

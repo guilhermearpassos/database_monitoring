@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FetchResponse, getBackendSrv, PluginPage } from '@grafana/runtime';
-import { lastValueFrom, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
   Alert,
   Button,
@@ -31,10 +31,14 @@ import { DeadlocksTimeline } from '../components/Deadlocks/DeadlocksTimeline';
 import {
   applyTimeRangeToSearchParams,
   buildPreservedNavSearch,
+  extractErrorMessage,
   parseCSVString,
   parseTimeRangeFromSearchParams,
+  resolveTimeRange,
   setCSVParam,
   setOptionalParam,
+  shiftTimeRange,
+  zoomOutTimeRange,
 } from '../utils/urlState';
 import { ROUTES } from '../constants';
 import { prefixRoute } from '../utils/utils.routing';
@@ -156,7 +160,13 @@ const PageFour = () => {
   const [deadlocks, setDeadlocks] = useState<DeadlockItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serversError, setServersError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+
+  const handleRefresh = useCallback(() => {
+    setTimeRange((prev) => resolveTimeRange(prev));
+    setRefreshCounter((c) => c + 1);
+  }, []);
 
   const updateParams = useCallback(
     (mutator: (next: URLSearchParams) => void) => {
@@ -170,26 +180,41 @@ const PageFour = () => {
     [searchParams, setSearchParams]
   );
 
-  const loadServers = useCallback(async (tr: TimeRange) => {
+  useEffect(() => {
+    let cancelled = false;
+    setServersError(null);
+    const params = new URLSearchParams({
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+      type: 'databases',
+    });
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      const params = new URLSearchParams({
-        start: tr.from.toISOString(),
-        end: tr.to.toISOString(),
-        type: 'databases',
-      });
       const response: Observable<FetchResponse<Array<{ label: string; value: string }>>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setServersError(extractErrorMessage(err, 'Failed to load servers'));
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load servers');
+      if (!cancelled) {
+        setServersError(extractErrorMessage(err, 'Failed to load servers'));
+      }
     }
-  }, []);
-
-  useEffect(() => {
-    loadServers(timeRange);
-  }, [timeRange, loadServers, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [timeRange, refreshCounter]);
 
   useEffect(() => {
     if (!selectedServer && servers.length === 1) {
@@ -197,40 +222,58 @@ const PageFour = () => {
     }
   }, [selectedServer, servers, updateParams]);
 
-  const loadDeadlocks = useCallback(async () => {
+  useEffect(() => {
     if (!selectedServer) {
       setDeadlocks([]);
       setAvailableDatabases([]);
+      setError(null);
+      setLoading(false);
       return;
     }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({
+      server: selectedServer,
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+    });
+    if (selectedDatabases.length > 0) {
+      params.set('databases', selectedDatabases.join(','));
+    }
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({
-        server: selectedServer,
-        start: timeRange.from.toISOString(),
-        end: timeRange.to.toISOString(),
-      });
-      if (selectedDatabases.length > 0) {
-        params.set('databases', selectedDatabases.join(','));
-      }
       const response: Observable<FetchResponse<DeadlocksResponse>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/deadlocks?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setDeadlocks(result.data?.deadlocks || []);
-      setAvailableDatabases(result.data?.available_databases || []);
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setDeadlocks(result.data?.deadlocks || []);
+            setAvailableDatabases(result.data?.available_databases || []);
+            setLoading(false);
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setError(extractErrorMessage(err, 'Failed to load deadlocks'));
+            setDeadlocks([]);
+            setLoading(false);
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load deadlocks');
-      setDeadlocks([]);
-    } finally {
-      setLoading(false);
+      if (!cancelled) {
+        setError(extractErrorMessage(err, 'Failed to load deadlocks'));
+        setDeadlocks([]);
+        setLoading(false);
+      }
     }
-  }, [selectedServer, timeRange, selectedDatabases]);
-
-  useEffect(() => {
-    loadDeadlocks();
-  }, [loadDeadlocks, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [selectedServer, timeRange, selectedDatabases, refreshCounter]);
 
   const filteredDeadlocks = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -265,11 +308,15 @@ const PageFour = () => {
       if (d.max_wait_ms > maxWaitMs) {
         maxWaitMs = d.max_wait_ms;
       }
+      const seenLabels = new Set<string>();
       for (const r of d.resources ?? []) {
         const label = r.index_name ? `${r.short_object || r.object_name} [${r.index_name}]` : r.short_object || r.object_name;
         if (label) {
-          objCounts[label] = (objCounts[label] || 0) + 1;
+          seenLabels.add(label);
         }
+      }
+      for (const label of seenLabels) {
+        objCounts[label] = (objCounts[label] || 0) + 1;
       }
     }
     const topObj = Object.entries(objCounts).sort((a, b) => b[1] - a[1])[0];
@@ -371,7 +418,7 @@ const PageFour = () => {
             <BarChart3 size={14} />
             <span style={{ marginLeft: 6 }}>Query Metrics</span>
           </Button>
-          <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
+          <Button variant="secondary" fill="outline" onClick={handleRefresh} disabled={loading}>
             <RefreshCw size={14} />
           </Button>
           <TimeRangePicker
@@ -379,17 +426,17 @@ const PageFour = () => {
             onChange={handleTimeRangeChange}
             timeZone="browser"
             onChangeTimeZone={() => {}}
-            onZoom={() => {}}
-            onMoveBackward={() => {}}
-            onMoveForward={() => {}}
+            onZoom={() => handleTimeRangeChange(zoomOutTimeRange(timeRange))}
+            onMoveBackward={() => handleTimeRangeChange(shiftTimeRange(timeRange, -1))}
+            onMoveForward={() => handleTimeRangeChange(shiftTimeRange(timeRange, 1))}
           />
         </div>
       </div>
 
-      {error && (
+      {(error || serversError) && (
         <Alert title="Error" severity="error" style={{ marginBottom: 16 }}>
-          <div>{error}</div>
-          <Button size="sm" variant="secondary" onClick={() => setRefreshCounter((c) => c + 1)} style={{ marginTop: 8 }}>
+          <div>{error || serversError}</div>
+          <Button size="sm" variant="secondary" onClick={handleRefresh} style={{ marginTop: 8 }}>
             Retry
           </Button>
         </Alert>

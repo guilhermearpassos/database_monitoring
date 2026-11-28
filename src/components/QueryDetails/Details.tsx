@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { css } from '@emotion/css';
 import {
   Alert,
@@ -10,7 +10,7 @@ import {
   TabsBar,
   useStyles2,
 } from '@grafana/ui';
-import { lastValueFrom, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import { FetchResponse, getBackendSrv } from '@grafana/runtime';
 import { GrafanaTheme2, TimeRange } from '@grafana/data';
 import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react';
@@ -20,6 +20,7 @@ import { QueryDetails } from './types';
 import { TempoTraceLink } from '../TempoTraceLink';
 import { QueryHistoryChart } from '../QueryMetrics/QueryHistoryChart';
 import { SqlQueryCard } from '../SqlQueryCard';
+import { extractErrorMessage } from '../../utils/urlState';
 
 export type DetailsTabId = 'overview' | 'plan' | 'blocking' | 'history';
 
@@ -101,45 +102,72 @@ export const QueryDetailsComponent: React.FC<{
   const [queryDetails, setQueryDetails] = useState<QueryDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  const lastInternalTargetRef = useRef<{ snapId: string; sampleId: string } | null>(null);
 
-  // Sync when external selection changes
+  // Sync when external selection changes (skip reset when triggered by internal blocking-chain navigation)
   useEffect(() => {
+    const internal = lastInternalTargetRef.current;
+    if (internal && internal.snapId === snapID && internal.sampleId === sampleID) {
+      lastInternalTargetRef.current = null;
+      return;
+    }
     setActiveTarget({ snapId: snapID, sampleId: sampleID });
     setHistoryStack([]);
     setActiveTab(initialTab);
   }, [snapID, sampleID, initialTab]);
 
-  const fetchDetails = useCallback(async () => {
+  useEffect(() => {
     if (!activeTarget.sampleId || !activeTarget.snapId) {
       return;
     }
+    let cancelled = false;
+    setDetailsLoading(true);
+    setDetailsError(null);
+    const params = new URLSearchParams({
+      sampleId: activeTarget.sampleId,
+      snapId: activeTarget.snapId,
+    });
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      setDetailsLoading(true);
-      setDetailsError(null);
-      const params = new URLSearchParams({
-        sampleId: activeTarget.sampleId,
-        snapId: activeTarget.snapId,
-      });
       const response: Observable<FetchResponse<QueryDetails>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/getQueryDetails?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setQueryDetails(result.data);
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setQueryDetails(result.data);
+            setDetailsLoading(false);
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setDetailsError(extractErrorMessage(err, 'Failed to load query details'));
+            setQueryDetails(null);
+            setDetailsLoading(false);
+          }
+        },
+      });
     } catch (err) {
-      setDetailsError(err instanceof Error ? err.message : 'Failed to load query details');
-      setQueryDetails(null);
-    } finally {
-      setDetailsLoading(false);
+      if (!cancelled) {
+        setDetailsError(extractErrorMessage(err, 'Failed to load query details'));
+        setQueryDetails(null);
+        setDetailsLoading(false);
+      }
     }
-  }, [activeTarget.sampleId, activeTarget.snapId]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [activeTarget.sampleId, activeTarget.snapId, refreshCounter]);
 
-  useEffect(() => {
-    fetchDetails();
-  }, [fetchDetails]);
+  const fetchDetails = () => setRefreshCounter((c) => c + 1);
 
   const handleNavigateInChain = (nextSnapId: string, nextSampleId: string) => {
     setHistoryStack((prev) => [...prev, activeTarget]);
-    setActiveTarget({ snapId: nextSnapId, sampleId: nextSampleId });
+    const nextTarget = { snapId: nextSnapId, sampleId: nextSampleId };
+    lastInternalTargetRef.current = nextTarget;
+    setActiveTarget(nextTarget);
     onSelectSample?.(nextSnapId, nextSampleId);
   };
 
@@ -149,6 +177,7 @@ export const QueryDetailsComponent: React.FC<{
     }
     const prevTarget = historyStack[historyStack.length - 1];
     setHistoryStack((prev) => prev.slice(0, -1));
+    lastInternalTargetRef.current = prevTarget;
     setActiveTarget(prevTarget);
     onSelectSample?.(prevTarget.snapId, prevTarget.sampleId);
   };

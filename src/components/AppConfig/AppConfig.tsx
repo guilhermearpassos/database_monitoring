@@ -3,8 +3,9 @@ import { lastValueFrom } from 'rxjs';
 import { css } from '@emotion/css';
 import { AppPluginMeta, GrafanaTheme2, PluginConfigPageProps, PluginMeta } from '@grafana/data';
 import { getBackendSrv, getDataSourceSrv } from '@grafana/runtime';
-import { Button, Combobox, ComboboxOption, Field, FieldSet, Input, SecretInput, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Combobox, ComboboxOption, Field, FieldSet, Input, SecretInput, useStyles2 } from '@grafana/ui';
 import { testIds } from '../testIds';
+import { extractErrorMessage } from '../../utils/urlState';
 
 type AppPluginSettings = {
   apiUrl?: string;
@@ -29,6 +30,8 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
     isApiKeySet: Boolean(secureJsonFields?.apiKey),
     tempoDatasourceUid: jsonData?.tempoDatasourceUid || '',
   });
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const tempoOptions = useMemo<Array<ComboboxOption<string>>>(() => {
     try {
       const dsSrv = getDataSourceSrv();
@@ -63,30 +66,44 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
     });
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitDisabled) {
+    if (isSubmitDisabled || saving) {
       return;
     }
 
-    updatePluginAndReload(plugin.meta.id, {
-      enabled,
-      pinned,
-      jsonData: {
-        apiUrl: state.apiUrl,
-        tempoDatasourceUid: state.tempoDatasourceUid || undefined,
-      },
-      secureJsonData:
-        state.isApiKeySet || !state.apiKey
-          ? undefined
-          : {
-              apiKey: state.apiKey,
-            },
-    });
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updatePlugin(plugin.meta.id, {
+        enabled,
+        pinned,
+        jsonData: {
+          apiUrl: state.apiUrl,
+          tempoDatasourceUid: state.tempoDatasourceUid || undefined,
+        },
+        secureJsonData:
+          state.isApiKeySet || !state.apiKey
+            ? undefined
+            : {
+                apiKey: state.apiKey,
+              },
+      });
+      window.location.reload();
+    } catch (err) {
+      setSaveError(extractErrorMessage(err, 'Failed to save plugin settings'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <form onSubmit={onSubmit}>
+      {saveError && (
+        <Alert title="Failed to save settings" severity="error">
+          {saveError}
+        </Alert>
+      )}
       <FieldSet label="API Settings">
         <Field label="API Key" description="Optional secret key for authenticating to your Sqlsights API">
           <SecretInput
@@ -150,15 +167,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     margin-top: ${theme.spacing(3)};
   `,
 });
-
-const updatePluginAndReload = async (pluginId: string, data: Partial<PluginMeta<AppPluginSettings>>) => {
-  try {
-    await updatePlugin(pluginId, data);
-    window.location.reload();
-  } catch (e) {
-    console.error('Error while updating the plugin', e);
-  }
-};
 
 const updatePlugin = async (pluginId: string, data: Partial<PluginMeta>) => {
   const response = await getBackendSrv().fetch({

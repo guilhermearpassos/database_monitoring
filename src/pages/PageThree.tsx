@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FetchResponse, getBackendSrv, PluginPage } from '@grafana/runtime';
-import { lastValueFrom, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
   Alert,
   Button,
@@ -32,10 +32,14 @@ import { QueryMetricDrawer } from '../components/QueryMetrics/QueryMetricDrawer'
 import {
   applyTimeRangeToSearchParams,
   buildPreservedNavSearch,
+  extractErrorMessage,
   parseCSVString,
   parseTimeRangeFromSearchParams,
+  resolveTimeRange,
   setCSVParam,
   setOptionalParam,
+  shiftTimeRange,
+  zoomOutTimeRange,
 } from '../utils/urlState';
 import { ROUTES } from '../constants';
 import { prefixRoute } from '../utils/utils.routing';
@@ -152,6 +156,7 @@ const PageThree = () => {
   const sortField = (searchParams.get('sort') as QueryMetricsSortField) || defaultSortField;
   const sortDir: SortDirection = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
   const selectedQueryHash = searchParams.get('queryHash') || '';
+  const selectedQueryDb = searchParams.get('queryDb') || '';
 
   const [timeRange, setTimeRange] = useState<TimeRange>(() => parseTimeRangeFromSearchParams(searchParams));
   const [servers, setServers] = useState<Array<ComboboxOption<string>>>([]);
@@ -159,7 +164,13 @@ const PageThree = () => {
   const [metrics, setMetrics] = useState<QueryMetricItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serversError, setServersError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+
+  const handleRefresh = useCallback(() => {
+    setTimeRange((prev) => resolveTimeRange(prev));
+    setRefreshCounter((c) => c + 1);
+  }, []);
 
   const updateParams = useCallback(
     (mutator: (next: URLSearchParams) => void) => {
@@ -173,26 +184,41 @@ const PageThree = () => {
     [searchParams, setSearchParams]
   );
 
-  const loadServers = useCallback(async (tr: TimeRange) => {
+  useEffect(() => {
+    let cancelled = false;
+    setServersError(null);
+    const params = new URLSearchParams({
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+      type: 'databases',
+    });
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      const params = new URLSearchParams({
-        start: tr.from.toISOString(),
-        end: tr.to.toISOString(),
-        type: 'databases',
-      });
       const response: Observable<FetchResponse<Array<{ label: string; value: string }>>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setServersError(extractErrorMessage(err, 'Failed to load servers'));
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load servers');
+      if (!cancelled) {
+        setServersError(extractErrorMessage(err, 'Failed to load servers'));
+      }
     }
-  }, []);
-
-  useEffect(() => {
-    loadServers(timeRange);
-  }, [timeRange, loadServers, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [timeRange, refreshCounter]);
 
   useEffect(() => {
     if (!selectedServer && servers.length === 1) {
@@ -200,40 +226,58 @@ const PageThree = () => {
     }
   }, [selectedServer, servers, updateParams]);
 
-  const loadQueryMetrics = useCallback(async () => {
+  useEffect(() => {
     if (!selectedServer) {
       setMetrics([]);
       setAvailableDatabases([]);
+      setError(null);
+      setLoading(false);
       return;
     }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({
+      server: selectedServer,
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+    });
+    if (selectedDatabases.length > 0) {
+      params.set('databases', selectedDatabases.join(','));
+    }
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({
-        server: selectedServer,
-        start: timeRange.from.toISOString(),
-        end: timeRange.to.toISOString(),
-      });
-      if (selectedDatabases.length > 0) {
-        params.set('databases', selectedDatabases.join(','));
-      }
       const response: Observable<FetchResponse<QueryMetricsResponse>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/queryMetrics?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setMetrics(result.data?.metrics || []);
-      setAvailableDatabases(result.data?.available_databases || []);
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setMetrics(result.data?.metrics || []);
+            setAvailableDatabases(result.data?.available_databases || []);
+            setLoading(false);
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setError(extractErrorMessage(err, 'Failed to load query metrics'));
+            setMetrics([]);
+            setLoading(false);
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load query metrics');
-      setMetrics([]);
-    } finally {
-      setLoading(false);
+      if (!cancelled) {
+        setError(extractErrorMessage(err, 'Failed to load query metrics'));
+        setMetrics([]);
+        setLoading(false);
+      }
     }
-  }, [selectedServer, timeRange, selectedDatabases]);
-
-  useEffect(() => {
-    loadQueryMetrics();
-  }, [loadQueryMetrics, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [selectedServer, timeRange, selectedDatabases, refreshCounter]);
 
   const filteredMetrics = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -298,8 +342,14 @@ const PageThree = () => {
     if (!selectedQueryHash) {
       return null;
     }
+    if (selectedQueryDb) {
+      const exact = metrics.find((m) => m.query_hash === selectedQueryHash && m.database === selectedQueryDb);
+      if (exact) {
+        return exact;
+      }
+    }
     return metrics.find((m) => m.query_hash === selectedQueryHash) ?? null;
-  }, [metrics, selectedQueryHash]);
+  }, [metrics, selectedQueryHash, selectedQueryDb]);
 
   const handleTimeRangeChange = useCallback(
     (next: TimeRange) => {
@@ -390,7 +440,7 @@ const PageThree = () => {
             <ShieldAlert size={14} />
             <span style={{ marginLeft: 6 }}>Deadlocks</span>
           </Button>
-          <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
+          <Button variant="secondary" fill="outline" onClick={handleRefresh} disabled={loading}>
             <RefreshCw size={14} />
           </Button>
           <TimeRangePicker
@@ -398,17 +448,17 @@ const PageThree = () => {
             onChange={handleTimeRangeChange}
             timeZone="browser"
             onChangeTimeZone={() => {}}
-            onZoom={() => {}}
-            onMoveBackward={() => {}}
-            onMoveForward={() => {}}
+            onZoom={() => handleTimeRangeChange(zoomOutTimeRange(timeRange))}
+            onMoveBackward={() => handleTimeRangeChange(shiftTimeRange(timeRange, -1))}
+            onMoveForward={() => handleTimeRangeChange(shiftTimeRange(timeRange, 1))}
           />
         </div>
       </div>
 
-      {error && (
+      {(error || serversError) && (
         <Alert title="Error" severity="error" style={{ marginBottom: 16 }}>
-          <div>{error}</div>
-          <Button size="sm" variant="secondary" onClick={() => setRefreshCounter((c) => c + 1)} style={{ marginTop: 8 }}>
+          <div>{error || serversError}</div>
+          <Button size="sm" variant="secondary" onClick={handleRefresh} style={{ marginTop: 8 }}>
             Retry
           </Button>
         </Alert>
@@ -556,7 +606,12 @@ const PageThree = () => {
             sortField={sortField}
             sortDir={sortDir}
             onSortChange={handleSortChange}
-            onSelectMetric={(item) => updateParams((p) => p.set('queryHash', item.query_hash))}
+            onSelectMetric={(item) =>
+              updateParams((p) => {
+                p.set('queryHash', item.query_hash);
+                setOptionalParam(p, 'queryDb', item.database || null);
+              })
+            }
             onOpenPlanAnalysis={handleOpenPlanAnalysis}
             onOpenSnapshots={handleOpenSnapshots}
           />
@@ -567,7 +622,12 @@ const PageThree = () => {
         <Drawer
           title="Query Metrics & Execution History"
           size="lg"
-          onClose={() => updateParams((p) => p.delete('queryHash'))}
+          onClose={() =>
+            updateParams((p) => {
+              p.delete('queryHash');
+              p.delete('queryDb');
+            })
+          }
         >
           <div className={styles.drawerContent}>
             <QueryMetricDrawer

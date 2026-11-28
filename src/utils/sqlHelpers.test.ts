@@ -1,4 +1,5 @@
 import { buildMissingIndexDDL, formatDurationMs } from './sqlHelpers';
+import { formatSQL } from './formatters';
 import { buildTempoExploreHref } from '../context/AppSettingsContext';
 import {
   applyTimeRangeToSearchParams,
@@ -34,10 +35,22 @@ describe('UI utilities', () => {
     expect(ddl).toContain('INCLUDE ([total], [user_id]);');
   });
 
-  test('formatDurationMs formats milliseconds, seconds, and minutes', () => {
+  test('formatDurationMs formats milliseconds, seconds, and minutes without 60s wrap', () => {
     expect(formatDurationMs(45)).toBe('45 ms');
     expect(formatDurationMs(2350)).toBe('2.35 s');
     expect(formatDurationMs(125000)).toBe('2m 5s');
+    expect(formatDurationMs(119600)).toBe('2m 0s');
+  });
+
+  test('formatSQL escapes HTML on fallback and preserves SQL after -- comments', () => {
+    const xssPayload = "SELECT '<img src=x onerror=alert(1)>' FROM (";
+    const rendered = formatSQL(xssPayload);
+    expect(rendered).not.toContain('<img');
+    expect(rendered).toContain('&lt;img');
+
+    const withComment = '-- lead comment\nSELECT id, name FROM dbo.Orders';
+    const formatted = formatSQL(withComment);
+    expect(formatted).toContain('Orders');
   });
 
   test('buildTempoExploreHref builds a Grafana Explore traceql URL', () => {

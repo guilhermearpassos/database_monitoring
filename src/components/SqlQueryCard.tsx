@@ -31,11 +31,23 @@ export const SqlQueryCard: React.FC<{
   const styles = useStyles2(getStyles);
   const [copied, setCopied] = useState(false);
 
+  const copyTimerRef = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleCopy = async () => {
     const ok = await copyToClipboard(formatSQLPlain(sql));
     if (ok) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1800);
     }
   };
 

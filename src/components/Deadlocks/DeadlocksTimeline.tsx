@@ -82,19 +82,23 @@ export const DeadlocksTimeline: React.FC<{
     const spanMs = Math.max(60_000, toMs - fromMs);
     const stepMs = spanMs / count;
 
+    const multiDay = spanMs > 86_400_000;
     const list: Bucket[] = [];
     for (let i = 0; i < count; i++) {
       const d = new Date(fromMs + i * stepMs);
-      const label = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const label = multiDay
+        ? `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${hhmm}`
+        : hhmm;
       list.push({ label, reverse_order: 0, bookmark_lookup: 0, lock_upgrade: 0, other: 0 });
     }
 
     for (const dl of deadlocks) {
       const ts = new Date(dl.timestamp).getTime();
-      if (!Number.isFinite(ts)) {
+      if (!Number.isFinite(ts) || ts < fromMs || ts > toMs) {
         continue;
       }
-      const idx = Math.min(count - 1, Math.max(0, Math.floor((ts - fromMs) / stepMs)));
+      const idx = Math.min(count - 1, Math.floor((ts - fromMs) / stepMs));
       const p = dl.diagnosis?.pattern || '';
       if (p === 'reverse_order') {
         list[idx].reverse_order++;

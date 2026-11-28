@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FetchResponse, getBackendSrv, PluginPage } from '@grafana/runtime';
-import { lastValueFrom, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import {
   Alert,
   Button,
@@ -24,10 +24,14 @@ import { PlanAnalysisTable, PlanSortField, SortDirection } from '../components/P
 import {
   applyTimeRangeToSearchParams,
   buildPreservedNavSearch,
+  extractErrorMessage,
   parseCSVString,
   parseTimeRangeFromSearchParams,
+  resolveTimeRange,
   setCSVParam,
   setOptionalParam,
+  shiftTimeRange,
+  zoomOutTimeRange,
 } from '../utils/urlState';
 import { ROUTES } from '../constants';
 import { prefixRoute } from '../utils/utils.routing';
@@ -150,7 +154,13 @@ const PageTwo = () => {
   const [plans, setPlans] = useState<PlanAnalysisItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serversError, setServersError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+
+  const handleRefresh = useCallback(() => {
+    setTimeRange((prev) => resolveTimeRange(prev));
+    setRefreshCounter((c) => c + 1);
+  }, []);
 
   const updateParams = useCallback(
     (mutator: (next: URLSearchParams) => void) => {
@@ -165,27 +175,41 @@ const PageTwo = () => {
   );
 
   // Load servers for time range
-  const loadServers = useCallback(async (tr: TimeRange) => {
+  useEffect(() => {
+    let cancelled = false;
+    setServersError(null);
+    const params = new URLSearchParams({
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+      type: 'databases',
+    });
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      const params = new URLSearchParams({
-        start: tr.from.toISOString(),
-        end: tr.to.toISOString(),
-        type: 'databases',
-      });
       const response: Observable<FetchResponse<Array<{ label: string; value: string }>>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/datasource-options?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      const opts = (result.data || []).map((s) => ({ label: s.label, value: s.value }));
-      setServers(opts);
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setServers((result.data || []).map((s) => ({ label: s.label, value: s.value })));
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setServersError(extractErrorMessage(err, 'Failed to load servers'));
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load servers');
+      if (!cancelled) {
+        setServersError(extractErrorMessage(err, 'Failed to load servers'));
+      }
     }
-  }, []);
-
-  useEffect(() => {
-    loadServers(timeRange);
-  }, [timeRange, loadServers, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [timeRange, refreshCounter]);
 
   // Auto-select single server if none is chosen
   useEffect(() => {
@@ -195,43 +219,61 @@ const PageTwo = () => {
   }, [selectedServer, servers, updateParams]);
 
   // Load plan analysis items
-  const loadPlanAnalysis = useCallback(async () => {
+  useEffect(() => {
     if (!selectedServer) {
       setPlans([]);
       setAvailableDatabases([]);
+      setError(null);
+      setLoading(false);
       return;
     }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({
+      server: selectedServer,
+      start: timeRange.from.toISOString(),
+      end: timeRange.to.toISOString(),
+    });
+    if (selectedDatabases.length > 0) {
+      params.set('databases', selectedDatabases.join(','));
+    }
+    if (selectedIssues.length > 0) {
+      params.set('issueTags', selectedIssues.join(','));
+    }
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({
-        server: selectedServer,
-        start: timeRange.from.toISOString(),
-        end: timeRange.to.toISOString(),
-      });
-      if (selectedDatabases.length > 0) {
-        params.set('databases', selectedDatabases.join(','));
-      }
-      if (selectedIssues.length > 0) {
-        params.set('issueTags', selectedIssues.join(','));
-      }
       const response: Observable<FetchResponse<PlanAnalysisResponse>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/planAnalysis?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setPlans(result.data?.plans || []);
-      setAvailableDatabases(result.data?.available_databases || []);
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setPlans(result.data?.plans || []);
+            setAvailableDatabases(result.data?.available_databases || []);
+            setLoading(false);
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setError(extractErrorMessage(err, 'Failed to load execution plans'));
+            setPlans([]);
+            setLoading(false);
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load execution plans');
-      setPlans([]);
-    } finally {
-      setLoading(false);
+      if (!cancelled) {
+        setError(extractErrorMessage(err, 'Failed to load execution plans'));
+        setPlans([]);
+        setLoading(false);
+      }
     }
-  }, [selectedServer, timeRange, selectedDatabases, selectedIssues]);
-
-  useEffect(() => {
-    loadPlanAnalysis();
-  }, [loadPlanAnalysis, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [selectedServer, timeRange, selectedDatabases, selectedIssues, refreshCounter]);
 
   // Client-side refinements (locks toggle + search across SQL / convert expression / missing index table)
   const filteredPlans = useMemo(() => {
@@ -343,7 +385,7 @@ const PageTwo = () => {
             <ShieldAlert size={14} />
             <span style={{ marginLeft: 6 }}>Deadlocks</span>
           </Button>
-          <Button variant="secondary" fill="outline" onClick={() => setRefreshCounter((c) => c + 1)} disabled={loading}>
+          <Button variant="secondary" fill="outline" onClick={handleRefresh} disabled={loading}>
             <RefreshCw size={14} />
           </Button>
           <TimeRangePicker
@@ -351,17 +393,17 @@ const PageTwo = () => {
             onChange={handleTimeRangeChange}
             timeZone="browser"
             onChangeTimeZone={() => {}}
-            onZoom={() => {}}
-            onMoveBackward={() => {}}
-            onMoveForward={() => {}}
+            onZoom={() => handleTimeRangeChange(zoomOutTimeRange(timeRange))}
+            onMoveBackward={() => handleTimeRangeChange(shiftTimeRange(timeRange, -1))}
+            onMoveForward={() => handleTimeRangeChange(shiftTimeRange(timeRange, 1))}
           />
         </div>
       </div>
 
-      {error && (
+      {(error || serversError) && (
         <Alert title="Error" severity="error" style={{ marginBottom: 16 }}>
-          <div>{error}</div>
-          <Button size="sm" variant="secondary" onClick={() => setRefreshCounter((c) => c + 1)} style={{ marginTop: 8 }}>
+          <div>{error || serversError}</div>
+          <Button size="sm" variant="secondary" onClick={handleRefresh} style={{ marginTop: 8 }}>
             Retry
           </Button>
         </Alert>
@@ -379,6 +421,8 @@ const PageTwo = () => {
                 updateParams((p) => {
                   setOptionalParam(p, 'server', opt?.value);
                   p.delete('db');
+                  p.delete('snapId');
+                  p.delete('sampleId');
                 })
               }
               placeholder="Select a server..."

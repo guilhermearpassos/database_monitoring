@@ -142,6 +142,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     let active = true;
     const server = query.database || '';
     if (!server || server.startsWith('$') || (!isPlanQuery && queryType !== 'snapshot')) {
+      setServerDbOptions([]);
       return;
     }
     datasource.getServerDatabaseOptions(server).then((opts) => {
@@ -158,6 +159,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     let active = true;
     const server = query.database || '';
     if (!server || server.startsWith('$') || queryType !== 'snapshot') {
+      setSnapshotOptions([]);
       return;
     }
     datasource.getSnapshotOptions(server).then((opts) => {
@@ -326,7 +328,8 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
               value={query.minImpact ?? ''}
               onChange={(e) => {
                 const raw = e.currentTarget.value;
-                onChange({ ...query, minImpact: raw === '' ? undefined : Number(raw) });
+                const parsed = raw === '' ? undefined : Number(raw);
+                onChange({ ...query, minImpact: parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined });
               }}
               onBlur={onRunQuery}
               onKeyDown={(e) => e.key === 'Enter' && onRunQuery()}

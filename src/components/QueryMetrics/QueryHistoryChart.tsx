@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import {
   createDataFrame,
@@ -19,11 +19,12 @@ import {
   LoadingPlaceholder,
   useStyles2,
 } from '@grafana/ui';
-import { lastValueFrom, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import { QueryMetricsSeriesPoint } from './types';
 import { MyGraph } from '../../pages/graph';
 import { formatDurationMs } from '../../utils/sqlHelpers';
+import { extractErrorMessage, resolveTimeRange } from '../../utils/urlState';
 
 export type HistoryChartMetric =
   | 'execution_count'
@@ -199,36 +200,55 @@ export const QueryHistoryChart: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
 
-  const fetchSeries = useCallback(async () => {
+  useEffect(() => {
     if (!server || !queryHash) {
       setPoints([]);
+      setError(null);
+      setLoading(false);
       return;
     }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const resolved = resolveTimeRange(timeRange);
+    const params = new URLSearchParams({
+      server,
+      queryHash,
+      start: resolved.from.toISOString(),
+      end: resolved.to.toISOString(),
+    });
+    let sub: { unsubscribe: () => void } | undefined;
     try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({
-        server,
-        queryHash,
-        start: timeRange.from.toISOString(),
-        end: timeRange.to.toISOString(),
-      });
       const response: Observable<FetchResponse<QueryMetricsSeriesPoint[]>> = getBackendSrv().fetch({
         url: `/api/plugins/guilhermearpassos-sqlsights-app/resources/queryMetricsSeries?${params.toString()}`,
       });
-      const result = await lastValueFrom(response);
-      setPoints(result.data || []);
+      sub = response.subscribe({
+        next: (result) => {
+          if (!cancelled) {
+            setPoints(result.data || []);
+            setLoading(false);
+          }
+        },
+        error: (err) => {
+          if (!cancelled) {
+            setError(extractErrorMessage(err, 'Failed to load execution history'));
+            setPoints([]);
+            setLoading(false);
+          }
+        },
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load execution history');
-      setPoints([]);
-    } finally {
-      setLoading(false);
+      if (!cancelled) {
+        setError(extractErrorMessage(err, 'Failed to load execution history'));
+        setPoints([]);
+        setLoading(false);
+      }
     }
-  }, [server, queryHash, timeRange]);
-
-  useEffect(() => {
-    fetchSeries();
-  }, [fetchSeries, refreshCounter]);
+    return () => {
+      cancelled = true;
+      sub?.unsubscribe();
+    };
+  }, [server, queryHash, timeRange, refreshCounter]);
 
   const summary = useMemo(() => {
     let totalExecs = 0;

@@ -56,9 +56,9 @@ export function formatSQLPlain(sql: string): string {
   if (!sql) {
     return '';
   }
-  const normalized = sql.replace(/\s+/g, ' ').trim();
+  const trimmed = sql.trim();
   try {
-    return format(normalized, {
+    return format(trimmed, {
       language: 'tsql',
       tabWidth: 2,
       keywordCase: 'upper',
@@ -81,8 +81,9 @@ export function formatDurationMs(ms: number): string {
   if (seconds < 60) {
     return `${seconds.toFixed(seconds < 10 ? 2 : 1)} s`;
   }
-  const mins = Math.floor(seconds / 60);
-  const remSec = Math.round(seconds % 60);
+  const totalSec = Math.round(seconds);
+  const mins = Math.floor(totalSec / 60);
+  const remSec = totalSec % 60;
   return `${mins}m ${remSec}s`;
 }
 
@@ -135,5 +136,5 @@ export function downloadTextFile(filename: string, content: string, mimeType = '
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -1,4 +1,77 @@
 import { dateMath, dateTime, TimeRange } from '@grafana/data';
+import { isFetchError } from '@grafana/runtime';
+
+export function resolveTimeRange(range: TimeRange): TimeRange {
+  const from =
+    typeof range.raw.from === 'string'
+      ? (dateMath.parse(range.raw.from, false) ?? range.from)
+      : range.from;
+  const to =
+    typeof range.raw.to === 'string'
+      ? (dateMath.parse(range.raw.to, true) ?? range.to)
+      : range.to;
+  return { from, to, raw: range.raw };
+}
+
+export function shiftTimeRange(range: TimeRange, direction: -1 | 1): TimeRange {
+  const resolved = resolveTimeRange(range);
+  const fromMs = resolved.from.valueOf();
+  const toMs = resolved.to.valueOf();
+  const halfSpan = Math.max(60_000, Math.round((toMs - fromMs) / 2));
+  const nextFrom = dateTime(fromMs + direction * halfSpan);
+  const nextTo = dateTime(toMs + direction * halfSpan);
+  return {
+    from: nextFrom,
+    to: nextTo,
+    raw: {
+      from: nextFrom.toISOString(),
+      to: nextTo.toISOString(),
+    },
+  };
+}
+
+export function zoomOutTimeRange(range: TimeRange): TimeRange {
+  const resolved = resolveTimeRange(range);
+  const fromMs = resolved.from.valueOf();
+  const toMs = resolved.to.valueOf();
+  const span = Math.max(60_000, toMs - fromMs);
+  const center = (fromMs + toMs) / 2;
+  const nextFrom = dateTime(Math.round(center - span));
+  const nextTo = dateTime(Math.round(center + span));
+  return {
+    from: nextFrom,
+    to: nextTo,
+    raw: {
+      from: nextFrom.toISOString(),
+      to: nextTo.toISOString(),
+    },
+  };
+}
+
+export function extractErrorMessage(err: unknown, fallback: string): string {
+  if (isFetchError(err)) {
+    const data = err.data;
+    if (typeof data === 'string' && data.trim()) {
+      return data.trim();
+    }
+    if (data && typeof data === 'object') {
+      const msg = (data as any).message || (data as any).error?.message || (data as any).error;
+      if (typeof msg === 'string' && msg.trim()) {
+        return msg.trim();
+      }
+    }
+    if (err.statusText) {
+      return `${err.status ? `${err.status} ` : ''}${err.statusText}`;
+    }
+  }
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  if (typeof err === 'string' && err.trim()) {
+    return err.trim();
+  }
+  return fallback;
+}
 
 export function parseTimeRangeFromSearchParams(params: URLSearchParams): TimeRange {
   const rawFrom = params.get('from') || 'now-1h';

@@ -182,7 +182,7 @@ const getStyles = (theme: GrafanaTheme2) => ({
 
 function escapeCSV(val: string | number): string {
   const s = String(val ?? '');
-  if (/[",\n]/.test(s)) {
+  if (/[",\n\r]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;
   }
   return s;
@@ -240,6 +240,15 @@ export const PlanAnalysisTable: React.FC<{
     return sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
   };
 
+  const copyTimerRef = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleCopyDDL = async (e: React.MouseEvent, item: PlanAnalysisItem) => {
     e.stopPropagation();
     if (!item.missing_indexes || item.missing_indexes.length === 0) {
@@ -247,8 +256,12 @@ export const PlanAnalysisTable: React.FC<{
     }
     const ddl = item.missing_indexes.map(buildMissingIndexDDL).join('\n');
     if (await copyToClipboard(ddl)) {
-      setCopiedKey(item.plan_handle || item.sample_id);
-      setTimeout(() => setCopiedKey(null), 1800);
+      const rowKey = item.plan_handle || `${item.snap_id}-${item.sample_id}`;
+      setCopiedKey(rowKey);
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => setCopiedKey(null), 1800);
     }
   };
 
