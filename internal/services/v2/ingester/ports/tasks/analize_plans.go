@@ -53,7 +53,15 @@ func (c AnalizePlansTask) Run(ctx context.Context) error {
 	for _, plan := range plansToAnalize {
 		parsedPlan, err2 := parsers.ParseExecutionPlan(plan.XmlData)
 		if err2 != nil {
+			// Mark unparseable plan as analyzed (0 issues) so it doesn't poison-pill future batches.
+			c.logger.WarnContext(ctx, "failed to parse execution plan; marking analyzed with 0 issues",
+				"plan_handle", plan.PlanHandle, "server", plan.Server.Host, "error", err2)
 			err = errors.Join(err, fmt.Errorf("parse plan %s: %w", plan.PlanHandle, err2))
+			results = append(results, domain.PlanAnalisysBatchResult{
+				PlanHandle: plan.PlanHandle,
+				ServerHost: plan.Server.Host,
+				Results:    domain.PlanAnalisysResults{},
+			})
 			continue
 		}
 		MissingIndexes := 0
@@ -72,6 +80,7 @@ func (c AnalizePlansTask) Run(ctx context.Context) error {
 		}
 		results = append(results, domain.PlanAnalisysBatchResult{
 			PlanHandle: plan.PlanHandle,
+			ServerHost: plan.Server.Host,
 			Results: domain.PlanAnalisysResults{
 				MissingIndexes:      MissingIndexes,
 				ImplicitConversions: ImplicitConversions,

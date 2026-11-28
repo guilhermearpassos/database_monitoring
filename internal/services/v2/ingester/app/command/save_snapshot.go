@@ -63,13 +63,24 @@ func (s SaveSnapshotStreamHandler) Handle(ctx context.Context, it domain.UploadI
 			if ch.ChunkSeq == 0 {
 				return "", domain.ErrInvalidChunkSeq
 			}
-			already, err := s.store.SaveChunk(snapshotID, ch.ChunkSeq, ch.Samples)
-			if err != nil {
-				return "", fmt.Errorf("save chunk %d: %w", ch.ChunkSeq, err)
-			}
-			if !already {
-				if err := s.repo.SaveSamples(ctx, snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
-					return "", fmt.Errorf("repo save chunk %d: %w", ch.ChunkSeq, err)
+			if checker, ok := s.store.(interface{ HasChunk(string, uint32) bool }); ok {
+				if !checker.HasChunk(snapshotID, ch.ChunkSeq) {
+					if err := s.repo.SaveSamples(ctx, snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
+						return "", fmt.Errorf("repo save chunk %d: %w", ch.ChunkSeq, err)
+					}
+					if _, err := s.store.SaveChunk(snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
+						return "", fmt.Errorf("save chunk %d: %w", ch.ChunkSeq, err)
+					}
+				}
+			} else {
+				already, err := s.store.SaveChunk(snapshotID, ch.ChunkSeq, ch.Samples)
+				if err != nil {
+					return "", fmt.Errorf("save chunk %d: %w", ch.ChunkSeq, err)
+				}
+				if !already {
+					if err := s.repo.SaveSamples(ctx, snapshotID, ch.ChunkSeq, ch.Samples); err != nil {
+						return "", fmt.Errorf("repo save chunk %d: %w", ch.ChunkSeq, err)
+					}
 				}
 			}
 			continue

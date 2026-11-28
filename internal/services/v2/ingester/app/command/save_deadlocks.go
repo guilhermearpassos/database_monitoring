@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/deadlock"
 	"github.com/guilhermearpassos/database-monitoring/internal/services/common_domain"
@@ -26,7 +27,10 @@ func (h *SaveDeadlocksHandler) Handle(ctx context.Context, server common_domain.
 			continue
 		}
 		if d.Fingerprint == "" || d.Pattern == "" || d.XMLHash == "" {
-			if parsed, err := deadlock.ParseXML(d.XMLReport); err == nil && parsed != nil {
+			parsed, err := deadlock.ParseXML(d.XMLReport)
+			if err != nil {
+				slog.WarnContext(ctx, "failed to parse deadlock XML in ingester", "server", server.Host, "deadlock_id", d.ID, "error", err)
+			} else if parsed != nil {
 				d.XMLHash = parsed.XMLHash
 				d.Fingerprint = parsed.Fingerprint
 				d.Pattern = parsed.Diagnosis.Pattern

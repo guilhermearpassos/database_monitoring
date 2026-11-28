@@ -179,6 +179,9 @@ func (p *PostgresRepo) SaveSamples(ctx context.Context, snapshotID string, seq u
 	if err != nil {
 		return fmt.Errorf("copy complete: %w", err)
 	}
+	if err = stmt.Close(); err != nil {
+		return fmt.Errorf("copy close: %w", err)
+	}
 	return nil
 }
 
@@ -196,9 +199,9 @@ func (p *PostgresRepo) getOrCreateTargetID(ctx context.Context, tx *sqlx.Tx, hos
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
 	}
-	// create
+	// create (safe under concurrent inserts when UNIQUE (host, type_id) exists)
 	//language=SQL
-	qIns := `insert into target (host, type_id, agent_version) values ($1, $2, $3)`
+	qIns := `insert into target (host, type_id, agent_version) values ($1, $2, $3) on conflict (host, type_id) do nothing`
 	if _, err = tx.ExecContext(ctx, qIns, host, 1, "-"); err != nil {
 		return 0, fmt.Errorf("insert target: %w", err)
 	}
@@ -220,7 +223,7 @@ func (p *PostgresRepo) getTargetID(ctx context.Context, tx sqlx.QueryerContext, 
 	return id, nil
 }
 
-func (p *PostgresRepo) SaveExecutionPlans(ctx context.Context, executionPlans []*common_domain.ExecutionPlan) error {
+func (p *PostgresRepo) SaveExecutionPlans(ctx context.Context, executionPlans []*common_domain.ExecutionPlan) (err error) {
 	ctx, span := p.tracer.Start(ctx, "StoreExecutionPlans")
 	defer span.End()
 	span.SetAttributes(attribute.Int("num_samples", len(executionPlans)))
@@ -247,31 +250,41 @@ func (p *PostgresRepo) SaveExecutionPlans(ctx context.Context, executionPlans []
 			return
 		}
 	}()
-	var targetID int
-	targetID, err = p.getOrCreateTargetID(ctx, tx, executionPlans[0].Server.Host)
-	if err != nil {
-		return fmt.Errorf("get target id: %w", err)
+	targetIDs := make(map[string]int)
+	getTarget := func(host string) (int, error) {
+		if tid, ok := targetIDs[host]; ok {
+			return tid, nil
+		}
+		tid, err := p.getOrCreateTargetID(ctx, tx, host)
+		if err != nil {
+			return 0, err
+		}
+		targetIDs[host] = tid
+		return tid, nil
 	}
+
 	chunks := slices.Chunk(executionPlans, 300)
-	n := 1
 	for chunk := range chunks {
+		n := 1
 		currentQuery := q
 		args := make([]interface{}, 0, len(chunk)*3)
 		for _, data := range chunk {
+			var targetID int
+			targetID, err = getTarget(data.Server.Host)
+			if err != nil {
+				return fmt.Errorf("get target id: %w", err)
+			}
 			currentQuery = currentQuery + fmt.Sprintf(" ($%d, $%d, $%d),", n, n+1, n+2)
 
 			encodedHandle := data.PlanHandle
 			args = append(args, encodedHandle, data.XmlData, targetID)
 			n += 3
 		}
-		currentQuery = currentQuery[:len(currentQuery)-1]
-		res, err := tx.ExecContext(ctx, currentQuery, args...)
+		currentQuery = currentQuery[:len(currentQuery)-1] + " ON CONFLICT (target_id, plan_handle) DO NOTHING"
+		_, err = tx.ExecContext(ctx, currentQuery, args...)
 		if err != nil {
 			return fmt.Errorf("exec query: %w", err)
 		}
-		_, _ = res.LastInsertId()
-		_, _ = res.RowsAffected()
-
 	}
 	return nil
 }
@@ -312,7 +325,7 @@ where qp.plan_handle is null
 	return missingPlans, nil
 }
 
-func (p *PostgresRepo) StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) error {
+func (p *PostgresRepo) StoreQueryMetrics(ctx context.Context, metrics []*common_domain.QueryMetric, serverMeta common_domain.ServerMeta, timestamp time.Time) (err error) {
 	ctx, span := p.tracer.Start(ctx, "StoreQueryMetrics")
 	defer span.End()
 	tx, err := p.db.BeginTxx(ctx, nil)
@@ -362,7 +375,10 @@ delete from query_stat_sample using rows_to_delete where query_stat_sample.CTID 
 		if err != nil {
 			return fmt.Errorf("purgeQueryMetrics: %w", err)
 		}
-		rowsAffected, _ = r.RowsAffected()
+		rowsAffected, err = r.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("purgeQueryMetrics rows affected: %w", err)
+		}
 	}
 	// language=SQL
 	querySnap := `
@@ -378,7 +394,10 @@ delete from query_stat_snapshot using rows_to_delete where query_stat_snapshot.C
 		if err != nil {
 			return fmt.Errorf("purgeQueryMetrics: %w", err)
 		}
-		rowsAffected, _ = r.RowsAffected()
+		rowsAffected, err = r.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("purgeQueryMetrics snap rows affected: %w", err)
+		}
 	}
 	return nil
 }
@@ -462,6 +481,9 @@ func (p *PostgresRepo) bulkInsertQueryStatSamples(ctx context.Context, tx *sqlx.
 	if err != nil {
 		return fmt.Errorf("failed to complete COPY operation: %w", err)
 	}
+	if err = stmt.Close(); err != nil {
+		return fmt.Errorf("failed to close COPY statement: %w", err)
+	}
 
 	return nil
 }
@@ -513,7 +535,7 @@ func (p *PostgresRepo) SetPlanAnalisysBatch(ctx context.Context, results []domai
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Create temporary table
 	_, err = tx.ExecContext(ctx, `
@@ -534,18 +556,22 @@ func (p *PostgresRepo) SetPlanAnalisysBatch(ctx context.Context, results []domai
 	if err != nil {
 		return fmt.Errorf("prepare copy: %w", err)
 	}
-	defer stmt.Close()
 
 	for _, res := range results {
 		_, err = stmt.ExecContext(ctx, res.PlanHandle, res.Results.MissingIndexes, res.Results.ImplicitConversions, res.Results.LargeTableScans, res.Results.HasProblems())
 		if err != nil {
+			_ = stmt.Close()
 			return fmt.Errorf("exec copy: %w", err)
 		}
 	}
 
 	_, err = stmt.ExecContext(ctx)
 	if err != nil {
+		_ = stmt.Close()
 		return fmt.Errorf("finalize copy: %w", err)
+	}
+	if err = stmt.Close(); err != nil {
+		return fmt.Errorf("close copy stmt: %w", err)
 	}
 
 	// Batch update from temporary table
@@ -582,7 +608,10 @@ delete from snapshot using rows_to_delete where snapshot.CTID = rows_to_delete.C
 		if err != nil {
 			return fmt.Errorf("purgeSnapshots: %w", err)
 		}
-		rowsAffected, _ = r.RowsAffected()
+		rowsAffected, err = r.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("purgeSnapshots rows affected: %w", err)
+		}
 	}
 	return nil
 }
@@ -605,20 +634,33 @@ truncate table snapshot cascade`
 func (p *PostgresRepo) PurgeUnboundedPlans(ctx context.Context, batchSize int) error {
 	ctx, span := p.tracer.Start(ctx, "PurgeUnboundedPlans")
 	defer span.End()
-	q := fmt.Sprintf(`
-delete from query_plans
-where plan_handle in (
-    select qp.plan_handle
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	q := `
+with rows_to_delete as (
+    select qp.CTID
     from query_plans qp
-    left join query_samples qs on qs.plan_handle = qp.plan_handle
-    where qs.plan_handle is null
-    limit %d
-
-    )`, batchSize,
-	)
-	_, err := p.db.ExecContext(ctx, q)
-	if err != nil {
-		return fmt.Errorf("purgeUnboundedPlans: %w", err)
+    where not exists (
+        select 1
+        from query_samples qs
+        inner join snapshot s on s.id = qs.snap_id
+        where qs.plan_handle = qp.plan_handle
+          and s.target_id = qp.target_id
+    )
+    limit $1
+)
+delete from query_plans using rows_to_delete where query_plans.CTID = rows_to_delete.CTID`
+	rowsAffected := int64(1)
+	for rowsAffected > 0 {
+		r, err := p.db.ExecContext(ctx, q, batchSize)
+		if err != nil {
+			return fmt.Errorf("purgeUnboundedPlans: %w", err)
+		}
+		rowsAffected, err = r.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("purgeUnboundedPlans rows affected: %w", err)
+		}
 	}
 	return nil
 }

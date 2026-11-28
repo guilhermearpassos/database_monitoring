@@ -114,7 +114,10 @@ func (p *PostgresRepo) PurgeDeadlocks(ctx context.Context, start time.Time, end 
 		if err != nil {
 			return fmt.Errorf("purgeDeadlocks: %w", err)
 		}
-		rowsAffected, _ = r.RowsAffected()
+		rowsAffected, err = r.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("purgeDeadlocks rows affected: %w", err)
+		}
 	}
 	return nil
 }

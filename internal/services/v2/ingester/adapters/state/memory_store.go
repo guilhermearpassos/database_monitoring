@@ -3,7 +3,6 @@ package state
 import (
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/guilhermearpassos/database-monitoring/internal/services/v2/ingester/domain"
 	dbmv1 "github.com/guilhermearpassos/database-monitoring/proto/database_monitoring/v1"
@@ -15,7 +14,6 @@ import (
 type MemoryStore struct {
 	mu       sync.RWMutex
 	sessions map[string]*sessionState
-	ttl      time.Duration
 }
 
 type sessionState struct {
@@ -25,7 +23,7 @@ type sessionState struct {
 	completed bool
 }
 
-func NewMemoryStore() *MemoryStore { // default, ttl is driven per-header UpsertHeader arg
+func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{sessions: make(map[string]*sessionState)}
 }
 
@@ -42,6 +40,18 @@ func (m *MemoryStore) UpsertHeader(h domain.SnapshotHeader) (*domain.SnapshotSes
 	}
 	st.header = h // refresh header fields idempotently
 	return m.asDomainSession(st), nil
+}
+
+// HasChunk reports whether a chunk sequence has already been persisted for snapshotID.
+func (m *MemoryStore) HasChunk(snapshotID string, seq uint32) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	st, ok := m.sessions[snapshotID]
+	if !ok {
+		return false
+	}
+	_, had := st.received[seq]
+	return had
 }
 
 func (m *MemoryStore) SaveChunk(snapshotID string, seq uint32, samples []*dbmv1.QuerySample) (bool, error) {
@@ -137,8 +147,12 @@ func (m *MemoryStore) maybeCompleteLocked(st *sessionState) {
 		if st.header.ExpectedChunks > 0 {
 			st.completed = uint32(len(st.received)) == st.header.ExpectedChunks
 		} else {
-			// Without an expected count, consider completed if there are no gaps
+			// ExpectedChunks == 0: empty snapshot with 0 samples completes cleanly on finalize;
+			// if chunks were still sent without an expected count, require contiguous 1..max.
 			if len(st.received) == 0 {
+				if st.header.ExpectedTotalSamples == 0 {
+					st.completed = true
+				}
 				return
 			}
 			max := uint32(0)

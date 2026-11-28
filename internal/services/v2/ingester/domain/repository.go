@@ -30,6 +30,7 @@ type SnapshotRepository interface {
 }
 type PlanAnalisysBatchResult struct {
 	PlanHandle string
+	ServerHost string
 	Results    PlanAnalisysResults
 }
 type PlanAnalisysResults struct {

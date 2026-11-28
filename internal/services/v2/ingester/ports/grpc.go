@@ -190,8 +190,8 @@ func (s *GrpcIngester) GetMissingPlans(in *ingestorv2.GetMissingPlansRequest, st
 		return fmt.Errorf("invalid to timestamp %v: %w", in.GetTo(), err)
 	}
 	handles, err := s.app.Query.GetMissingPlans.Handle(stream.Context(), common_domain.ServerMeta{
-		Host: in.Server.Host,
-		Type: in.Server.Type,
+		Host: in.GetServer().GetHost(),
+		Type: in.GetServer().GetType(),
 	}, in.GetFrom().AsTime(), in.GetTo().AsTime())
 	if err != nil {
 		return fmt.Errorf("getting missing plans: %w", err)
@@ -223,26 +223,30 @@ func (s *GrpcIngester) GetMissingPlans(in *ingestorv2.GetMissingPlansRequest, st
 
 func (s *GrpcIngester) IngestMetrics(ctx context.Context, metrics *ingestorv2.DatabaseMetrics) (*ingestorv2.IngestMetricsResponse, error) {
 	span := trace.SpanFromContext(ctx)
+	timestamp := metrics.GetTimestamp().AsTime()
 	span.SetAttributes(
-		attribute.String("request.timestamp", metrics.Timestamp.AsTime().Format(time.RFC3339)),
-		attribute.String("request.server.host", metrics.Server.Host),
-		attribute.String("request.server.type", metrics.Server.Type),
+		attribute.String("request.timestamp", timestamp.Format(time.RFC3339)),
+		attribute.String("request.server.host", metrics.GetServer().GetHost()),
+		attribute.String("request.server.type", metrics.GetServer().GetType()),
 		attribute.Int("request.metrics_count", len(metrics.GetQueryMetrics().GetQueryMetrics())),
 	)
 
-	timestamp := metrics.Timestamp.AsTime()
-	domainMetrics := make([]*common_domain.QueryMetric, len(metrics.GetQueryMetrics().GetQueryMetrics()))
-	for i, m := range metrics.GetQueryMetrics().GetQueryMetrics() {
+	rawMetrics := metrics.GetQueryMetrics().GetQueryMetrics()
+	domainMetrics := make([]*common_domain.QueryMetric, 0, len(rawMetrics))
+	for _, m := range rawMetrics {
 		domainMetric, err := converters.QueryMetricToDomain(m)
 		if err != nil {
 			return nil, err
 		}
+		if domainMetric == nil {
+			continue
+		}
 		domainMetric.CollectionTime = timestamp
-		domainMetrics[i] = domainMetric
+		domainMetrics = append(domainMetrics, domainMetric)
 	}
 	err := s.app.Command.StoreQueryMetrics.Handle(ctx, domainMetrics, common_domain.ServerMeta{
-		Host: metrics.Server.Host,
-		Type: metrics.Server.Type,
+		Host: metrics.GetServer().GetHost(),
+		Type: metrics.GetServer().GetType(),
 	}, timestamp)
 	if err != nil {
 		return nil, err
