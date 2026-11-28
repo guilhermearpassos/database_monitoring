@@ -67,6 +67,7 @@ type Task interface {
 	Opts() TaskOpts
 }
 type BackGroundTaskRuntime struct {
+	mu      sync.Mutex
 	tasks   map[string]Task
 	wg      sync.WaitGroup
 	started bool
@@ -88,7 +89,27 @@ func NewBackGroundTaskRuntime(logger *slog.Logger) *BackGroundTaskRuntime {
 
 var _ Runtime = (*BackGroundTaskRuntime)(nil)
 
+func isValidOverlapOpt(opt OverlapOpt) bool {
+	switch opt {
+	case OverlapOptEnqueue, OverlapOptDrop, OverlapOptCancelCurrent, OverlapOptAllow:
+		return true
+	default:
+		return false
+	}
+}
+
 func (b *BackGroundTaskRuntime) RegisterTask(task Task) error {
+	if task == nil {
+		return fmt.Errorf("task cannot be nil")
+	}
+	if task.Interval() <= 0 {
+		return fmt.Errorf("background task interval must be positive - %s: %v", task.Name(), task.Interval())
+	}
+	if !isValidOverlapOpt(task.Opts().Overlap) {
+		return fmt.Errorf("invalid overlap option on task %s: %s", task.Name(), task.Opts().Overlap)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if _, ok := b.tasks[task.Name()]; ok {
 		return fmt.Errorf("task %s already exists", task.Name())
 	}
@@ -100,19 +121,23 @@ func (b *BackGroundTaskRuntime) Start(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	if len(b.tasks) == 0 {
-		return nil
-	}
-	if b.started {
+	b.mu.Lock()
+	if len(b.tasks) == 0 || b.started {
+		b.mu.Unlock()
 		return nil
 	}
 	b.started = true
 	runCtx, cancel := context.WithCancel(ctx)
 	b.cancel = cancel
+	tasksCopy := make([]Task, 0, len(b.tasks))
 	for _, task := range b.tasks {
-		if task == nil {
-			continue
+		if task != nil {
+			tasksCopy = append(tasksCopy, task)
 		}
+	}
+	b.mu.Unlock()
+
+	for _, task := range tasksCopy {
 		b.wg.Add(1)
 		go func(task Task) {
 			defer b.wg.Done()
@@ -125,15 +150,20 @@ func (b *BackGroundTaskRuntime) Stop(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	if b.cancel == nil {
+	b.mu.Lock()
+	cancel := b.cancel
+	b.mu.Unlock()
+	if cancel == nil {
 		return nil
 	}
-	b.cancel()
+	cancel()
 	done := make(chan struct{})
 	go func() {
 		b.wg.Wait()
+		b.mu.Lock()
 		b.started = false
 		b.cancel = nil
+		b.mu.Unlock()
 		close(done)
 	}()
 	select {
@@ -141,7 +171,7 @@ func (b *BackGroundTaskRuntime) Stop(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		b.logger.Warn("context canceled", "err", ctx.Err())
-		return nil
+		return ctx.Err()
 	}
 }
 
@@ -234,7 +264,8 @@ func (b *BackGroundTaskRuntime) runEnqueueLoop(ctx context.Context, task Task) {
 func (b *BackGroundTaskRuntime) runDropOnOverlapLoop(ctx context.Context, task Task) {
 	ticker := time.NewTicker(task.Interval())
 	defer ticker.Stop()
-	defer ticker.Stop()
+	var taskWG sync.WaitGroup
+	defer taskWG.Wait()
 	running := false
 	var mu sync.Mutex
 	start := func() {
@@ -246,7 +277,9 @@ func (b *BackGroundTaskRuntime) runDropOnOverlapLoop(ctx context.Context, task T
 		}
 		running = true
 		mu.Unlock()
+		taskWG.Add(1)
 		go func() {
+			defer taskWG.Done()
 			defer func() {
 				mu.Lock()
 				running = false
@@ -337,12 +370,21 @@ func (b *BackGroundTaskRuntime) runCancelOnOverlapLoop(ctx context.Context, task
 	}
 }
 func (b *BackGroundTaskRuntime) runAllowOverlapLoop(ctx context.Context, task Task) {
+	const maxConcurrentRuns = 32
+	sem := make(chan struct{}, maxConcurrentRuns)
 	ticker := time.NewTicker(task.Interval())
 	defer ticker.Stop()
 	start := func() {
+		select {
+		case sem <- struct{}{}:
+		default:
+			b.logger.Warn("max concurrent overlap runs reached; dropping tick", "task", task.Name(), "limit", maxConcurrentRuns)
+			return
+		}
 		b.wg.Add(1)
 		go func() {
 			defer b.wg.Done()
+			defer func() { <-sem }()
 			b.runTask(ctx, task)
 		}()
 	}
